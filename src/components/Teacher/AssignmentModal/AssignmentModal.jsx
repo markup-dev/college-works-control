@@ -1,0 +1,356 @@
+// src/components/Teacher/AssignmentModal/AssignmentModal.jsx
+import React, { useState, useEffect } from 'react';
+import Button from '../../UI/Button/Button';
+import { useNotification } from '../../../context/NotificationContext';
+import './AssignmentModal.scss';
+
+const AssignmentModal = ({ 
+  assignment, 
+  isOpen, 
+  onClose,
+  onSubmit
+}) => {
+  const { showError } = useNotification();
+  const [formData, setFormData] = useState({
+    title: '',
+    course: 'Базы данных',
+    group: 'ИСП-401',
+    deadline: '',
+    description: '',
+    maxScore: 100,
+    submissionType: 'file',
+    criteria: []
+  });
+
+  // Инициализация формы при открытии модалки
+  useEffect(() => {
+    if (assignment) {
+      // Преобразуем критерии из строк в объекты, если нужно
+      const criteria = (assignment.criteria || []).map(criterion => {
+        if (typeof criterion === 'string') {
+          return { text: criterion, maxPoints: 0 };
+        }
+        return criterion;
+      });
+      
+      // Определяем группу из studentGroups
+      const group = assignment.studentGroups && assignment.studentGroups.length > 0
+        ? assignment.studentGroups[0]
+        : assignment.group || 'ИСП-401';
+
+      setFormData({
+        title: assignment.title || '',
+        course: assignment.course || 'Базы данных',
+        group: group,
+        deadline: assignment.deadline ? assignment.deadline.split('T')[0] : '',
+        description: assignment.description || '',
+        maxScore: assignment.maxScore || 100,
+        submissionType: assignment.submissionType || 'file',
+        criteria: criteria,
+        priority: assignment.priority || 'medium'
+      });
+    } else {
+      setFormData({
+        title: '',
+        course: 'Базы данных',
+        group: 'ИСП-401',
+        deadline: '',
+        description: '',
+        maxScore: 100,
+        submissionType: 'file',
+        criteria: [],
+        priority: 'medium'
+      });
+    }
+  }, [assignment, isOpen]);
+
+  if (!isOpen) return null;
+
+  const isEdit = !!assignment;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Валидация
+    if (!formData.title.trim()) {
+      showError('Введите название задания');
+      return;
+    }
+    if (!formData.deadline) {
+      showError('Укажите срок сдачи');
+      return;
+    }
+    if (!formData.description.trim()) {
+      showError('Введите описание задания');
+      return;
+    }
+    if (!formData.maxScore || formData.maxScore < 1 || formData.maxScore > 100) {
+      showError('Максимальный балл должен быть в пределах 1-100');
+      return;
+    }
+
+    // Преобразование данных
+    const studentGroups = formData.group && formData.group !== 'Все группы' 
+      ? [formData.group] 
+      : [];
+    
+    // Преобразуем критерии в массив строк, если они в формате объектов
+    const criteriaArray = formData.criteria.map(criterion => {
+      if (typeof criterion === 'string') {
+        return criterion;
+      }
+      return criterion.text || criterion;
+    });
+
+    const submissionData = {
+      ...formData,
+      deadline: `${formData.deadline}T23:59:00`,
+      maxScore: parseInt(formData.maxScore),
+      studentGroups: studentGroups,
+      criteria: criteriaArray,
+      priority: formData.priority || 'medium'
+    };
+
+    if (onSubmit) {
+      onSubmit(submissionData);
+    } else {
+      console.log('Сохранение задания:', submissionData);
+      onClose();
+    }
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const addCriterion = () => {
+    setFormData(prev => ({
+      ...prev,
+      criteria: [...prev.criteria, { text: '', maxPoints: 0 }]
+    }));
+  };
+
+  const updateCriterion = (index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      criteria: prev.criteria.map((criterion, i) => 
+        i === index ? { ...criterion, [field]: value } : criterion
+      )
+    }));
+  };
+
+  const removeCriterion = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      criteria: prev.criteria.filter((_, i) => i !== index)
+    }));
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content large">
+        <div className="modal-header">
+          <h3>{isEdit ? 'Редактирование задания' : 'Создание нового задания'}</h3>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="create-assignment-form">
+              <div className="form-section">
+                <h4>Основная информация</h4>
+                <div className="form-row">
+                  <FormGroup 
+                    label="Название задания:" 
+                    required
+                  >
+                    <input
+                      type="text"
+                      value={formData.title}
+                      onChange={(e) => handleInputChange('title', e.target.value)}
+                      placeholder="Введите название задания..."
+                      className="form-input"
+                      required
+                    />
+                  </FormGroup>
+                  
+                  <FormGroup label="Дисциплина:" required>
+                    <select
+                      value={formData.course}
+                      onChange={(e) => handleInputChange('course', e.target.value)}
+                      className="form-select"
+                    >
+                      <option value="Базы данных">Базы данных</option>
+                      <option value="Веб-программирование">Веб-программирование</option>
+                      <option value="Проектирование ИС">Проектирование ИС</option>
+                      <option value="UI/UX дизайн">UI/UX дизайн</option>
+                      <option value="Мобильная разработка">Мобильная разработка</option>
+                    </select>
+                  </FormGroup>
+                </div>
+                
+                <div className="form-row">
+                  <FormGroup label="Учебная группа:" required>
+                    <select
+                      value={formData.group}
+                      onChange={(e) => handleInputChange('group', e.target.value)}
+                      className="form-select"
+                    >
+                      <option value="ИСП-401">ИСП-401</option>
+                      <option value="ИСП-402">ИСП-402</option>
+                      <option value="ИСП-403">ИСП-403</option>
+                      <option value="Все группы">Все группы</option>
+                    </select>
+                  </FormGroup>
+                  
+                  <FormGroup label="Срок сдачи:" required>
+                    <input
+                      type="date"
+                      value={formData.deadline}
+                      onChange={(e) => handleInputChange('deadline', e.target.value)}
+                      className="form-input"
+                      required
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </FormGroup>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Описание задания</h4>
+                <FormGroup label="Подробное описание:" required>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => handleInputChange('description', e.target.value)}
+                    placeholder="Опишите задание, требования, ожидаемый результат..."
+                    className="form-textarea"
+                    rows="4"
+                    required
+                  />
+                </FormGroup>
+              </div>
+
+              <div className="form-section">
+                <h4>Параметры оценки</h4>
+                <div className="form-row">
+                  <FormGroup label="Максимальный балл:" required>
+                    <input
+                      type="number"
+                      value={formData.maxScore}
+                      onChange={(e) => handleInputChange('maxScore', parseInt(e.target.value) || 0)}
+                      min="1"
+                      max="100"
+                      className="form-input"
+                      required
+                    />
+                  </FormGroup>
+                  
+                  <FormGroup label="Формат сдачи:" required>
+                    <select
+                      value={formData.submissionType}
+                      onChange={(e) => handleInputChange('submissionType', e.target.value)}
+                      className="form-select"
+                    >
+                      <option value="file">📎 Файл</option>
+                      <option value="demo">🎤 Демонстрация</option>
+                      <option value="both">📎 Файл + 🎤 Демонстрация</option>
+                    </select>
+                  </FormGroup>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <div className="section-header">
+                  <h4>Критерии оценки</h4>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="small"
+                    onClick={addCriterion}
+                  >
+                    + Добавить критерий
+                  </Button>
+                </div>
+                
+                <div className="criteria-list">
+                  {formData.criteria.map((criterion, index) => (
+                    <CriterionItem
+                      key={index}
+                      criterion={criterion}
+                      index={index}
+                      onUpdate={updateCriterion}
+                      onRemove={removeCriterion}
+                    />
+                  ))}
+                  
+                  {formData.criteria.length === 0 && (
+                    <div className="no-criteria">
+                      <p>Критерии оценки не добавлены</p>
+                      <small>Добавьте критерии для более объективной оценки работ</small>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="modal-actions">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Отмена
+            </Button>
+            <Button type="submit" variant="primary">
+              💾 {isEdit ? 'Сохранить изменения' : 'Создать задание'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const FormGroup = ({ label, children, required = false }) => (
+  <div className="form-group">
+    <label>
+      {label}
+      {required && <span className="required">*</span>}
+    </label>
+    {children}
+  </div>
+);
+
+const CriterionItem = ({ criterion, index, onUpdate, onRemove }) => (
+  <div className="criterion-item">
+    <div className="criterion-content">
+      <input
+        type="text"
+        value={criterion.text}
+        onChange={(e) => onUpdate(index, 'text', e.target.value)}
+        placeholder="Описание критерия..."
+        className="criterion-text"
+      />
+      <input
+        type="number"
+        value={criterion.maxPoints}
+        onChange={(e) => onUpdate(index, 'maxPoints', parseInt(e.target.value) || 0)}
+        placeholder="0"
+        min="0"
+        max="100"
+        className="criterion-points"
+      />
+      <span className="points-label">баллов</span>
+    </div>
+    <Button
+      type="button"
+      variant="danger"
+      size="small"
+      onClick={() => onRemove(index)}
+    >
+      🗑️
+    </Button>
+  </div>
+);
+
+export default AssignmentModal;

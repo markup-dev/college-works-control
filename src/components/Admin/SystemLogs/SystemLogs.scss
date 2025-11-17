@@ -1,0 +1,169 @@
+@import '../../../styles/base/variables';
+@import '../../../styles/base/mixins';
+
+.system-logs {
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+
+    @include mobile {
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    h2 {
+      margin: 0 0 4px 0;
+      color: $text-primary;
+    }
+
+    .log-count {
+      margin: 0;
+      color: $text-secondary;
+      font-size: 14px;
+    }
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 12px;
+
+    @include mobile {
+      width: 100%;
+      
+      .btn {
+        flex: 1;
+      }
+    }
+  }
+}
+
+.logs-filters {
+  margin-bottom: 20px;
+
+  .filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+
+    @include mobile {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .filter-group {
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: $text-primary;
+      font-size: 14px;
+    }
+
+    .filter-select,
+    .search-input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid $border-color;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s ease;
+
+      &:focus {
+        outline: none;
+        border-color: $primary-color;
+      }
+    }
+  }
+}
+
+.logs-table-container {
+  margin-bottom: 20px;
+}
+
+.logs-table {
+  .log-details {
+    font-size: 13px;
+    line-height: 1.4;
+    color: $text-secondary;
+  }
+}
+
+.empty-logs {
+  text-align: center;
+  padding: 60px 20px;
+
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+  }
+
+  h3 {
+    margin: 0 0 8px 0;
+    color: $text-secondary;
+    font-size: 18px;
+  }
+
+  p {
+    margin: 0;
+    color: $text-light;
+    font-size: 14px;
+  }
+}
+
+.logs-summary {
+  .summary-card {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 4px solid $primary-color;
+
+    h4 {
+      margin: 0 0 16px 0;
+      color: $text-primary;
+      font-size: 16px;
+    }
+  }
+
+  .summary-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+
+    .summary-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+
+      .stat-label {
+        color: $text-secondary;
+        font-size: 14px;
+      }
+
+      .stat-value {
+        font-weight: 600;
+        color: $text-primary;
+      }
+    }
+  }
+}
+
+// Стили для таблицы логов
+.table-container {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+// Адаптивность
+@include mobile {
+  .logs-filters .filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-stats {
+    grid-template-columns: 1fr;
+  }
+}

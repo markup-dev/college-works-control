@@ -1,0 +1,43 @@
+.input-modal {
+  &__message {
+    margin: 0 0 1rem 0;
+    color: #374151;
+    line-height: 1.6;
+    font-size: 0.95rem;
+  }
+
+  &__input {
+    margin-bottom: 1.5rem;
+  }
+
+  &__input-field {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s;
+
+    &:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    &::placeholder {
+      color: #9ca3af;
+    }
+  }
+
+  &__textarea {
+    width: 100%;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+  }
+}
+

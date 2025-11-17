@@ -1,0 +1,57 @@
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: $spacing-md;
+  color: $text-primary;
+}
+
+h1 {
+  font-size: $font-size-4xl;
+  
+  @include mobile {
+    font-size: $font-size-3xl;
+  }
+}
+
+h2 {
+  font-size: $font-size-3xl;
+  
+  @include mobile {
+    font-size: $font-size-2xl;
+  }
+}
+
+h3 {
+  font-size: $font-size-2xl;
+}
+
+h4 {
+  font-size: $font-size-xl;
+}
+
+h5 {
+  font-size: $font-size-lg;
+}
+
+h6 {
+  font-size: $font-size-base;
+}
+
+p {
+  margin-bottom: $spacing-md;
+  line-height: 1.6;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+a {
+  color: $primary-color;
+  text-decoration: none;
+  transition: color 0.3s ease;
+  
+  &:hover {
+    color: $primary-dark;
+  }
+}

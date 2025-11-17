@@ -1,0 +1,451 @@
+.assignment-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  
+  &--urgent {
+    border-left: 4px solid #f59e0b;
+  }
+  
+  &--overdue {
+    border-left: 4px solid #dc2626;
+  }
+}
+
+.assignment-priority-badge {
+  position: absolute;
+  top: 65px;
+  right: 20px;
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+  
+  .priority-dot {
+    width: 6px;
+    height: 6px;
+    background: white;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.assignment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.assignment-title-section {
+  flex: 1;
+  min-width: 0;
+  padding-right: 100px; /* Оставляем место для бейджа приоритета */
+}
+
+.assignment-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.assignment-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.course-badge,
+.teacher-info {
+  font-size: 12px;
+  color: #6b7280;
+  background: #f9fafb;
+  padding: 6px 10px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.meta-icon {
+  font-size: 14px;
+}
+
+.assignment-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  flex-shrink: 0;
+  min-width: 120px; /* Минимальная ширина для статусов */
+}
+
+.status-badge {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  min-width: 100px;
+  justify-content: center;
+  
+  &--danger {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+  }
+  
+  &--warning {
+    background: #fffbeb;
+    color: #d97706;
+    border: 1px solid #fed7aa;
+  }
+  
+  &--success {
+    background: #f0fdf4;
+    color: #16a34a;
+    border: 1px solid #bbf7d0;
+  }
+  
+  &--secondary {
+    background: #f8fafc;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+  }
+}
+
+.status-icon {
+  font-size: 14px;
+}
+
+.urgency-badge {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  
+  &--warning {
+    background: #fef3c7;
+    color: #d97706;
+    border: 1px solid #fcd34d;
+  }
+  
+  &--danger {
+    background: #fecaca;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+  }
+}
+
+.urgency-icon {
+  font-size: 12px;
+}
+
+.assignment-description {
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+}
+
+.assignment-details {
+  margin-bottom: 20px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 14px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.detail-label {
+  color: #6b7280;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-icon {
+  font-size: 14px;
+}
+
+.detail-value {
+  color: #374151;
+  font-weight: 500;
+  text-align: right;
+}
+
+.deadline-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.deadline-date {
+  font-weight: 600;
+}
+
+.days-left {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  
+  &--urgent {
+    background: #fef3c7;
+    color: #d97706;
+  }
+  
+  &--overdue {
+    background: #fecaca;
+    color: #dc2626;
+  }
+}
+
+.priority-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.priority-icon {
+  font-size: 14px;
+}
+
+.max-score {
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.score-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.score-value {
+  font-size: 16px;
+  font-weight: 800;
+  color: #16a34a;
+}
+
+.score-separator {
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.score-percent {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.criteria-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.criteria-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  
+  h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin: 0;
+  }
+}
+
+.criteria-icon {
+  font-size: 16px;
+}
+
+.criteria-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.criterion-item {
+  font-size: 13px;
+  color: #6b7280;
+  padding: 6px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.4;
+  
+  &:not(:last-child) {
+    border-bottom: 1px solid #e5e7eb;
+  }
+}
+
+.criterion-marker {
+  color: #2563eb;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.assignment-actions {
+  margin-top: auto;
+  
+  &__group {
+    display: flex;
+    gap: 8px;
+    
+    .btn {
+      flex: 1;
+    }
+  }
+}
+
+// Адаптивность
+@media (max-width: 768px) {
+  .assignment-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .assignment-title-section {
+    padding-right: 0;
+    width: 100%;
+  }
+  
+  .assignment-status {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    justify-content: space-between;
+    min-width: auto;
+  }
+  
+  .status-badge {
+    min-width: auto;
+    flex: 1;
+  }
+  
+  .urgency-badge {
+    flex: 1;
+    justify-content: center;
+  }
+  
+  .assignment-priority-badge {
+    position: relative;
+    top: auto;
+    right: auto;
+    align-self: flex-start;
+    margin-bottom: 8px;
+    order: -1; /* Перемещаем в начало на мобильных */
+  }
+  
+  .assignment-actions__group {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .assignment-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .assignment-status {
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .status-badge,
+  .urgency-badge {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .detail-value {
+    text-align: left;
+  }
+  
+  .deadline-info {
+    align-items: flex-start;
+  }
+}
+
+// Специальные стили для случаев с высоким приоритетом
+.assignment-card:has(.assignment-priority-badge) {
+  .assignment-title-section {
+    padding-right: 120px; /* Больше места для бейджа приоритета */
+  }
+}
+
+// Гарантия отсутствия конфликтов
+.assignment-priority-badge {
+  pointer-events: none; /* Чтобы не мешал кликам */
+}
+
+.assignment-status {
+  position: relative;
+  z-index: 2;
+}

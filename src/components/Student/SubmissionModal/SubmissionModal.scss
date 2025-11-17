@@ -1,0 +1,151 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e1e5e9;
+  
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #333;
+  }
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover {
+    color: #333;
+  }
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.submission-info {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  
+  p {
+    margin: 8px 0;
+    font-size: 14px;
+    
+    strong {
+      color: #333;
+    }
+  }
+}
+
+.file-upload {
+  .file-input-label {
+    display: block;
+    
+    input[type="file"] {
+      display: none;
+    }
+  }
+  
+  .file-input-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: #2c5aa0;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    
+    &:hover {
+      background: #1d4ed8;
+    }
+  }
+  
+  .file-info {
+    margin-top: 12px;
+    padding: 12px;
+    background: #e8f5e8;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+  }
+}
+
+.demo-submission {
+  text-align: center;
+  padding: 20px;
+  background: #fff3cd;
+  border-radius: 8px;
+  
+  p {
+    margin: 8px 0;
+    color: #856404;
+  }
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px;
+  border-top: 1px solid #e1e5e9;
+}
+
+// Адаптивность
+@media (max-width: 768px) {
+  .modal-overlay {
+    padding: 10px;
+  }
+  
+  .modal-content {
+    max-width: 100%;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+    
+    .btn {
+      width: 100%;
+    }
+  }
+}

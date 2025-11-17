@@ -1,0 +1,75 @@
+@import '../../../styles/base/variables';
+@import '../../../styles/base/mixins';
+
+.user-management {
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+
+    h2 {
+      margin: 0;
+      color: $text-primary;
+    }
+  }
+}
+
+.user-form {
+  margin-bottom: 24px;
+
+  h3 {
+    margin: 0 0 20px 0;
+    color: $text-primary;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+
+    @include mobile {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .form-group {
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: $text-primary;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid $border-color;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s ease;
+
+      &:focus {
+        outline: none;
+        border-color: $primary-color;
+      }
+    }
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+  }
+}
+
+.user-actions {
+  display: flex;
+  gap: 8px;
+
+  .btn {
+    padding: 6px 10px;
+    min-width: auto;
+  }
+}

@@ -1,0 +1,280 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e1e5e9;
+  
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f2937;
+  }
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
+}
+
+.results-modal {
+  max-width: 700px !important;
+  max-height: 90vh;
+  overflow-y: auto;
+
+  .modal-body {
+    padding: 24px;
+  }
+
+  .results-section {
+    margin-bottom: 32px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+
+    strong {
+      font-size: 13px;
+      color: #6b7280;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    span {
+      font-size: 15px;
+      color: #1f2937;
+      font-weight: 500;
+    }
+  }
+
+  .score-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 32px;
+    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    border-radius: 16px;
+    margin-bottom: 16px;
+
+    &--excellent {
+      background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    }
+
+    &--good {
+      background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    }
+
+    &--satisfactory {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    }
+
+    &--poor {
+      background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    }
+
+    .score-main {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .score-value {
+      font-size: 56px;
+      font-weight: 800;
+      color: #1f2937;
+      line-height: 1;
+    }
+
+    .score-separator {
+      font-size: 40px;
+      font-weight: 600;
+      color: #6b7280;
+      opacity: 0.5;
+    }
+
+    .score-max {
+      font-size: 32px;
+      font-weight: 600;
+      color: #6b7280;
+    }
+
+    .score-percentage {
+      font-size: 20px;
+      font-weight: 700;
+      color: #4b5563;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 20px;
+    }
+  }
+
+  .score-indicator {
+    width: 100%;
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+
+    .score-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+  }
+
+  .score-display--excellent .score-indicator .score-bar {
+    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  }
+
+  .score-display--good .score-indicator .score-bar {
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+  }
+
+  .score-display--satisfactory .score-indicator .score-bar {
+    background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+  }
+
+  .score-display--poor .score-indicator .score-bar {
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+  }
+
+  .feedback-text {
+    padding: 16px;
+    background: #f9fafb;
+    border-left: 4px solid #3b82f6;
+    border-radius: 8px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #374151;
+    white-space: pre-wrap;
+  }
+
+  .criteria-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .criterion-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: #f3f4f6;
+    }
+  }
+
+  .criterion-marker {
+    font-size: 20px;
+    color: #3b82f6;
+    font-weight: 700;
+    flex-shrink: 0;
+    line-height: 1.5;
+  }
+
+  .criterion-text {
+    font-size: 15px;
+    color: #374151;
+    line-height: 1.6;
+    flex: 1;
+  }
+
+  .description-text {
+    padding: 16px;
+    background: #f9fafb;
+    border-radius: 8px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #374151;
+    white-space: pre-wrap;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px 24px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+  }
+}
+

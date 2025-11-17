@@ -1,0 +1,34 @@
+.card {
+  background: $background-white;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-sm;
+  border: 1px solid $border-color;
+  @include transition;
+  
+  &:hover {
+    box-shadow: $shadow-md;
+  }
+}
+
+.card-header {
+  padding: $spacing-xl;
+  border-bottom: 1px solid $border-color;
+  background: $background-primary;
+  border-radius: $border-radius-lg $border-radius-lg 0 0;
+  
+  h2, h3, h4 {
+    margin: 0;
+    color: $primary-color;
+  }
+}
+
+.card-body {
+  padding: $spacing-xl;
+}
+
+.card-footer {
+  padding: $spacing-lg $spacing-xl;
+  border-top: 1px solid $border-color;
+  background: $background-primary;
+  border-radius: 0 0 $border-radius-lg $border-radius-lg;
+}

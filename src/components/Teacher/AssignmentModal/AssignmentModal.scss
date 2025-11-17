@@ -1,0 +1,250 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 2rem;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: auto;
+  
+  &.large {
+    max-width: 900px;
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e1e5e9;
+  
+  h3 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: #333;
+  }
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover {
+    color: #333;
+  }
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.create-assignment-form {
+  .form-section {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #f0f0f0;
+    
+    &:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+    
+    h4 {
+      margin: 0 0 1rem 0;
+      font-size: 1.1rem;
+      color: #2c5aa0;
+      font-weight: 600;
+    }
+    
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+  }
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-group {
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #333;
+    font-size: 0.9rem;
+    
+    .required {
+      color: #dc3545;
+      margin-left: 2px;
+    }
+  }
+  
+  .form-input,
+  .form-select,
+  .form-textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e1e5e9;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    
+    &:focus {
+      outline: none;
+      border-color: #2c5aa0;
+      box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.1);
+    }
+  }
+  
+  .form-textarea {
+    resize: vertical;
+    min-height: 100px;
+    
+    &::placeholder {
+      color: #999;
+    }
+  }
+}
+
+.criteria-list {
+  .no-criteria {
+    text-align: center;
+    padding: 2rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    color: #666;
+    
+    p {
+      margin: 0 0 0.5rem 0;
+      font-weight: 500;
+    }
+    
+    small {
+      font-size: 0.8rem;
+    }
+  }
+}
+
+.criterion-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  
+  .criterion-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+    
+    .criterion-text {
+      flex: 1;
+      padding: 0.5rem;
+      border: 1px solid #e1e5e9;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      
+      &:focus {
+        outline: none;
+        border-color: #2c5aa0;
+      }
+    }
+    
+    .criterion-points {
+      width: 60px;
+      padding: 0.5rem;
+      border: 1px solid #e1e5e9;
+      border-radius: 4px;
+      text-align: center;
+      font-size: 0.9rem;
+      
+      &:focus {
+        outline: none;
+        border-color: #2c5aa0;
+      }
+    }
+    
+    .points-label {
+      font-size: 0.8rem;
+      color: #666;
+      white-space: nowrap;
+    }
+  }
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid #e1e5e9;
+}
+
+// Адаптивность
+@media (max-width: 768px) {
+  .modal-overlay {
+    padding: 1rem;
+  }
+  
+  .modal-content {
+    &.large {
+      max-width: 100%;
+    }
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .criterion-item {
+    flex-direction: column;
+    align-items: stretch;
+    
+    .criterion-content {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.5rem;
+    }
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+    
+    .btn {
+      width: 100%;
+    }
+  }
+}
