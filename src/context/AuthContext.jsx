@@ -26,11 +26,11 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Вход в систему
-  const login = useCallback(async (login, password) => {
+  const login = useCallback(async (login, password, role) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await authService.login(login, password);
+      const result = await authService.login(login, password, role);
       
       if (result.success) {
         setUser(result.user);

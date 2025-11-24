@@ -3,6 +3,7 @@ import Table from '../../UI/Table/Table';
 import Button from '../../UI/Button/Button';
 import Badge from '../../UI/Badge/Badge';
 import Card from '../../UI/Card/Card';
+import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import './CourseManagement.scss';
 
 const CourseManagement = ({ 
@@ -25,6 +26,8 @@ const CourseManagement = ({
     semester: 1,
     status: 'active'
   });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [courseToDelete, setCourseToDelete] = useState(null);
   const [formErrors, setFormErrors] = useState({});
 
   const handleCreate = () => {
@@ -99,10 +102,17 @@ const CourseManagement = ({
     await onUpdateCourse(course.id, { status: newStatus });
   };
 
-  const handleDelete = async (course) => {
-    if (window.confirm(`Вы уверены, что хотите удалить курс "${course.name}"?`)) {
+  const handleDelete = (course) => {
+    setCourseToDelete(course);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (courseToDelete) {
       try {
-        await onDeleteCourse(course.id);
+        await onDeleteCourse(courseToDelete.id);
+        setShowDeleteConfirm(false);
+        setCourseToDelete(null);
       } catch (error) {
         console.error('Ошибка удаления курса:', error);
       }
@@ -113,7 +123,7 @@ const CourseManagement = ({
     {
       key: 'name',
       title: 'Название курса',
-      width: '25%',
+      width: '20%',
       render: (value, course) => (
         <div className="course-name-cell">
           <div className="course-name">{value}</div>
@@ -144,21 +154,31 @@ const CourseManagement = ({
       )
     },
     {
-      key: 'assignmentsCount',
-      title: 'Заданий',
-      width: '10%',
+      key: 'credits',
+      title: 'Кредиты',
+      width: '8%',
       render: (value) => (
         <div className="count-cell">
-          <span className="count-value">{value || 0}</span>
+          <span className="count-value">{value || 3}</span>
+        </div>
+      )
+    },
+    {
+      key: 'semester',
+      title: 'Семестр',
+      width: '8%',
+      render: (value) => (
+        <div className="count-cell">
+          <span className="count-value">{value || 1}</span>
         </div>
       )
     },
     {
       key: 'status',
       title: 'Статус',
-      width: '10%',
+      width: '8%',
       render: (value) => (
-        <Badge 
+        <Badge
           variant={value === 'active' ? 'success' : 'secondary'}
         >
           {value === 'active' ? 'Активен' : 'Неактивен'}
@@ -168,7 +188,7 @@ const CourseManagement = ({
     {
       key: 'actions',
       title: 'Действия',
-      width: '25%',
+      width: '18%',
       render: (value, course) => (
         <div className="course-actions">
           <Button 
@@ -255,6 +275,28 @@ const CourseManagement = ({
                 </select>
                 {formErrors.teacherId && <div className="error-text">{formErrors.teacherId}</div>}
               </div>
+
+              <div className="form-group">
+                <label>Кредиты</label>
+                <input
+                  type="number"
+                  value={formData.credits}
+                  onChange={(e) => setFormData(prev => ({ ...prev, credits: parseInt(e.target.value) || 3 }))}
+                  min="1"
+                  max="10"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Семестр</label>
+                <input
+                  type="number"
+                  value={formData.semester}
+                  onChange={(e) => setFormData(prev => ({ ...prev, semester: parseInt(e.target.value) || 1 }))}
+                  min="1"
+                  max="8"
+                />
+              </div>
             </div>
 
             <div className="form-group">
@@ -296,6 +338,20 @@ const CourseManagement = ({
           hoverable
         />
       </Card>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => {
+          setShowDeleteConfirm(false);
+          setCourseToDelete(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Удаление курса"
+        message={courseToDelete ? `Вы уверены, что хотите удалить курс "${courseToDelete.name}"?` : ''}
+        confirmText="Удалить"
+        cancelText="Отмена"
+        danger={true}
+      />
     </div>
   );
 };

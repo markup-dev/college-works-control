@@ -6,6 +6,10 @@ export const validateLoginForm = (formData) => {
     errors.login = 'Логин или email обязателен';
   }
 
+  if (!formData.role) {
+    errors.role = 'Необходимо выбрать роль';
+  }
+
   if (!formData.password) {
     errors.password = 'Пароль обязателен';
   } else if (formData.password.length < 6) {
@@ -66,18 +70,10 @@ export const validateRegisterForm = (formData) => {
     errors.confirmPassword = 'Пароли не совпадают';
   }
 
-  // Валидация роли
-  if (!formData.role) {
-    errors.role = 'Роль обязательна';
-  }
 
   // Дополнительные проверки в зависимости от роли
   if (formData.role === 'student' && !formData.group?.trim()) {
     errors.group = 'Группа обязательна для студента';
-  }
-
-  if (formData.role === 'teacher' && !formData.department?.trim()) {
-    errors.department = 'Кафедра обязательна для преподавателя';
   }
 
   return {

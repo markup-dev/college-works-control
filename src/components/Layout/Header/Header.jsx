@@ -1,6 +1,5 @@
-// src/components/Layout/Header/Header.jsx
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import './Header.scss';
 
 const Header = ({ user, onLogout }) => {
@@ -21,7 +20,9 @@ const Header = ({ user, onLogout }) => {
     <header className="header">
       <div className="header__content">
         <div className="header__left">
-          <h1 className="header__title">🎓 Учебный портал</h1>
+          <h1 className="header__title">
+            <Link to="/welcome">🎓 Учебный портал</Link>
+          </h1>
           <span className="header__role">
             {getRoleLabel(user?.role)}
           </span>

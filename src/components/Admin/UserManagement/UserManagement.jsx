@@ -1,4 +1,3 @@
-// src/components/Admin/UserManagement/UserManagement.jsx
 import React, { useState } from 'react';
 import Table from '../../UI/Table/Table';
 import Button from '../../UI/Button/Button';
@@ -17,13 +16,15 @@ const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => 
   const [formData, setFormData] = useState({
     login: '',
     name: '',
+    email: '',
+    password: '',
     role: 'student',
     group: '',
     department: ''
   });
 
   const handleCreate = () => {
-    setFormData({ login: '', name: '', role: 'student', group: '', department: '' });
+    setFormData({ login: '', name: '', email: '', password: '', role: 'student', group: '', department: '' });
     setEditingUser(null);
     setShowCreateForm(true);
   };
@@ -32,6 +33,8 @@ const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => 
     setFormData({
       login: user.login,
       name: user.name,
+      email: user.email || '',
+      password: '', // не показываем существующий пароль
       role: user.role,
       group: user.group || '',
       department: user.department || ''
@@ -72,17 +75,22 @@ const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => 
     {
       key: 'login',
       title: 'Логин',
-      width: '15%'
+      width: '12%'
     },
     {
       key: 'name',
       title: 'ФИО',
-      width: '25%'
+      width: '20%'
+    },
+    {
+      key: 'email',
+      title: 'Email',
+      width: '18%'
     },
     {
       key: 'role',
       title: 'Роль',
-      width: '15%',
+      width: '12%',
       render: (value) => {
         const roleLabels = {
           student: '👨‍🎓 Студент',
@@ -95,7 +103,7 @@ const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => 
     {
       key: 'group',
       title: 'Группа/Кафедра',
-      width: '20%',
+      width: '15%',
       render: (value, user) => user.role === 'student' ? value : user.department
     },
     {
@@ -111,18 +119,18 @@ const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => 
     {
       key: 'actions',
       title: 'Действия',
-      width: '15%',
+      width: '13%',
       render: (value, user) => (
         <div className="user-actions">
-          <Button 
-            size="small" 
+          <Button
+            size="small"
             variant="secondary"
             onClick={() => handleEdit(user)}
           >
             ✏️
           </Button>
-          <Button 
-            size="small" 
+          <Button
+            size="small"
             variant="danger"
             onClick={() => handleDelete(user)}
             disabled={user.role === 'admin'}
@@ -164,6 +172,25 @@ const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => 
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   required
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label>Пароль {editingUser ? '(оставьте пустым, чтобы не менять)' : '*'}</label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                  required={!editingUser}
                 />
               </div>
             </div>

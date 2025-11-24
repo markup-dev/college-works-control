@@ -1,4 +1,3 @@
-// src/pages/AdminDashboard/AdminDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardHeader from '../../components/Admin/DashboardHeader/DashboardHeader';
@@ -12,18 +11,20 @@ import './AdminDashboard.scss';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
-  const { 
-    users = [], 
-    courses = [], 
-    systemLogs = [], 
-    adminStats = {}, 
-    loading, 
+  const {
+    users = [],
+    courses = [],
+    submissions = [],
+    systemLogs = [],
+    adminStats = {},
+    loading,
     loadAdminData,
     createUser,
     updateUser,
     deleteUser,
     createCourse,
-    updateCourse
+    updateCourse,
+    deleteCourse
   } = useAdmin();
   
   const [activeTab, setActiveTab] = useState('overview');
@@ -58,10 +59,11 @@ const AdminDashboard = () => {
     switch (activeTab) {
       case 'overview':
         return (
-          <StatisticsSection 
-            stats={safeStats} 
-            users={users} 
-            courses={courses} 
+          <StatisticsSection
+            stats={safeStats}
+            users={users}
+            courses={courses}
+            submissions={submissions}
           />
         );
       
@@ -82,6 +84,7 @@ const AdminDashboard = () => {
             teachers={users.filter(u => u.role === 'teacher')}
             onCreateCourse={createCourse}
             onUpdateCourse={updateCourse}
+            onDeleteCourse={deleteCourse}
           />
         );
       

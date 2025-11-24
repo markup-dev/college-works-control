@@ -5,6 +5,7 @@ import AssignmentCard from '../../components/Student/AssignmentCard/AssignmentCa
 import SubmissionModal from '../../components/Student/SubmissionModal/SubmissionModal';
 import ResultsModal from '../../components/Student/ResultsModal/ResultsModal';
 import Card from '../../components/UI/Card/Card';
+import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsModal/AssignmentDetailsModal';
 import { useAuth } from '../../context/AuthContext';
 import { useStudent } from '../../context/StudentContext';
 import { useNotification } from '../../context/NotificationContext';
@@ -31,7 +32,9 @@ const StudentDashboard = () => {
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [showResultsModal, setShowResultsModal] = useState(false);
+  const [showAssignmentDetails, setShowAssignmentDetails] = useState(false);
   const [submissionFile, setSubmissionFile] = useState(null);
+  const [detailsAssignment, setDetailsAssignment] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -50,6 +53,11 @@ const StudentDashboard = () => {
   const handleViewResults = useCallback((assignment) => {
     setSelectedAssignment(assignment);
     setShowResultsModal(true);
+  }, []);
+
+  const handleViewDetails = useCallback((assignment) => {
+    setDetailsAssignment(assignment);
+    setShowAssignmentDetails(true);
   }, []);
 
   const handleFileSelect = useCallback((event) => {
@@ -233,6 +241,7 @@ const StudentDashboard = () => {
             onSubmitWork={handleSubmitWork}
             onViewResults={handleViewResults}
             onResubmit={handleSubmitWork}
+            onViewDetails={handleViewDetails}
           />
         </div>
       </main>
@@ -254,6 +263,16 @@ const StudentDashboard = () => {
           setSelectedAssignment(null);
         }}
       />
+
+      <AssignmentDetailsModal
+        assignment={detailsAssignment}
+        isOpen={showAssignmentDetails}
+        onClose={() => {
+          setShowAssignmentDetails(false);
+          setDetailsAssignment(null);
+        }}
+        mode="student"
+      />
     </div>
   );
 };
@@ -270,7 +289,8 @@ const DashboardContent = React.memo(({
   assignments = [],
   onSubmitWork, 
   onViewResults, 
-  onResubmit 
+  onResubmit,
+  onViewDetails
 }) => {
   if (isLoading) {
     return (
@@ -302,6 +322,7 @@ const DashboardContent = React.memo(({
           onSubmitWork={onSubmitWork}
           onViewResults={onViewResults}
           onResubmit={onResubmit}
+          onViewDetails={onViewDetails}
         />
       ))}
     </div>

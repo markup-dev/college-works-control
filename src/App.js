@@ -87,7 +87,7 @@ function AppContent() {
   }
 
   return (
-    <Router>
+    <Router basename="/college-works-control">
       <div className="App">
         {user && <DataLoader />}
         {user && <Header user={user} onLogout={handleLogout} />}

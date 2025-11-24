@@ -9,6 +9,7 @@ const AssignmentCard = ({
   onSubmitWork, 
   onViewResults, 
   onResubmit,
+  onViewDetails,
   className = "" 
 }) => {
   const statusInfo = getStatusInfo(assignment);
@@ -197,7 +198,7 @@ const AssignmentCard = ({
                   {assignment.score}<span className="score-separator">/</span>{assignment.maxScore}
                 </span>
                 <span className="score-percent">
-                  {Math.round((assignment.score / assignment.maxScore) * 100)}%
+                  {Math.round((Number(assignment.score) / Number(assignment.maxScore)) * 100)}%
                 </span>
               </div>
             } 
@@ -210,6 +211,17 @@ const AssignmentCard = ({
       )}
       
       <div className="assignment-actions">
+        {onViewDetails && (
+          <Button 
+            variant="outline" 
+            size="small" 
+            icon="ℹ️"
+            onClick={() => onViewDetails(assignment)}
+            fullWidth={assignment.status === 'submitted'}
+          >
+            Подробнее
+          </Button>
+        )}
         {renderActions()}
       </div>
     </Card>

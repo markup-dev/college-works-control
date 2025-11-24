@@ -1,9 +1,20 @@
 // src/context/TeacherContext.jsx
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import { mockTeacherAssignments, mockTeacherSubmissions } from '../data/mockData/teacherData';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
+import { mockTeacherAssignments } from '../data/mockData/teacherData';
+import { mockStudentSubmissions } from '../data/mockData/studentData';
+import { useAuth } from './AuthContext';
 
+// Используем submissions от студентов как начальные данные
+const combinedSubmissions = [...mockStudentSubmissions];
+
+// Используем assignments от преподавателя
+const combinedAssignments = [...mockTeacherAssignments];
+
+const SHARED_ASSIGNMENTS_KEY = 'college_assignments';
 const TEACHER_ASSIGNMENTS_KEY = 'college_teacher_assignments';
-const TEACHER_SUBMISSIONS_KEY = 'college_submissions';
+const SHARED_SUBMISSIONS_KEY = 'college_submissions';
+const DEFAULT_TEACHER_LOGIN = 'teacher_kartseva';
+const DEFAULT_TEACHER_NAME = 'Карцева Мария Сергеевна';
 
 const readFromStorage = (key, fallback) => {
   try {
@@ -36,10 +47,52 @@ export const useTeacher = () => {
 };
 
 export const TeacherProvider = ({ children }) => {
-  const [teacherAssignments, setTeacherAssignments] = useState([]);
-  const [submissions, setSubmissions] = useState([]);
+  const [allTeacherAssignments, setAllTeacherAssignments] = useState([]);
+  const [allSubmissions, setAllSubmissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
+
+  const teacherLogin = user?.login;
+  const teacherName = user?.name;
+
+  const resolveOwnerLogin = useCallback(
+    (login) => login || DEFAULT_TEACHER_LOGIN,
+    []
+  );
+
+  const belongsToCurrentTeacher = useCallback(
+    (login) => {
+      const targetLogin = teacherLogin || DEFAULT_TEACHER_LOGIN;
+      return resolveOwnerLogin(login) === targetLogin;
+    },
+    [teacherLogin, resolveOwnerLogin]
+  );
+
+  const normalizeAssignments = useCallback(
+    (assignments) =>
+      assignments.map((assignment) => ({
+        ...assignment,
+        teacherLogin: resolveOwnerLogin(assignment.teacherLogin),
+        teacherName: assignment.teacherName || DEFAULT_TEACHER_NAME,
+      })),
+    [resolveOwnerLogin]
+  );
+
+  const normalizeSubmissions = useCallback(
+    (submissions, assignments) =>
+      submissions.map((submission) => {
+        const assignment = assignments.find(a => a.id === submission.assignmentId);
+        return {
+          ...submission,
+          teacherLogin: resolveOwnerLogin(submission.teacherLogin),
+          assignmentTitle: assignment ? assignment.title : 'Неизвестно',
+          assignmentCourse: assignment ? assignment.course : '',
+          maxScore: assignment ? assignment.maxScore : 100
+        };
+      }),
+    [resolveOwnerLogin]
+  );
 
   // Загрузка данных преподавателя
   const loadTeacherData = useCallback(async () => {
@@ -49,21 +102,24 @@ export const TeacherProvider = ({ children }) => {
       // Имитация загрузки данных
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      const storedAssignments = readFromStorage(TEACHER_ASSIGNMENTS_KEY, mockTeacherAssignments);
-      const storedSubmissions = readFromStorage(TEACHER_SUBMISSIONS_KEY, mockTeacherSubmissions);
+      const storedAssignments = readFromStorage(TEACHER_ASSIGNMENTS_KEY, combinedAssignments);
+      const storedSubmissions = readFromStorage(SHARED_SUBMISSIONS_KEY, combinedSubmissions);
 
-      setTeacherAssignments(storedAssignments);
-      setSubmissions(storedSubmissions);
+      const normalizedAssignments = normalizeAssignments(storedAssignments);
+      const normalizedSubmissions = normalizeSubmissions(storedSubmissions, normalizedAssignments);
 
-      writeToStorage(TEACHER_ASSIGNMENTS_KEY, storedAssignments);
-      writeToStorage(TEACHER_SUBMISSIONS_KEY, storedSubmissions);
+      setAllTeacherAssignments(normalizedAssignments);
+      setAllSubmissions(normalizedSubmissions);
+
+      writeToStorage(TEACHER_ASSIGNMENTS_KEY, normalizedAssignments);
+      writeToStorage(SHARED_SUBMISSIONS_KEY, normalizedSubmissions);
     } catch (err) {
       setError('Ошибка загрузки данных преподавателя');
       console.error('Error loading teacher data:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [normalizeAssignments, normalizeSubmissions]);
 
   const loadTeacherAssignments = useCallback(async () => {
     return loadTeacherData();
@@ -81,14 +137,31 @@ export const TeacherProvider = ({ children }) => {
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Обновляем submission
-      setSubmissions(prev => {
+      setAllSubmissions(prev => {
         const updated = prev.map(submission =>
           submission.id === submissionId
-            ? { ...submission, status: 'зачтена', score: parseInt(score, 10), comment }
+            ? { ...submission, status: 'graded', score: parseInt(score, 10), comment }
             : submission
         );
-        writeToStorage(TEACHER_SUBMISSIONS_KEY, updated);
+        writeToStorage(SHARED_SUBMISSIONS_KEY, updated);
         return updated;
+      });
+
+      // Обновляем assignments в storage для синхронизации
+      setAllTeacherAssignments(prev => {
+        const updatedAssignments = prev.map(assignment => {
+          const assignmentSubmissions = allSubmissions.filter(sub => sub.assignmentId === assignment.id);
+          const pendingCount = assignmentSubmissions.filter(sub =>
+            sub.status === 'submitted'
+          ).length;
+          return {
+            ...assignment,
+            submissionsCount: assignmentSubmissions.length,
+            pendingCount
+          };
+        });
+        writeToStorage(SHARED_ASSIGNMENTS_KEY, updatedAssignments);
+        return updatedAssignments;
       });
 
       return { success: true };
@@ -98,7 +171,7 @@ export const TeacherProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [allSubmissions]);
 
   // Возврат работы на доработку
   const returnSubmission = useCallback(async (submissionId, comment) => {
@@ -108,14 +181,31 @@ export const TeacherProvider = ({ children }) => {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Обновляем submission
-      setSubmissions(prev => {
+      setAllSubmissions(prev => {
         const updated = prev.map(submission =>
           submission.id === submissionId
-            ? { ...submission, status: 'возвращена', comment }
+            ? { ...submission, status: 'returned', comment }
             : submission
         );
-        writeToStorage(TEACHER_SUBMISSIONS_KEY, updated);
+        writeToStorage(SHARED_SUBMISSIONS_KEY, updated);
         return updated;
+      });
+
+      // Обновляем assignments в storage для синхронизации
+      setAllTeacherAssignments(prev => {
+        const updatedAssignments = prev.map(assignment => {
+          const assignmentSubmissions = allSubmissions.filter(sub => sub.assignmentId === assignment.id);
+          const pendingCount = assignmentSubmissions.filter(sub =>
+            sub.status === 'submitted'
+          ).length;
+          return {
+            ...assignment,
+            submissionsCount: assignmentSubmissions.length,
+            pendingCount
+          };
+        });
+        writeToStorage(TEACHER_ASSIGNMENTS_KEY, updatedAssignments);
+        return updatedAssignments;
       });
 
       return { success: true };
@@ -125,7 +215,7 @@ export const TeacherProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [allSubmissions]);
 
   // Создание задания
   const createAssignment = useCallback(async (assignmentData) => {
@@ -145,10 +235,12 @@ export const TeacherProvider = ({ children }) => {
         createdAt: new Date().toISOString().split('T')[0],
         submissions: [], // Пустой массив submissions для нового задания
         studentGroups: studentGroups,
-        priority: assignmentData.priority || 'medium'
+        priority: assignmentData.priority || 'medium',
+        teacherLogin: resolveOwnerLogin(teacherLogin),
+        teacherName: teacherName || assignmentData.teacherName || DEFAULT_TEACHER_NAME
       };
 
-      setTeacherAssignments(prev => {
+      setAllTeacherAssignments(prev => {
         const updated = [...prev, newAssignment];
         writeToStorage(TEACHER_ASSIGNMENTS_KEY, updated);
         return updated;
@@ -160,12 +252,12 @@ export const TeacherProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [resolveOwnerLogin, teacherLogin, teacherName]);
 
   const updateAssignment = useCallback(async (assignmentId, updates) => {
     setLoading(true);
     try {
-      setTeacherAssignments(prev => {
+      setAllTeacherAssignments(prev => {
         const updated = prev.map(assignment =>
           assignment.id === assignmentId ? { ...assignment, ...updates } : assignment
         );
@@ -181,12 +273,47 @@ export const TeacherProvider = ({ children }) => {
     }
   }, []);
 
+  const deleteAssignment = useCallback(async (assignmentId) => {
+    setLoading(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      setAllTeacherAssignments(prev => {
+        const updated = prev.filter(assignment => assignment.id !== assignmentId);
+        writeToStorage(TEACHER_ASSIGNMENTS_KEY, updated);
+        return updated;
+      });
+
+      setAllSubmissions(prev => {
+        const updated = prev.filter(submission => submission.assignmentId !== assignmentId);
+        writeToStorage(SHARED_SUBMISSIONS_KEY, updated);
+        return updated;
+      });
+
+      return { success: true };
+    } catch (err) {
+      console.error('Error deleting assignment:', err);
+      return { success: false, error: 'Ошибка при удалении задания' };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const teacherAssignments = useMemo(() => {
+    return allTeacherAssignments.filter(assignment => belongsToCurrentTeacher(assignment.teacherLogin));
+  }, [allTeacherAssignments, belongsToCurrentTeacher]);
+
+  const teacherSubmissions = useMemo(() => {
+    return allSubmissions.filter(sub => belongsToCurrentTeacher(sub.teacherLogin));
+  }, [allSubmissions, belongsToCurrentTeacher]);
+
   const assignmentsWithSubmissions = useMemo(() => {
     return teacherAssignments.map(assignment => {
-      const assignmentSubmissions = submissions.filter(sub => sub.assignmentId === assignment.id);
-      const pendingCount = assignmentSubmissions.filter(sub => 
-        sub.status === 'на проверке' || sub.status === 'submitted'
+      const assignmentSubmissions = teacherSubmissions.filter(sub => sub.assignmentId === assignment.id);
+      const pendingCount = assignmentSubmissions.filter(sub =>
+        sub.status === 'submitted'
       ).length;
+
 
       return {
         ...assignment,
@@ -195,11 +322,23 @@ export const TeacherProvider = ({ children }) => {
         pendingCount
       };
     });
-  }, [teacherAssignments, submissions]);
+  }, [teacherAssignments, teacherSubmissions]);
+
+  // Синхронизация с localStorage
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === TEACHER_ASSIGNMENTS_KEY || e.key === SHARED_SUBMISSIONS_KEY) {
+        loadTeacherData();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [loadTeacherData]);
 
   const value = {
     teacherAssignments: assignmentsWithSubmissions,
-    submissions,
+    submissions: teacherSubmissions,
     loading,
     error,
     loadTeacherAssignments,
@@ -208,6 +347,7 @@ export const TeacherProvider = ({ children }) => {
     returnSubmission,
     createAssignment,
     updateAssignment,
+    deleteAssignment,
   };
 
   return <TeacherContext.Provider value={value}>{children}</TeacherContext.Provider>;

@@ -32,17 +32,63 @@
   .filters {
     display: flex;
     gap: 1rem;
-    
+
     .filter-select {
       padding: 0.5rem 1rem;
       border: 2px solid #e1e5e9;
       border-radius: 8px;
       font-size: 0.9rem;
       background: white;
-      
+
       &:focus {
         outline: none;
         border-color: #2c5aa0;
+      }
+    }
+  }
+}
+
+.filters-section {
+  margin-bottom: 2rem;
+
+  .controls-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+
+    .search-box {
+      flex: 1;
+      min-width: 250px;
+
+      .search-input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 2px solid #e1e5e9;
+        border-radius: 8px;
+        font-size: 0.9rem;
+
+        &:focus {
+          outline: none;
+          border-color: #2c5aa0;
+        }
+      }
+    }
+
+    .sort-filter {
+      .filter-select {
+        padding: 0.75rem 1rem;
+        border: 2px solid #e1e5e9;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        background: white;
+        min-width: 150px;
+  
+        &:focus {
+          outline: none;
+          border-color: #2c5aa0;
+        }
+  
       }
     }
   }

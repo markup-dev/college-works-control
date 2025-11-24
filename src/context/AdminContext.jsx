@@ -1,7 +1,8 @@
-// src/context/AdminContext.jsx
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import authService from '../services/authService';
 import { mockAdminCourses, mockSystemLogs } from '../data/mockData/adminData';
+import { mockStudentSubmissions } from '../data/mockData/studentData';
+import { mockTeacherSubmissions } from '../data/mockData/teacherData';
 
 const ADMIN_COURSES_KEY = 'admin_courses';
 const ADMIN_LOGS_KEY = 'admin_logs';
@@ -39,6 +40,7 @@ export const useAdmin = () => {
 export const AdminProvider = ({ children }) => {
   const [users, setUsers] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [submissions] = useState([...mockStudentSubmissions, ...mockTeacherSubmissions]);
   const [systemLogs, setSystemLogs] = useState([]);
   const [adminStats, setAdminStats] = useState({
     totalUsers: 0,
@@ -232,9 +234,37 @@ export const AdminProvider = ({ children }) => {
     }
   }, []);
 
+  const deleteCourse = useCallback(async (courseId) => {
+    try {
+      setCourses((prev) => {
+        const updated = prev.filter((course) => course.id !== courseId);
+        writeToStorage(ADMIN_COURSES_KEY, updated);
+        return updated;
+      });
+      setSystemLogs(prev => {
+        const updatedLogs = [
+          {
+            id: Date.now(),
+            timestamp: new Date().toLocaleString('ru-RU'),
+            user: 'system',
+            action: 'delete_course',
+            details: `Удален курс ID ${courseId}`
+          },
+          ...prev
+        ];
+        writeToStorage(ADMIN_LOGS_KEY, updatedLogs);
+        return updatedLogs;
+      });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Ошибка удаления курса' };
+    }
+  }, []);
+
   const value = {
     users,
     courses,
+    submissions,
     systemLogs,
     adminStats,
     loading,
@@ -245,6 +275,7 @@ export const AdminProvider = ({ children }) => {
     deleteUser,
     createCourse,
     updateCourse,
+    deleteCourse,
   };
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;

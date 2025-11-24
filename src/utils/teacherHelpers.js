@@ -1,5 +1,8 @@
 export const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('ru-RU', {
+  if (!dateString) return 'Дата не указана';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Некорректная дата';
+  return date.toLocaleDateString('ru-RU', {
     day: 'numeric',
     month: 'long',
     year: 'numeric'
@@ -15,14 +18,11 @@ export const getDaysUntilDeadline = (deadline) => {
 
 export const getSubmissionStatusInfo = (status) => {
   const statusMap = {
-    'на проверке': { label: 'На проверке', variant: 'warning', icon: '📋' },
-    'зачтена': { label: 'Зачтена', variant: 'success', icon: '✅' },
-    'возвращена': { label: 'Возвращена', variant: 'danger', icon: '↩️' },
     'submitted': { label: 'На проверке', variant: 'warning', icon: '📋' },
     'graded': { label: 'Зачтена', variant: 'success', icon: '✅' },
     'returned': { label: 'Возвращена', variant: 'danger', icon: '↩️' }
   };
-  return statusMap[status] || statusMap['на проверке'];
+  return statusMap[status] || statusMap['submitted'];
 };
 
 // Форматирование размера файла

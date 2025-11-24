@@ -1,5 +1,5 @@
 // src/components/Teacher/AssignmentModal/AssignmentModal.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Button from '../../UI/Button/Button';
 import { useNotification } from '../../../context/NotificationContext';
 import './AssignmentModal.scss';
@@ -8,21 +8,40 @@ const AssignmentModal = ({
   assignment, 
   isOpen, 
   onClose,
-  onSubmit
+  onSubmit,
+  availableGroups = []
 }) => {
   const { showError } = useNotification();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     title: '',
     course: 'Базы данных',
-    group: 'ИСП-401',
+    group: availableGroups[0] || 'ИСП-029',
     deadline: '',
     description: '',
     maxScore: 100,
     submissionType: 'file',
     criteria: []
-  });
+  }));
 
   // Инициализация формы при открытии модалки
+  const getDefaultGroup = () => {
+    if (assignment?.studentGroups?.length) {
+      return assignment.studentGroups[0];
+    }
+    if (assignment?.group) {
+      return assignment.group;
+    }
+    return availableGroups[0] || 'ИСП-029';
+  };
+
+  const groupOptions = useMemo(() => {
+    const uniqueGroups = new Set(availableGroups.filter(Boolean));
+    if (formData.group && formData.group !== 'Все группы') {
+      uniqueGroups.add(formData.group);
+    }
+    return Array.from(uniqueGroups);
+  }, [availableGroups, formData.group]);
+
   useEffect(() => {
     if (assignment) {
       // Преобразуем критерии из строк в объекты, если нужно
@@ -34,9 +53,7 @@ const AssignmentModal = ({
       });
       
       // Определяем группу из studentGroups
-      const group = assignment.studentGroups && assignment.studentGroups.length > 0
-        ? assignment.studentGroups[0]
-        : assignment.group || 'ИСП-401';
+      const group = getDefaultGroup();
 
       setFormData({
         title: assignment.title || '',
@@ -53,7 +70,7 @@ const AssignmentModal = ({
       setFormData({
         title: '',
         course: 'Базы данных',
-        group: 'ИСП-401',
+        group: availableGroups[0] || 'ИСП-029',
         deadline: '',
         description: '',
         maxScore: 100,
@@ -62,7 +79,7 @@ const AssignmentModal = ({
         priority: 'medium'
       });
     }
-  }, [assignment, isOpen]);
+  }, [assignment, isOpen, availableGroups]);
 
   if (!isOpen) return null;
 
@@ -199,9 +216,11 @@ const AssignmentModal = ({
                       onChange={(e) => handleInputChange('group', e.target.value)}
                       className="form-select"
                     >
-                      <option value="ИСП-401">ИСП-401</option>
-                      <option value="ИСП-402">ИСП-402</option>
-                      <option value="ИСП-403">ИСП-403</option>
+                      {groupOptions.map((group) => (
+                        <option key={group} value={group}>
+                          {group}
+                        </option>
+                      ))}
                       <option value="Все группы">Все группы</option>
                     </select>
                   </FormGroup>

@@ -9,10 +9,15 @@ import AssignmentModal from '../../components/Teacher/AssignmentModal/Assignment
 import SubmissionDetailsModal from '../../components/Teacher/SubmissionDetailsModal/SubmissionDetailsModal';
 import Button from '../../components/UI/Button/Button';
 import InputModal from '../../components/UI/Modal/InputModal';
+import ConfirmModal from '../../components/UI/Modal/ConfirmModal';
+import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsModal/AssignmentDetailsModal';
 import { useAuth } from '../../context/AuthContext';
 import { useTeacher } from '../../context/TeacherContext';
 import { useNotification } from '../../context/NotificationContext';
+import { calculateSubmissionStats } from '../../utils/assignmentHelpers';
 import './TeacherDashboard.scss';
+
+const DEFAULT_GROUPS = ['ИСП-029', 'ИСП-029А'];
 
 const TeacherDashboard = () => {
   const { user } = useAuth();
@@ -26,6 +31,7 @@ const TeacherDashboard = () => {
     returnSubmission,
     createAssignment,
     updateAssignment,
+    deleteAssignment,
     error 
   } = useTeacher();
   const { showSuccess, showError, showWarning, showInfo } = useNotification();
@@ -41,6 +47,14 @@ const TeacherDashboard = () => {
   const [gradeData, setGradeData] = useState({ score: '', comment: '' });
   const [assignmentFilter, setAssignmentFilter] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [assignmentSearchTerm, setAssignmentSearchTerm] = useState('');
+  const [assignmentGroupFilter, setAssignmentGroupFilter] = useState('all');
+  const [assignmentToDelete, setAssignmentToDelete] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [detailsAssignment, setDetailsAssignment] = useState(null);
+  const [showAssignmentDetails, setShowAssignmentDetails] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -52,7 +66,7 @@ const TeacherDashboard = () => {
     loadTeacherSubmissions();
   }, [user, navigate, loadTeacherAssignments, loadTeacherSubmissions]);
 
-  const { dashboardStats, filteredSubmissions } = useMemo(() => {
+  const { dashboardStats, filteredSubmissions, filteredAssignments } = useMemo(() => {
     const dashboardStats = {
       totalAssignments: assignments.length,
       pendingSubmissions: submissions.filter(s => s.status === 'на проверке').length,
@@ -61,16 +75,70 @@ const TeacherDashboard = () => {
       totalSubmissions: submissions.length
     };
 
-    let filtered = [...submissions];
+    let filteredSubs = [...submissions];
     if (assignmentFilter !== 'all') {
-      filtered = filtered.filter(s => s.assignmentId === parseInt(assignmentFilter));
+      filteredSubs = filteredSubs.filter(s => s.assignmentId === parseInt(assignmentFilter));
     }
     if (groupFilter !== 'all') {
-      filtered = filtered.filter(s => s.group === groupFilter);
+      filteredSubs = filteredSubs.filter(s => s.group === groupFilter);
+    }
+    if (statusFilter !== 'all') {
+      filteredSubs = filteredSubs.filter(s => s.status === statusFilter);
+    }
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filteredSubs = filteredSubs.filter(s =>
+        s.studentName?.toLowerCase().includes(term) ||
+        s.assignmentTitle?.toLowerCase().includes(term) ||
+        s.group?.toLowerCase().includes(term)
+      );
     }
 
-    return { dashboardStats, filteredSubmissions: filtered };
-  }, [assignments, submissions, assignmentFilter, groupFilter]);
+    let filteredAssigns = [...assignments];
+    if (assignmentGroupFilter !== 'all') {
+      filteredAssigns = filteredAssigns.filter(a =>
+        a.studentGroups?.includes(assignmentGroupFilter)
+      );
+    }
+    if (assignmentSearchTerm.trim()) {
+      const term = assignmentSearchTerm.toLowerCase();
+      filteredAssigns = filteredAssigns.filter(a =>
+        a.title?.toLowerCase().includes(term) ||
+        a.course?.toLowerCase().includes(term)
+      );
+    }
+
+    return {
+      dashboardStats,
+      filteredSubmissions: filteredSubs,
+      filteredAssignments: filteredAssigns
+    };
+  }, [assignments, submissions, assignmentFilter, groupFilter, statusFilter, searchTerm, assignmentGroupFilter, assignmentSearchTerm]);
+
+  const availableGroups = useMemo(() => {
+    const groupSet = new Set();
+    const addGroup = (value) => {
+      const normalized = value?.trim();
+      if (normalized) {
+        groupSet.add(normalized);
+      }
+    };
+
+    assignments.forEach((assignment) => {
+      addGroup(assignment.group);
+      (assignment.studentGroups || []).forEach(addGroup);
+    });
+
+    submissions.forEach((submission) => {
+      addGroup(submission.group);
+    });
+
+    if (groupSet.size === 0) {
+      DEFAULT_GROUPS.forEach(addGroup);
+    }
+
+    return Array.from(groupSet);
+  }, [assignments, submissions]);
 
   const handleCreateAssignment = () => {
     setSelectedAssignment(null);
@@ -169,6 +237,44 @@ const TeacherDashboard = () => {
     setActiveTab('analytics');
   };
 
+  const handleViewAssignmentDetails = (assignment) => {
+    setDetailsAssignment(assignment);
+    setShowAssignmentDetails(true);
+  };
+
+  const handleCloseAssignmentDetails = () => {
+    setDetailsAssignment(null);
+    setShowAssignmentDetails(false);
+  };
+
+  const handleRequestDeleteAssignment = (assignment) => {
+    setAssignmentToDelete(assignment);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDeleteAssignment = async () => {
+    const assignment = assignmentToDelete;
+    if (!assignment) return;
+
+    try {
+      const result = await deleteAssignment(assignment.id);
+      if (result.success) {
+        showSuccess(`Задание "${assignment.title}" удалено`);
+      } else {
+        showError(result.error || 'Не удалось удалить задание');
+      }
+    } catch (error) {
+      showError('Ошибка при удалении задания');
+    } finally {
+      setAssignmentToDelete(null);
+    }
+  };
+
+  const handleCloseDeleteModal = () => {
+    setShowDeleteConfirm(false);
+    setAssignmentToDelete(null);
+  };
+
   const handleSaveAssignment = async (assignmentData) => {
     try {
       const result = selectedAssignment
@@ -219,16 +325,27 @@ const TeacherDashboard = () => {
 
           <DashboardContent
             activeTab={activeTab}
-            assignments={assignments}
+            assignments={filteredAssignments}
             filteredSubmissions={filteredSubmissions}
             assignmentFilter={assignmentFilter}
             groupFilter={groupFilter}
+            statusFilter={statusFilter}
+            searchTerm={searchTerm}
+            assignmentSearchTerm={assignmentSearchTerm}
+            assignmentGroupFilter={assignmentGroupFilter}
+            availableGroups={availableGroups}
             onAssignmentFilterChange={setAssignmentFilter}
             onGroupFilterChange={setGroupFilter}
+            onStatusFilterChange={setStatusFilter}
+            onSearchChange={setSearchTerm}
+            onAssignmentSearchChange={setAssignmentSearchTerm}
+            onAssignmentGroupFilterChange={setAssignmentGroupFilter}
             onCreateAssignment={handleCreateAssignment}
             onViewSubmissions={handleViewSubmissions}
             onEditAssignment={handleEditAssignment}
             onViewAnalytics={handleViewAnalytics}
+            onViewAssignmentDetails={handleViewAssignmentDetails}
+            onDeleteAssignment={handleRequestDeleteAssignment}
             onGradeSubmission={handleGradeSubmission}
             onReturnSubmission={handleReturnSubmission}
             onDownloadFile={handleDownloadFile}
@@ -256,6 +373,29 @@ const TeacherDashboard = () => {
         isOpen={showAssignmentModal}
         onClose={closeAssignmentModal}
         onSubmit={handleSaveAssignment}
+        availableGroups={availableGroups}
+      />
+
+      <AssignmentDetailsModal
+        assignment={detailsAssignment}
+        isOpen={showAssignmentDetails}
+        onClose={handleCloseAssignmentDetails}
+        mode="teacher"
+        stats={detailsAssignment ? calculateSubmissionStats(detailsAssignment.submissions || []) : null}
+      />
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDeleteAssignment}
+        title="Удалить задание?"
+        message={
+          assignmentToDelete
+            ? `Вы уверены, что хотите удалить задание "${assignmentToDelete.title}"? Связанные сдачи также будут удалены.`
+            : 'Вы уверены, что хотите удалить задание?'
+        }
+        confirmText="Удалить"
+        danger
       />
 
       <SubmissionDetailsModal
@@ -304,12 +444,23 @@ const DashboardContent = ({
   filteredSubmissions,
   assignmentFilter,
   groupFilter,
+  statusFilter,
+  searchTerm,
+  assignmentSearchTerm,
+  assignmentGroupFilter,
+  availableGroups,
   onAssignmentFilterChange,
   onGroupFilterChange,
+  onStatusFilterChange,
+  onSearchChange,
+  onAssignmentSearchChange,
+  onAssignmentGroupFilterChange,
   onCreateAssignment,
   onViewSubmissions,
   onEditAssignment,
   onViewAnalytics,
+  onViewAssignmentDetails,
+  onDeleteAssignment,
   onGradeSubmission,
   onReturnSubmission,
   onDownloadFile,
@@ -321,10 +472,17 @@ const DashboardContent = ({
         return (
           <AssignmentsSection
             assignments={assignments}
+            searchTerm={assignmentSearchTerm}
+            groupFilter={assignmentGroupFilter}
+            availableGroups={availableGroups}
+            onSearchChange={onAssignmentSearchChange}
+            onGroupFilterChange={onAssignmentGroupFilterChange}
             onCreateAssignment={onCreateAssignment}
             onViewSubmissions={onViewSubmissions}
             onEditAssignment={onEditAssignment}
             onViewAnalytics={onViewAnalytics}
+            onViewDetails={onViewAssignmentDetails}
+            onDeleteAssignment={onDeleteAssignment}
           />
         );
       
@@ -335,8 +493,13 @@ const DashboardContent = ({
             assignments={assignments}
             assignmentFilter={assignmentFilter}
             groupFilter={groupFilter}
+            statusFilter={statusFilter}
+            searchTerm={searchTerm}
+            availableGroups={availableGroups}
             onAssignmentFilterChange={onAssignmentFilterChange}
             onGroupFilterChange={onGroupFilterChange}
+            onStatusFilterChange={onStatusFilterChange}
+            onSearchChange={onSearchChange}
             onGradeSubmission={onGradeSubmission}
             onReturnSubmission={onReturnSubmission}
             onDownloadFile={onDownloadFile}
@@ -367,12 +530,19 @@ const DashboardContent = ({
   return <div className="dashboard-content">{renderSection()}</div>;
 };
 
-const AssignmentsSection = ({ 
-  assignments, 
-  onCreateAssignment, 
+const AssignmentsSection = ({
+  assignments,
+  searchTerm,
+  groupFilter,
+  availableGroups,
+  onSearchChange,
+  onGroupFilterChange,
+  onCreateAssignment,
   onViewSubmissions,
   onEditAssignment,
-  onViewAnalytics
+  onViewAnalytics,
+  onViewDetails,
+  onDeleteAssignment
 }) => (
   <div className="assignments-section">
     <div className="section-header">
@@ -381,7 +551,35 @@ const AssignmentsSection = ({
         + Создать задание
       </Button>
     </div>
-    
+
+    <div className="filters-section">
+      <div className="controls-row">
+        <div className="search-box">
+          <input
+            type="text"
+            placeholder="🔍 Поиск по названию, дисциплине..."
+            value={searchTerm}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="search-input"
+          />
+        </div>
+        <div className="sort-filter">
+          <select
+            value={groupFilter}
+            onChange={(e) => onGroupFilterChange(e.target.value)}
+            className="filter-select"
+          >
+            <option value="all">Все группы</option>
+            {availableGroups.map((group) => (
+              <option key={group} value={group}>
+                {group}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+
     <div className="assignments-grid">
       {assignments.map(assignment => (
         <AssignmentCard
@@ -390,6 +588,8 @@ const AssignmentsSection = ({
           onViewSubmissions={() => onViewSubmissions(assignment.id)}
           onEditAssignment={() => onEditAssignment(assignment)}
           onViewAnalytics={() => onViewAnalytics(assignment)}
+          onViewDetails={() => onViewDetails && onViewDetails(assignment)}
+          onDeleteAssignment={onDeleteAssignment ? () => onDeleteAssignment(assignment) : undefined}
         />
       ))}
     </div>
@@ -401,8 +601,13 @@ const SubmissionsSection = ({
   assignments,
   assignmentFilter,
   groupFilter,
+  statusFilter,
+  searchTerm,
+  availableGroups,
   onAssignmentFilterChange,
   onGroupFilterChange,
+  onStatusFilterChange,
+  onSearchChange,
   onGradeSubmission,
   onReturnSubmission,
   onDownloadFile,
@@ -412,8 +617,17 @@ const SubmissionsSection = ({
     <div className="section-header">
       <h2>Работы студентов</h2>
       <div className="filters">
-        <select 
-          value={assignmentFilter} 
+        <div className="search-box">
+          <input
+            type="text"
+            placeholder="🔍 Поиск по студенту, заданию, группе..."
+            value={searchTerm}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="search-input"
+          />
+        </div>
+        <select
+          value={assignmentFilter}
           onChange={(e) => onAssignmentFilterChange(e.target.value)}
           className="filter-select"
         >
@@ -424,14 +638,27 @@ const SubmissionsSection = ({
             </option>
           ))}
         </select>
-        <select 
-          value={groupFilter} 
+        <select
+          value={groupFilter}
           onChange={(e) => onGroupFilterChange(e.target.value)}
           className="filter-select"
         >
           <option value="all">Все группы</option>
-          <option value="ИСП-401">ИСП-401</option>
-          <option value="ИСП-402">ИСП-402</option>
+          {availableGroups.map((group) => (
+            <option key={group} value={group}>
+              {group}
+            </option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => onStatusFilterChange(e.target.value)}
+          className="filter-select"
+        >
+          <option value="all">Все статусы</option>
+          <option value="на проверке">На проверке</option>
+          <option value="зачтена">Зачтена</option>
+          <option value="возвращена">Возвращена</option>
         </select>
       </div>
     </div>

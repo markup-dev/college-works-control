@@ -1,5 +1,7 @@
-// src/data/mockData/studentData.js
-// Моковые данные для студента
+const DEFAULT_TEACHER = {
+  login: 'teacher_kartseva',
+  shortName: 'Карцева М.С.',
+};
 
 export const mockStudentAssignments = [
   {
@@ -13,11 +15,17 @@ export const mockStudentAssignments = [
     description: 'Разработка схемы БД для информационной системы колледжа.',
     priority: 'high',
     maxScore: 100,
-    teacher: 'Петрова М.И.',
+    teacher: DEFAULT_TEACHER.shortName,
+    teacherLogin: DEFAULT_TEACHER.login,
     submissionType: 'file',
     allowedFormats: ['.pdf', '.docx', '.zip'],
     maxFileSize: 50,
-    criteria: ['Качество проектирования БД - 40 баллов', 'Нормализация - 30 баллов', 'Документация - 30 баллов']
+    criteria: [
+      'Качество проектирования БД - 40 баллов',
+      'Нормализация - 30 баллов',
+      'Документация - 30 баллов'
+    ],
+    studentGroups: ['ИСП-029', 'ИСП-029А']
   },
   {
     id: 2,
@@ -30,11 +38,17 @@ export const mockStudentAssignments = [
     description: 'Разработка клиентской части системы контроля учебных работ.',
     priority: 'medium',
     maxScore: 100,
-    teacher: 'Петрова М.И.',
+    teacher: DEFAULT_TEACHER.shortName,
+    teacherLogin: DEFAULT_TEACHER.login,
     submissionType: 'file',
     allowedFormats: ['.pdf', '.docx', '.zip'],
     maxFileSize: 50,
-    criteria: ['Функциональность - 40 баллов', 'Интерфейс - 30 баллов', 'Код - 30 баллов']
+    criteria: [
+      'Функциональность - 40 баллов',
+      'Интерфейс - 30 баллов',
+      'Код - 30 баллов'
+    ],
+    studentGroups: ['ИСП-029']
   },
   {
     id: 3,
@@ -47,12 +61,14 @@ export const mockStudentAssignments = [
     description: 'Написание тестов для модуля аутентификации.',
     priority: 'low',
     maxScore: 100,
-    teacher: 'Смирнов А.В.',
+    teacher: DEFAULT_TEACHER.shortName,
+    teacherLogin: DEFAULT_TEACHER.login,
     submissionType: 'file',
     allowedFormats: ['.pdf', '.docx', '.zip'],
     maxFileSize: 50,
     feedback: 'Отличная работа! Хорошее покрытие тестами.',
-    criteria: ['Покрытие кода - 50 баллов', 'Качество тестов - 50 баллов']
+    criteria: ['Покрытие кода - 50 баллов', 'Качество тестов - 50 баллов'],
+    studentGroups: ['ИСП-029А']
   }
 ];
 
@@ -63,7 +79,9 @@ export const mockStudentSubmissions = [
     fileName: 'react_app.zip',
     submissionDate: '2025-01-15T14:30:00',
     status: 'submitted',
-    fileSize: '15.6 MB'
+    fileSize: '15.6 MB',
+    group: 'ИСП-029',
+    teacherLogin: DEFAULT_TEACHER.login
   },
   {
     id: 2,
@@ -72,7 +90,9 @@ export const mockStudentSubmissions = [
     submissionDate: '2025-01-10T10:15:00',
     status: 'graded',
     score: 85,
-    fileSize: '2.1 MB'
+    fileSize: '2.1 MB',
+    group: 'ИСП-029А',
+    teacherLogin: DEFAULT_TEACHER.login
   }
 ];
 

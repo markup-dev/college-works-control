@@ -167,24 +167,6 @@ const Register = () => {
             )}
           </div>
 
-          <div className='form-group'>
-            <label htmlFor='role' className='form-label'>
-              Роль в системе: *
-            </label>
-            <select
-              id='role'
-              className={`form-select ${errors.role ? 'error' : ''}`}
-              value={formData.role}
-              onChange={(e) => handleInputChange('role', e.target.value)}
-              disabled={isLoading}
-            >
-              <option value='student'>👨‍🎓 Студент</option>
-              <option value='teacher'>👩‍🏫 Преподаватель</option>
-            </select>
-            {errors.role && (
-              <span className='error-message'>{errors.role}</span>
-            )}
-          </div>
 
           {formData.role === 'student' ? (
             <div className='form-group'>

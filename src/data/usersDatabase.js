@@ -6,12 +6,12 @@ const CURRENT_USER_STORAGE_KEY = 'college_current_user';
 const defaultUsers = [
   {
     id: 1,
-    login: 'student_ivanov',
-    email: 'ivanov@college.ru',
+    login: 'student_zabiryuchenko',
+    email: 'zabiryuchenko@college.ru',
     passwordHash: '$2b$10$e9i7oT2Y/aHi59s/kPvoQ.UYJtjpw7ht5cvRgVOzlT7DcmIfeKC4S', // Password123
-    name: 'Иванов Алексей Петрович',
+    name: 'Забирюченко Кристина Алексеевна',
     role: 'student',
-    group: 'ИСП-401',
+    group: 'ИСП-029',
     phone: '+7 (999) 111-22-33',
     timezone: 'UTC+3',
     notifications: {
@@ -20,19 +20,19 @@ const defaultUsers = [
       sms: false
     },
     theme: 'system',
-    bio: 'Студент 4 курса, интересы — веб-разработка и дизайн.',
+    bio: 'Студентка 4 курса, интересы — веб-разработка и дизайн.',
     isActive: true,
     registrationDate: '2024-01-15',
     lastLogin: null
   },
   {
     id: 2,
-    login: 'teacher_petrova',
-    email: 'petrova@college.ru',
+    login: 'teacher_kartseva',
+    email: 'kartseva@college.ru',
     passwordHash: '$2b$10$e9i7oT2Y/aHi59s/kPvoQ.UYJtjpw7ht5cvRgVOzlT7DcmIfeKC4S', // Password123
-    name: 'Петрова Мария Сергеевна',
+    name: 'Карцева Мария Сергеевна',
     role: 'teacher',
-    department: 'Информатика',
+    department: 'JS-разработка',
     phone: '+7 (999) 444-55-66',
     timezone: 'UTC+3',
     notifications: {
@@ -41,7 +41,7 @@ const defaultUsers = [
       sms: true
     },
     theme: 'system',
-    bio: 'Преподаватель дисциплин по программированию и базам данных.',
+    bio: 'Преподаватель дисциплин по JavaScript',
     isActive: true,
     registrationDate: '2024-01-10',
     lastLogin: null

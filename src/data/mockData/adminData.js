@@ -1,11 +1,8 @@
-// src/data/mockData/adminData.js
-// Моковые данные для администратора
-
 export const mockAdminCourses = [
   {
     id: 1,
-    name: 'Базы данных',
-    teacher: 'Петрова М.И.',
+    name: 'JavaScript',
+    teacher: 'Карцева М.С.',
     studentsCount: 25,
     assignmentsCount: 8,
     status: 'active',
@@ -32,21 +29,21 @@ export const mockSystemLogs = [
   {
     id: 1,
     timestamp: '2025-01-16 10:30:00',
-    user: 'student_ivanov',
+    user: 'student_zabiryuchenko',
     action: 'login',
     details: 'Успешный вход в систему',
   },
   {
     id: 2,
     timestamp: '2025-01-16 11:15:00',
-    user: 'teacher_petrova',
+    user: 'teacher_kartseva',
     action: 'create_assignment',
     details: 'Создано задание "Курсовая работа"',
   },
   {
     id: 3,
     timestamp: '2025-01-16 12:00:00',
-    user: 'student_ivanov',
+    user: 'student_zabiryuchenko',
     action: 'submit_work',
     details: 'Сдана работа по БД',
   },

@@ -49,9 +49,9 @@ export const mockUsers = [
   },
   {
     id: 2,
-    login: 'teacher_petrova',
-    fullName: 'Петрова Мария Сергеевна',
-    email: 'petrova@college.ru',
+    login: 'teacher_kartseva',
+    fullName: 'Карцева Мария Сергеевна',
+    email: 'kartseva@college.ru',
     role: 'teacher',
     group: null,
     status: 'active',

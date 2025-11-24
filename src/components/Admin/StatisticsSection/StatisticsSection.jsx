@@ -18,15 +18,14 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
     totalCourses: courses.length,
     totalStudents: courses.reduce((sum, course) => sum + (course.studentsCount || 0), 0),
     avgStudents: Math.round(courses.reduce((sum, course) => sum + (course.studentsCount || 0), 0) / courses.length) || 0,
-    totalAssignments: courses.reduce((sum, course) => sum + (course.assignmentsCount || 0), 0)
+    totalAssignments: new Set(submissions.map(s => s.assignmentId)).size
   };
 
   const submissionStats = {
     total: submissions.length,
     pending: submissions.filter(s => s.status === 'submitted').length,
     graded: submissions.filter(s => s.status === 'graded').length,
-    returned: submissions.filter(s => s.status === 'returned').length,
-    notSubmitted: submissions.filter(s => s.status === 'not_submitted').length
+    returned: submissions.filter(s => s.status === 'returned').length
   };
 
   const progressPercentage = submissionStats.total > 0 
@@ -55,9 +54,9 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
               trend="+12%"
               color="primary"
             />
-            <MetricCard 
+            <MetricCard
               icon="📚"
-              value={courseStats.totalCourses}
+              value={courseStats.activeCourses}
               label="Активных курсов"
               trend="+5%"
               color="success"
@@ -69,7 +68,7 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
               trend="+8%"
               color="info"
             />
-            <MetricCard 
+            <MetricCard
               icon="⏳"
               value={submissionStats.pending}
               label="Работ на проверке"
@@ -87,25 +86,25 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
           </div>
           <div className="users-chart">
             <div className="chart-bars">
-              <ChartBar 
+              <ChartBar
                 label="Студенты"
                 value={userStats.students}
                 total={userStats.totalUsers}
-                color="var(--primary-color)"
+                color="#3b82f6"
                 icon="🎓"
               />
-              <ChartBar 
+              <ChartBar
                 label="Преподаватели"
                 value={userStats.teachers}
                 total={userStats.totalUsers}
-                color="var(--success-color)"
+                color="#10b981"
                 icon="👨‍🏫"
               />
-              <ChartBar 
+              <ChartBar
                 label="Администраторы"
                 value={userStats.admins}
                 total={userStats.totalUsers}
-                color="var(--warning-color)"
+                color="#f59e0b"
                 icon="⚙️"
               />
             </div>
@@ -172,7 +171,7 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
         </Card>
 
         {/* Статистика работ */}
-        <Card className="stat-card submissions-card" hoverable>
+        <Card className="stat-card submissions-card" hoverable style={{ gridColumn: '1 / -1' }}>
           <div className="card-header">
             <div className="card-icon">📝</div>
             <h3>Работы студентов</h3>
@@ -191,16 +190,16 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
                 icon="✅"
                 type="success"
               />
-              <SubmissionStat 
+              <SubmissionStat
                 count={submissionStats.returned}
                 label="Возвращено"
                 icon="↩️"
                 type="danger"
               />
-              <SubmissionStat 
-                count={submissionStats.notSubmitted}
-                label="Не сдано"
-                icon="📭"
+              <SubmissionStat
+                count={submissionStats.total}
+                label="Всего работ"
+                icon="📄"
                 type="secondary"
               />
             </div>
@@ -217,6 +216,9 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
               </div>
               <div className="progress-stats">
                 <span>Проверено: {submissionStats.graded + submissionStats.returned} из {submissionStats.total}</span>
+                {submissionStats.pending > 0 && (
+                  <span className="pending-count"> • На проверке: {submissionStats.pending}</span>
+                )}
               </div>
             </div>
           </div>

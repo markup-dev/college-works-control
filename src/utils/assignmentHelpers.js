@@ -38,12 +38,12 @@ export const formatDate = (dateString) => {
 // Вычисление статистики по работам для преподавателя
 export const calculateSubmissionStats = (submissions = []) => {
   const total = submissions.length;
-  const submitted = submissions.filter(s => s.status === 'submitted' || s.status === 'на проверке').length;
-  const graded = submissions.filter(s => s.status === 'graded' || s.status === 'зачтена').length;
-  const pending = submissions.filter(s => s.status === 'submitted' || s.status === 'на проверке').length;
-  
+  const submitted = submissions.filter(s => s.status === 'submitted').length;
+  const graded = submissions.filter(s => s.status === 'graded').length;
+  const pending = submissions.filter(s => s.status === 'submitted').length;
+
   const completionRate = total > 0 ? Math.round((submitted / total) * 100) : 0;
-  
+
   return {
     total,
     submitted,

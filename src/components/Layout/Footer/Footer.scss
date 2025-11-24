@@ -6,7 +6,6 @@
   position: relative;
   overflow: hidden;
 
-  // Простая верхняя линия вместо вертящегося градиента
   &::before {
     content: '';
     position: absolute;

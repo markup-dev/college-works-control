@@ -14,7 +14,7 @@ const Login = () => {
   const [errors, setErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login, user } = useAuth();
+  const { login, user, error: authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -62,6 +62,7 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
 
+    setErrors((prev) => ({ ...prev, submit: '' }));
     // Валидация формы
     const validation = validateLoginForm(formData);
     if (!validation.isValid) {
@@ -73,23 +74,25 @@ const Login = () => {
 
     try {
       // Правильный вызов login - передаем два аргумента, а не объект
-      const result = await login(formData.login, formData.password);
+      const result = await login(formData.login, formData.password, formData.role);
       
       if (result.success) {
         // Успешный вход - навигация произойдет автоматически через useEffect выше
         console.log('Вход выполнен успешно');
       } else {
         // Показываем ошибку от сервера
-        setErrors({ 
+        setErrors((prev) => ({ 
+          ...prev,
           submit: result.error || 'Ошибка входа. Проверьте логин и пароль.' 
-        });
-        setIsLoading(false);
+        }));
       }
     } catch (error) {
       console.error('Login error:', error);
-      setErrors({ 
+      setErrors((prev) => ({ 
+        ...prev,
         submit: 'Произошла ошибка при входе в систему. Попробуйте еще раз.' 
-      });
+      }));
+    } finally {
       setIsLoading(false);
     }
   };
@@ -181,9 +184,9 @@ const Login = () => {
           </div>
 
           {/* Общая ошибка формы */}
-          {errors.submit && (
+          {(errors.submit || authError) && (
             <div className='form-error'>
-              <span className='error-message'>{errors.submit}</span>
+              <span className='error-message'>{errors.submit || authError}</span>
             </div>
           )}
 
@@ -223,7 +226,7 @@ const Login = () => {
               <strong>Студент:</strong> student_ivanov / Password123
             </div>
             <div className='demo-account'>
-              <strong>Преподаватель:</strong> teacher_petrova / Password123
+              <strong>Преподаватель:</strong> teacher_kartseva / Password123
             </div>
             <div className='demo-account'>
               <strong>Администратор:</strong> admin_sidorov / Password123

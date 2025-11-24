@@ -79,7 +79,7 @@ class AuthService {
     }
   }
 
-  async login(identifier, password) {
+  async login(identifier, password, expectedRole) {
     try {
       const user = userService.findByLoginOrEmail(identifier);
 
@@ -87,6 +87,13 @@ class AuthService {
         return {
           success: false,
           error: 'Неверный логин/email или пароль'
+        };
+      }
+
+      if (expectedRole && user.role !== expectedRole) {
+        return {
+          success: false,
+          error: 'Вы выбрали неверную роль для этого аккаунта'
         };
       }
 

@@ -1,4 +1,3 @@
-// src/components/Admin/SystemLogs/SystemLogs.jsx
 import React, { useState, useMemo } from 'react';
 import Table from '../../UI/Table/Table';
 import Badge from '../../UI/Badge/Badge';

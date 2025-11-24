@@ -10,26 +10,27 @@ import {
 } from '../../../utils/assignmentHelpers';
 import './AssignmentCard.scss';
 
-const AssignmentCard = React.memo(({ 
-  assignment, 
-  onViewSubmissions, 
-  onEditAssignment, 
+const AssignmentCard = React.memo(({
+  assignment,
+  onViewSubmissions,
+  onEditAssignment,
   onViewAnalytics,
-  onDeleteAssignment 
+  onDeleteAssignment,
+  onViewDetails
 }) => {
-  const { 
-    title, 
-    course, 
-    description, 
+  const {
+    title,
+    course,
+    description,
     criteria,
-    status, 
-    priority, 
-    deadline, 
-    maxScore, 
+    status,
+    priority,
+    deadline,
+    maxScore,
     submissionType,
     submissions = [],
     studentGroups = [],
-    createdAt 
+    createdAt
   } = assignment;
 
   // Вычисляем статистику
@@ -43,70 +44,104 @@ const AssignmentCard = React.memo(({
   const isDraft = status === 'draft';
 
   // Обработчики
-  const handleViewSubmissions = () => onViewSubmissions(assignment.id);
-  const handleEditAssignment = () => onEditAssignment(assignment);
-  const handleViewAnalytics = () => onViewAnalytics(assignment);
-  const handleDeleteAssignment = () => onDeleteAssignment(assignment);
+  const handleViewSubmissions = (e) => {
+    e.stopPropagation();
+    onViewSubmissions(assignment.id);
+  };
+  const handleEditAssignment = (e) => {
+    e.stopPropagation();
+    onEditAssignment(assignment);
+  };
+  const handleViewAnalytics = (e) => {
+    e.stopPropagation();
+    onViewAnalytics(assignment);
+  };
+  const handleDeleteAssignment = (e) => {
+    e.stopPropagation();
+    onDeleteAssignment && onDeleteAssignment(assignment);
+  };
+  const handleViewDetails = (e) => {
+    e.stopPropagation();
+    onViewDetails && onViewDetails(assignment);
+  };
 
   const renderActions = () => {
     if (isDraft) {
       return (
-        <div className="assignment-actions__group">
-          <Button 
-            variant="primary" 
+        <div className="assignment-actions">
+          <Button
+            variant="primary"
+            size="medium"
+            onClick={handleEditAssignment}
+            icon="✏️"
+            fullWidth
+          >
+            Редактировать
+          </Button>
+          <div className="assignment-actions__secondary">
+            <Button
+              variant="danger"
+              size="small"
+              onClick={handleDeleteAssignment}
+              icon="🗑️"
+            >
+              Удалить
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="assignment-actions">
+        <Button
+          variant="primary"
+          size="medium"
+          onClick={handleViewSubmissions}
+          icon="📋"
+          disabled={!isActive}
+          fullWidth
+        >
+          Просмотр работ ({stats.total})
+        </Button>
+        <div className="assignment-actions__secondary">
+          <Button
+            variant="outline"
             size="small"
             onClick={handleEditAssignment}
             icon="✏️"
           >
             Редактировать
           </Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="small"
-            onClick={handleDeleteAssignment}
-            icon="🗑️"
+            onClick={handleViewAnalytics}
+            icon="📊"
           >
-            Удалить
+            Аналитика
           </Button>
+          {onDeleteAssignment && (
+            <Button
+              variant="danger"
+              size="small"
+              onClick={handleDeleteAssignment}
+              icon="🗑️"
+            >
+              Удалить
+            </Button>
+          )}
         </div>
-      );
-    }
-
-    return (
-      <div className="assignment-actions__group">
-        <Button 
-          variant="primary" 
-          size="small"
-          onClick={handleViewSubmissions}
-          icon="📋"
-          disabled={!isActive}
-        >
-          Работы ({stats.total})
-        </Button>
-        <Button 
-          variant="outline" 
-          size="small"
-          onClick={handleEditAssignment}
-          icon="⚙️"
-        >
-          Настройки
-        </Button>
-        <Button 
-          variant="outline" 
-          size="small"
-          onClick={handleViewAnalytics}
-          icon="📊"
-        >
-          Аналитика
-        </Button>
       </div>
     );
   };
 
   return (
-    <Card 
-      hoverable 
+    <Card
+      hoverable
       className={`assignment-card assignment-card--${status} ${isUrgent ? 'assignment-card--urgent' : ''}`}
+      onClick={handleViewDetails}
+      style={{ cursor: 'pointer' }}
     >
       {/* Хедер с заголовком и статусами */}
       <div className="assignment-header">
