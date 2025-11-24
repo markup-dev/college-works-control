@@ -1,5 +1,5 @@
 // src/components/Teacher/AssignmentModal/AssignmentModal.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Button from '../../UI/Button/Button';
 import { useNotification } from '../../../context/NotificationContext';
 import './AssignmentModal.scss';
@@ -24,7 +24,7 @@ const AssignmentModal = ({
   }));
 
   // Инициализация формы при открытии модалки
-  const getDefaultGroup = () => {
+  const getDefaultGroup = useCallback(() => {
     if (assignment?.studentGroups?.length) {
       return assignment.studentGroups[0];
     }
@@ -32,7 +32,7 @@ const AssignmentModal = ({
       return assignment.group;
     }
     return availableGroups[0] || 'ИСП-029';
-  };
+  }, [assignment, availableGroups]);
 
   const groupOptions = useMemo(() => {
     const uniqueGroups = new Set(availableGroups.filter(Boolean));
@@ -79,7 +79,7 @@ const AssignmentModal = ({
         priority: 'medium'
       });
     }
-  }, [assignment, isOpen, availableGroups]);
+  }, [assignment, isOpen, availableGroups, getDefaultGroup]);
 
   if (!isOpen) return null;
 

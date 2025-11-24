@@ -1,6 +1,6 @@
 // src/pages/Login/Login.jsx (исправленная версия)
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { validateLoginForm } from '../../utils/validation';
 import './Login.scss';
@@ -113,12 +113,12 @@ const Login = () => {
         </button>
 
         <div className='login-header'>
-          <div className='login-logo'>🎓</div>
-          <h1 className='login-title'>Вход в систему</h1>
-          <p className='login-subtitle'>
-            Выберите роль и введите данные для входа
-          </p>
-        </div>
+           <Link to="/welcome" className='login-logo'>🎓</Link>
+           <h1 className='login-title'>Вход в систему</h1>
+           <p className='login-subtitle'>
+             Выберите роль и введите данные для входа
+           </p>
+         </div>
 
         {successMessage && (
           <div className='form-success'>

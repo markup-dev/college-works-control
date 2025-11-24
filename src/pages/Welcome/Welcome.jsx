@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import './Welcome.scss';
 
 const Welcome = () => {
@@ -94,10 +94,10 @@ const Welcome = () => {
 
       <nav className="welcome-nav">
         <div className="nav-content">
-          <div className="nav-brand">
+          <Link to="/welcome" className="nav-brand">
             <span className="nav-logo">🎓</span>
             <span className="nav-title">Учебный портал</span>
-          </div>
+          </Link>
           <button 
             className="nav-login-btn"
             onClick={handleGetStarted}

@@ -6,6 +6,27 @@ const CURRENT_USER_STORAGE_KEY = 'college_current_user';
 const defaultUsers = [
   {
     id: 1,
+    login: 'student_ivanov',
+    email: 'ivanov@college.ru',
+    passwordHash: '$2b$10$e9i7oT2Y/aHi59s/kPvoQ.UYJtjpw7ht5cvRgVOzlT7DcmIfeKC4S', // Password123
+    name: 'Иванов Алексей Петрович',
+    role: 'student',
+    group: 'ИСП-029',
+    phone: '+7 (999) 111-22-33',
+    timezone: 'UTC+3',
+    notifications: {
+      email: true,
+      push: true,
+      sms: false
+    },
+    theme: 'system',
+    bio: 'Студент 4 курса, интересы — базы данных и программирование.',
+    isActive: true,
+    registrationDate: '2024-01-15',
+    lastLogin: null
+  },
+  {
+    id: 4,
     login: 'student_zabiryuchenko',
     email: 'zabiryuchenko@college.ru',
     passwordHash: '$2b$10$e9i7oT2Y/aHi59s/kPvoQ.UYJtjpw7ht5cvRgVOzlT7DcmIfeKC4S', // Password123

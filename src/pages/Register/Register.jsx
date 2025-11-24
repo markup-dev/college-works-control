@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { validateRegisterForm } from '../../utils/validation';
 import './Register.scss';
@@ -105,12 +105,12 @@ const Register = () => {
         </button>
 
         <div className='register-header'>
-          <div className='register-logo'>🎓</div>
-          <h1 className='register-title'>Регистрация</h1>
-          <p className='register-subtitle'>
-            Создайте новый аккаунт для доступа к системе
-          </p>
-        </div>
+           <Link to="/welcome" className='register-logo'>🎓</Link>
+           <h1 className='register-title'>Регистрация</h1>
+           <p className='register-subtitle'>
+             Создайте новый аккаунт для доступа к системе
+           </p>
+         </div>
 
         <form className='register-form' onSubmit={handleRegister} noValidate>
           <div className='form-group'>
