@@ -28,9 +28,17 @@ export const StudentProvider = ({ children }) => {
     try {
       const storedAssignments = readFromStorage(SHARED_ASSIGNMENTS_KEY, []);
       const storedSubmissions = readFromStorage(SHARED_SUBMISSIONS_KEY, []);
+      const storedUsers = readFromStorage(STORAGE_KEYS.USERS, []);
 
       const studentGroup = normalizeGroup(user?.group);
       const studentTeacherLogin = user?.teacherLogin;
+        
+      const getTeacherName = (teacherLogin) => {
+        if (!teacherLogin) return 'Не указан';
+        
+        const teacher = storedUsers.find(u => u.login === teacherLogin && u.role === 'teacher');
+        return teacher?.name || 'Не указан';
+      };
       
       const filteredAssignments = storedAssignments.filter(assignment => {
         if (assignment.teacherLogin) {
@@ -88,10 +96,13 @@ export const StudentProvider = ({ children }) => {
           }
         }
         
+        // Получаем имя преподавателя: сначала из задания, затем из базы пользователей
+        const teacherName = assignment.teacherName || assignment.teacher || getTeacherName(assignment.teacherLogin);
+        
         return {
           ...assignment,
           status,
-          teacher: assignment.teacherName || assignment.teacher || 'Не указан',
+          teacher: teacherName,
           submittedAt: studentSubmission?.submissionDate,
           score: studentSubmission?.score,
           maxScore: studentSubmission?.maxScore || assignment.maxScore
