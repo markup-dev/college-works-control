@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Button from '../../UI/Button/Button';
-import { formatDate } from '../../../utils/teacherHelpers';
+import { formatDate, validateScore, validateGradingComment } from '../../../utils';
+import { useNotification } from '../../../context/NotificationContext';
 import './GradingModal.scss';
 
 const GradingModal = ({ 
@@ -12,12 +13,32 @@ const GradingModal = ({
   onGradeDataChange, 
   onSubmit 
 }) => {
+  const { showError } = useNotification();
+  const [errors, setErrors] = useState({});
+  
   if (!isOpen || !submission) return null;
 
   const maxScore = submission.maxScore || assignment?.maxScore || 100;
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    setErrors({});
+    
+    const scoreValidation = validateScore(gradeData.score, maxScore);
+    if (!scoreValidation.isValid) {
+      setErrors({ score: scoreValidation.error });
+      showError(scoreValidation.error);
+      return;
+    }
+    
+    const commentValidation = validateGradingComment(gradeData.comment);
+    if (!commentValidation.isValid) {
+      setErrors({ comment: commentValidation.error });
+      showError(commentValidation.error);
+      return;
+    }
+    
     onSubmit();
   };
 
@@ -36,20 +57,25 @@ const GradingModal = ({
             <div className="grading-form">
               <div className="form-group">
                 <label htmlFor="score">
-                  Оценка (0-{maxScore} баллов):
+                  Оценка (0-{maxScore} баллов): *
                 </label>
                 <input
                   id="score"
                   type="number"
                   min="0"
                   max={maxScore}
+                  step="1"
                   value={gradeData.score}
-                  onChange={(e) => onGradeDataChange({...gradeData, score: e.target.value})}
-                  className="score-input"
+                  onChange={(e) => {
+                    onGradeDataChange({...gradeData, score: e.target.value});
+                    if (errors.score) setErrors({...errors, score: null});
+                  }}
+                  className={`score-input ${errors.score ? 'error' : ''}`}
                   required
                 />
+                {errors.score && <div className="error-message">{errors.score}</div>}
                 <div className="score-hint">
-                  Введите число от 0 до {maxScore}
+                  Введите целое число от 0 до {maxScore}
                 </div>
               </div>
               
@@ -57,14 +83,19 @@ const GradingModal = ({
                 <label htmlFor="comment">Комментарий и рекомендации:</label>
                 <textarea
                   id="comment"
-                  value={gradeData.comment}
-                  onChange={(e) => onGradeDataChange({...gradeData, comment: e.target.value})}
-                  className="comment-textarea"
+                  value={gradeData.comment || ''}
+                  onChange={(e) => {
+                    onGradeDataChange({...gradeData, comment: e.target.value});
+                    if (errors.comment) setErrors({...errors, comment: null});
+                  }}
+                  className={`comment-textarea ${errors.comment ? 'error' : ''}`}
                   placeholder="Укажите сильные стороны работы, замечания и рекомендации по улучшению..."
                   rows="6"
+                  maxLength={2000}
                 />
+                {errors.comment && <div className="error-message">{errors.comment}</div>}
                 <div className="comment-hint">
-                  Этот комментарий увидят студенты
+                  Этот комментарий увидят студенты (максимум 2000 символов)
                 </div>
               </div>
 
@@ -109,7 +140,7 @@ const SubmissionInfo = ({ submission, maxScore }) => (
       </div>
       <div className="info-item">
         <strong>Дата сдачи:</strong>
-        <span>{formatDate(submission.submitDate)}</span>
+        <span>{formatDate(submission.submissionDate)}</span>
       </div>
       <div className="info-item">
         <strong>Файл:</strong>

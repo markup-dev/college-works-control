@@ -4,7 +4,6 @@ import Button from '../../UI/Button/Button';
 import './AnalyticsSection.scss';
 
 const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
-  // Вычисляем статистику по группам
   const groupStats = React.useMemo(() => {
     const groups = {};
     submissions.forEach(sub => {
@@ -13,17 +12,16 @@ const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
         groups[group] = { total: 0, submitted: 0, graded: 0 };
       }
       groups[group].total++;
-      if (sub.status === 'на проверке' || sub.status === 'submitted' || sub.status === 'зачтена' || sub.status === 'graded') {
+      if (sub.status === 'submitted') {
         groups[group].submitted++;
       }
-      if (sub.status === 'зачтена' || sub.status === 'graded') {
+      if (sub.status === 'graded') {
         groups[group].graded++;
       }
     });
     return groups;
   }, [submissions]);
 
-  // Вычисляем средние оценки по дисциплинам
   const courseStats = React.useMemo(() => {
     const courses = {};
     assignments.forEach(assignment => {
@@ -65,7 +63,8 @@ const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
       .map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
       .join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -184,19 +183,18 @@ const GradeItem = ({ subject, grade }) => (
 );
 
 const ActivityChartCard = ({ submissions = [] }) => {
-  // Группируем по месяцам
   const monthlyData = React.useMemo(() => {
     const months = {};
     submissions.forEach(sub => {
-      const date = new Date(sub.submitDate || sub.submissionDate);
+      const date = new Date(sub.submissionDate);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       if (!months[monthKey]) {
         months[monthKey] = { submitted: 0, graded: 0 };
       }
-      if (sub.status === 'на проверке' || sub.status === 'submitted' || sub.status === 'зачтена' || sub.status === 'graded') {
+      if (sub.status === 'submitted') {
         months[monthKey].submitted++;
       }
-      if (sub.status === 'зачтена' || sub.status === 'graded') {
+      if (sub.status === 'graded') {
         months[monthKey].graded++;
       }
     });

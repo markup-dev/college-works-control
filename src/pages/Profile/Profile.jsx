@@ -125,28 +125,31 @@ const Profile = () => {
   };
 
   const validateProfile = () => {
-    const errors = {};
-    if (!profileData.name.trim()) {
-      errors.name = 'Укажите ваше ФИО';
-    }
-    if (!profileData.email.trim()) {
-      errors.email = 'Email обязателен';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileData.email.trim())) {
-      errors.email = 'Введите корректный email';
-    }
-
-    if (!profileData.login.trim()) {
+    const { validateProfileForm } = require('../../utils/validation');
+    const trimmedProfileData = {
+      ...profileData,
+      name: profileData.name?.trim() || '',
+      email: profileData.email?.trim() || '',
+      phone: profileData.phone?.trim() || '',
+      group: profileData.group?.trim() || '',
+      department: profileData.department?.trim() || '',
+      bio: profileData.bio?.trim() || ''
+    };
+    
+    const validation = validateProfileForm(trimmedProfileData);
+    
+    const errors = { ...validation.errors };
+    
+    if (!trimmedProfileData.login.trim()) {
       errors.login = 'Логин обязателен';
     }
 
-    if (profileData.phone && !/^\+?[\d\s()-]{7,}$/.test(profileData.phone.trim())) {
-      errors.phone = 'Введите корректный номер телефона';
-    }
-
     const extraFieldKey = currentRoleConfig.field.key;
-    const extraValue = profileData[extraFieldKey]?.trim();
-    if (!extraValue) {
-      errors[extraFieldKey] = `Заполните поле «${currentRoleConfig.field.label}»`;
+    const extraValue = trimmedProfileData[extraFieldKey];
+    if (extraFieldKey === 'group' && extraValue && !/^[А-ЯЁA-Z\-\d]+$/i.test(extraValue)) {
+      errors[extraFieldKey] = 'Группа должна содержать только буквы, цифры и дефис (например, ИСП-401)';
+    } else if (extraValue && extraValue.length > 100) {
+      errors[extraFieldKey] = `Поле «${currentRoleConfig.field.label}» не должно превышать 100 символов`;
     }
 
     return {
@@ -185,19 +188,19 @@ const Profile = () => {
 
   const buildProfilePayload = () => {
     const payload = {
-      name: profileData.name.trim(),
-      login: profileData.login.trim(),
-      email: profileData.email.trim(),
-      phone: profileData.phone.trim(),
+      name: (profileData.name || '').trim(),
+      login: (profileData.login || '').trim(),
+      email: (profileData.email || '').trim(),
+      phone: (profileData.phone || '').trim(),
       timezone: profileData.timezone,
-      bio: profileData.bio.trim(),
+      bio: (profileData.bio || '').trim(),
       notifications: profileData.notifications
     };
 
     if (user?.role === 'student') {
-      payload.group = profileData.group.trim();
+      payload.group = (profileData.group || '').trim();
     } else {
-      payload.department = profileData.department.trim();
+      payload.department = (profileData.department || '').trim();
     }
 
     return payload;

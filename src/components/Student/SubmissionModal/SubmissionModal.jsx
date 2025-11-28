@@ -1,7 +1,7 @@
 import React from 'react';
 import Button from '../../UI/Button/Button';
 import { useNotification } from '../../../context/NotificationContext';
-import { formatDate } from '../../../utils/assignmentHelpers';
+import { formatDate } from '../../../utils';
 import './SubmissionModal.scss';
 
 const SubmissionModal = ({ 
@@ -12,15 +12,48 @@ const SubmissionModal = ({
   onFileSelect, 
   onSubmit 
 }) => {
-  const { showWarning } = useNotification();
+  const { showWarning, showError } = useNotification();
   
   if (!isOpen || !assignment) return null;
 
   const handleSubmit = () => {
-    if (assignment.submissionType === 'file' && !submissionFile) {
-      showWarning('Пожалуйста, выберите файл для загрузки');
-      return;
+    if (assignment.submissionType === 'file') {
+      if (!submissionFile) {
+        showWarning('Пожалуйста, выберите файл для загрузки');
+        return;
+      }
+      
+      const maxFileSize = (assignment.maxFileSize || 50) * 1024 * 1024;
+      if (submissionFile.size > maxFileSize) {
+        showError(`Файл слишком большой. Максимальный размер: ${assignment.maxFileSize || 50} МБ`);
+        return;
+      }
+      
+      if (submissionFile.size === 0) {
+        showError('Файл не может быть пустым');
+        return;
+      }
+      
+      const allowedFormats = assignment.allowedFormats || ['.pdf', '.docx', '.zip'];
+      const fileExtension = '.' + submissionFile.name.split('.').pop()?.toLowerCase();
+      if (!allowedFormats.includes(fileExtension)) {
+        showError(`Недопустимый формат файла. Разрешены: ${allowedFormats.join(', ')}`);
+        return;
+      }
+      
+      const invalidChars = /[<>:"/\\|?*]/;
+      if (invalidChars.test(submissionFile.name)) {
+        showError('Имя файла содержит недопустимые символы');
+        return;
+      }
     }
+    
+    const deadline = new Date(assignment.deadline);
+    const now = new Date();
+    if (deadline < now) {
+      showWarning('Срок сдачи задания истек. Работа может быть не принята.');
+    }
+    
     onSubmit();
   };
 
@@ -63,7 +96,6 @@ const SubmissionModal = ({
   );
 };
 
-// Компонент информации о задании
 const SubmissionInfo = ({ assignment }) => {
   const allowedFormats = assignment.allowedFormats || ['.pdf', '.docx', '.zip'];
   const maxFileSize = assignment.maxFileSize || 50;
@@ -85,16 +117,43 @@ const SubmissionInfo = ({ assignment }) => {
   );
 };
 
-// Компонент загрузки файла
 const FileUpload = ({ assignment, submissionFile, onFileSelect }) => {
+  const { showError } = useNotification();
   const allowedFormats = assignment.allowedFormats || ['.pdf', '.docx', '.zip'];
+  const maxFileSize = (assignment.maxFileSize || 50) * 1024 * 1024;
+  
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (file.size > maxFileSize) {
+      showError(`Файл слишком большой. Максимальный размер: ${assignment.maxFileSize || 50} МБ`);
+      e.target.value = '';
+      return;
+    }
+    
+    if (file.size === 0) {
+      showError('Файл не может быть пустым');
+      e.target.value = '';
+      return;
+    }
+    
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!allowedFormats.includes(fileExtension)) {
+      showError(`Недопустимый формат файла. Разрешены: ${allowedFormats.join(', ')}`);
+      e.target.value = '';
+      return;
+    }
+    
+    onFileSelect(file);
+  };
   
   return (
     <div className="file-upload">
       <label className="file-input-label">
         <input
           type="file"
-          onChange={onFileSelect}
+          onChange={handleFileChange}
           accept={allowedFormats.join(',')}
         />
         <span className="file-input-button">📎 Выберите файл</span>
@@ -109,11 +168,10 @@ const FileUpload = ({ assignment, submissionFile, onFileSelect }) => {
   );
 };
 
-// Компонент для демонстрации
 const DemoSubmission = () => (
   <div className="demo-submission">
     <p>Для этого задания требуется личная демонстрация.</p>
-    <p>Свяжитесь с преподавателем для согласования времени.</p>
+    <p>Нажмите кнопку ниже, чтобы сообщить о готовности к демонстрации.</p>
   </div>
 );
 

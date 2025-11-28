@@ -1,34 +1,9 @@
-// src/context/StudentContext.jsx
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { mockStudentSubmissions } from '../data/mockData/studentData';
-import { mockTeacherAssignments } from '../data/mockData/teacherData';
 import { useAuth } from './AuthContext';
+import { readFromStorage, writeToStorage, generateId, STORAGE_KEYS, normalizeGroup } from '../utils/storageUtils';
 
-// Используем assignments от преподавателя
-const combinedAssignments = [...mockTeacherAssignments];
-
-const SHARED_ASSIGNMENTS_KEY = 'college_assignments';
-const SHARED_SUBMISSIONS_KEY = 'college_submissions';
-
-const readFromStorage = (key, fallback) => {
-  try {
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (error) {
-    console.error(`Error reading ${key} from storage:`, error);
-  }
-  return fallback;
-};
-
-const writeToStorage = (key, value) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(`Error writing ${key} to storage:`, error);
-  }
-};
+const SHARED_ASSIGNMENTS_KEY = STORAGE_KEYS.ASSIGNMENTS;
+const SHARED_SUBMISSIONS_KEY = STORAGE_KEYS.SUBMISSIONS;
 
 const StudentContext = createContext();
 
@@ -40,8 +15,6 @@ export const useStudent = () => {
   return context;
 };
 
-const normalizeGroup = (group) => group?.trim().toLowerCase() || '';
-
 export const StudentProvider = ({ children }) => {
   const [assignments, setAssignments] = useState([]);
   const [studentSubmissions, setStudentSubmissions] = useState([]);
@@ -49,31 +22,61 @@ export const StudentProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const { user } = useAuth();
 
-  // Загрузка данных студента
   const loadStudentData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // Имитация загрузки данных
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const storedAssignments = readFromStorage(SHARED_ASSIGNMENTS_KEY, combinedAssignments);
-      const storedSubmissions = readFromStorage(SHARED_SUBMISSIONS_KEY, mockStudentSubmissions);
+      const storedAssignments = readFromStorage(SHARED_ASSIGNMENTS_KEY, []);
+      const storedSubmissions = readFromStorage(SHARED_SUBMISSIONS_KEY, []);
 
       const studentGroup = normalizeGroup(user?.group);
+      const studentTeacherLogin = user?.teacherLogin;
+      
       const filteredAssignments = storedAssignments.filter(assignment => {
+        if (assignment.teacherLogin) {
+          if (studentTeacherLogin && assignment.teacherLogin !== studentTeacherLogin) {
+            return false;
+          }
+          if (!studentTeacherLogin) {
+            return false;
+          }
+        }
+        
         const assignmentGroups = Array.isArray(assignment.studentGroups) && assignment.studentGroups.length > 0
           ? assignment.studentGroups
           : [];
 
-        if (assignmentGroups.length === 0 || !studentGroup) {
-          return true;
+        if (assignmentGroups.length === 0) {
+          return false;
         }
-        return assignmentGroups
-          .map(group => normalizeGroup(group))
-          .includes(studentGroup);
+        
+        if (!studentGroup) {
+          return false;
+        }
+        
+        const normalizedGroups = assignmentGroups.map(group => normalizeGroup(group));
+        const includesGroup = normalizedGroups.includes(studentGroup);
+        
+        return includesGroup;
       }).map(assignment => {
-        const studentSubmission = storedSubmissions.find(sub => sub.assignmentId === assignment.id && sub.studentId === user?.id);
+        const studentSubmissions = storedSubmissions.filter(sub => {
+          const subStudentId = typeof sub.studentId === 'number' ? sub.studentId : (typeof sub.studentId === 'string' ? parseInt(sub.studentId, 10) : null);
+          const userId = typeof user?.id === 'number' ? user.id : (typeof user?.id === 'string' ? parseInt(user.id, 10) : null);
+          const assignmentIdMatch = typeof sub.assignmentId === 'number' 
+            ? sub.assignmentId === assignment.id 
+            : (typeof sub.assignmentId === 'string' && typeof assignment.id === 'number'
+              ? parseInt(sub.assignmentId, 10) === assignment.id
+              : sub.assignmentId === String(assignment.id));
+          
+          return assignmentIdMatch && subStudentId === userId;
+        });
+        
+        const studentSubmission = studentSubmissions.sort((a, b) => {
+          const dateA = new Date(a.submissionDate || 0);
+          const dateB = new Date(b.submissionDate || 0);
+          return dateB - dateA;
+        })[0];
+        
         let status = 'not_submitted';
         if (studentSubmission) {
           if (studentSubmission.status === 'graded') {
@@ -84,25 +87,21 @@ export const StudentProvider = ({ children }) => {
             status = 'submitted';
           }
         }
+        
         return {
           ...assignment,
           status,
           teacher: assignment.teacherName || assignment.teacher || 'Не указан',
-          submittedAt: studentSubmission?.submitDate,
+          submittedAt: studentSubmission?.submissionDate,
           score: studentSubmission?.score,
           maxScore: studentSubmission?.maxScore || assignment.maxScore
         };
       });
-
+      
       setAssignments(filteredAssignments);
       setStudentSubmissions(storedSubmissions);
-
-      // Обновляем storage (на случай, если данных еще не было)
-      writeToStorage(SHARED_ASSIGNMENTS_KEY, storedAssignments);
-      writeToStorage(SHARED_SUBMISSIONS_KEY, storedSubmissions);
     } catch (err) {
       setError('Ошибка загрузки данных студента');
-      console.error('Error loading student data:', err);
     } finally {
       setLoading(false);
     }
@@ -112,80 +111,119 @@ export const StudentProvider = ({ children }) => {
     return loadStudentData();
   }, [loadStudentData]);
 
-  // Сдача работы
   const submitWork = useCallback(async (assignmentId, file) => {
     setLoading(true);
     try {
-      // Имитация загрузки файла
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Обновляем статус задания
-      const assignment = assignments.find(item => item.id === assignmentId) || {};
-      const submitDate = new Date().toISOString();
+      const currentAssignments = readFromStorage(SHARED_ASSIGNMENTS_KEY, []);
+      const assignment = currentAssignments.find(item => {
+        const itemId = typeof item.id === 'number' ? item.id : parseInt(item.id, 10);
+        const searchId = typeof assignmentId === 'number' ? assignmentId : parseInt(assignmentId, 10);
+        return itemId === searchId;
+      }) || {};
+      const submissionDate = new Date().toISOString();
       const studentName = user?.name || user?.login || 'Студент';
       const studentGroup = user?.group || assignment.studentGroups?.[0] || 'Не указана';
       const studentIdentifier = user?.id;
       const assignmentTeacherLogin = assignment.teacherLogin || 'teacher_kartseva';
 
-      setAssignments(prev => {
-        const updated = prev.map(assignmentItem => 
-          assignmentItem.id === assignmentId 
-            ? { 
-                ...assignmentItem, 
-                status: 'submitted', 
-                submittedAt: submitDate 
-              }
-            : assignmentItem
-        );
-        writeToStorage(SHARED_ASSIGNMENTS_KEY, updated);
-        return updated;
-      });
+      const currentSubmissions = readFromStorage(SHARED_SUBMISSIONS_KEY, []);
 
-      // Добавляем submission
       const newSubmission = {
-        id: Date.now(),
+        id: generateId(),
         assignmentId,
         assignmentTitle: assignment.title || 'Задание',
         course: assignment.course,
-        fileName: file.name,
-        submissionDate: submitDate,
-        submitDate,
+        submissionDate,
         status: 'submitted',
-        fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
         group: studentGroup,
         studentName,
         studentId: studentIdentifier,
         score: null,
         comment: '',
         maxScore: assignment.maxScore || 100,
-        teacherLogin: assignmentTeacherLogin
+        teacherLogin: assignmentTeacherLogin,
+        ...(assignment.submissionType === 'file' ? {
+          fileName: file.name,
+          fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+        } : {
+          fileName: 'Демонстрация',
+          fileSize: 'N/A',
+        })
       };
 
-      setStudentSubmissions(prev => {
-        const updated = [...prev, newSubmission];
-        writeToStorage(SHARED_SUBMISSIONS_KEY, updated);
-        return updated;
+      const updatedSubmissions = [...currentSubmissions, newSubmission];
+
+      const updatedAssignments = currentAssignments.map(assignmentItem => {
+        const itemId = typeof assignmentItem.id === 'number' ? assignmentItem.id : parseInt(assignmentItem.id, 10);
+        const searchId = typeof assignmentId === 'number' ? assignmentId : parseInt(assignmentId, 10);
+        const matches = itemId === searchId;
+        
+        if (matches) {
+          const matchingSubmissions = updatedSubmissions.filter(sub => {
+            const subAssignmentId = typeof sub.assignmentId === 'number' ? sub.assignmentId : parseInt(sub.assignmentId, 10);
+            return subAssignmentId === searchId;
+          });
+          return {
+            ...assignmentItem,
+            submissionsCount: matchingSubmissions.length,
+            pendingCount: matchingSubmissions.filter(sub => sub.status === 'submitted').length
+          };
+        }
+        return assignmentItem;
       });
+
+      writeToStorage(SHARED_ASSIGNMENTS_KEY, updatedAssignments);
+      writeToStorage(SHARED_SUBMISSIONS_KEY, updatedSubmissions);
+
+      await loadStudentData();
 
       return { success: true };
     } catch (err) {
-      console.error('Error submitting work:', err);
       return { success: false, error: 'Ошибка при отправке работы' };
     } finally {
       setLoading(false);
     }
-  }, [assignments, user]);
+  }, [user, loadStudentData]);
 
-  // Синхронизация с localStorage
   useEffect(() => {
+    if (user) {
+      loadStudentData();
+    }
+  }, [user, loadStudentData]);
+
+  useEffect(() => {
+    let isMounted = true;
+    let timeoutId = null;
+
     const handleStorageChange = (e) => {
-      if (e.key === SHARED_ASSIGNMENTS_KEY || e.key === SHARED_SUBMISSIONS_KEY) {
-        loadStudentData();
+      const eventKey = e.detail?.key || e.key;
+      
+      if (eventKey !== SHARED_ASSIGNMENTS_KEY && eventKey !== SHARED_SUBMISSIONS_KEY) {
+        return;
       }
+      
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      
+      timeoutId = setTimeout(() => {
+        if (isMounted) {
+          loadStudentData();
+        }
+      }, 50);
     };
 
+    window.addEventListener('storageChange', handleStorageChange);
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+
+    return () => {
+      isMounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      window.removeEventListener('storageChange', handleStorageChange);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [loadStudentData]);
 
   const value = {
@@ -199,4 +237,3 @@ export const StudentProvider = ({ children }) => {
 
   return <StudentContext.Provider value={value}>{children}</StudentContext.Provider>;
 };
-

@@ -1,7 +1,6 @@
-// src/components/Teacher/SubmissionDetailsModal/SubmissionDetailsModal.jsx
 import React from 'react';
 import Button from '../../UI/Button/Button';
-import { formatDate, formatFileSize } from '../../../utils/teacherHelpers';
+import { formatDate, formatFileSize } from '../../../utils';
 import './SubmissionDetailsModal.scss';
 
 const SubmissionDetailsModal = ({ 
@@ -17,11 +16,8 @@ const SubmissionDetailsModal = ({
   const maxScore = assignment?.maxScore || submission.maxScore || 100;
   const statusInfo = {
     'submitted': { label: 'На проверке', variant: 'warning', icon: '📋' },
-    'на проверке': { label: 'На проверке', variant: 'warning', icon: '📋' },
     'graded': { label: 'Зачтена', variant: 'success', icon: '✅' },
-    'зачтена': { label: 'Зачтена', variant: 'success', icon: '✅' },
-    'returned': { label: 'Возвращена', variant: 'danger', icon: '↩️' },
-    'возвращена': { label: 'Возвращена', variant: 'danger', icon: '↩️' }
+    'returned': { label: 'Возвращена', variant: 'danger', icon: '↩️' }
   }[submission.status] || { label: 'На проверке', variant: 'warning', icon: '📋' };
 
   return (
@@ -33,7 +29,6 @@ const SubmissionDetailsModal = ({
         </div>
         
         <div className="modal-body">
-          {/* Информация о задании */}
           <div className="details-section">
             <h4 className="section-title">📝 Задание</h4>
             <div className="info-grid">
@@ -60,7 +55,6 @@ const SubmissionDetailsModal = ({
             </div>
           </div>
 
-          {/* Информация о студенте */}
           <div className="details-section">
             <h4 className="section-title">👨‍🎓 Студент</h4>
             <div className="info-grid">
@@ -83,13 +77,12 @@ const SubmissionDetailsModal = ({
             </div>
           </div>
 
-          {/* Информация о работе */}
           <div className="details-section">
             <h4 className="section-title">📄 Работа</h4>
             <div className="info-grid">
               <div className="info-item">
                 <strong>Дата сдачи:</strong>
-                <span>{formatDate(submission.submissionDate || submission.submitDate)}</span>
+                <span>{formatDate(submission.submissionDate)}</span>
               </div>
               <div className="info-item">
                 <strong>Статус:</strong>
@@ -111,7 +104,6 @@ const SubmissionDetailsModal = ({
             </div>
           </div>
 
-          {/* Оценка и комментарий */}
           {(submission.score !== null && submission.score !== undefined) && (
             <div className="details-section">
               <h4 className="section-title">✅ Оценка</h4>
@@ -129,7 +121,6 @@ const SubmissionDetailsModal = ({
             </div>
           )}
 
-          {/* Описание задания, если есть */}
           {assignment?.description && (
             <div className="details-section">
               <h4 className="section-title">📋 Описание задания</h4>
@@ -137,7 +128,6 @@ const SubmissionDetailsModal = ({
             </div>
           )}
 
-          {/* Критерии оценки, если есть */}
           {assignment?.criteria && assignment.criteria.length > 0 && (
             <div className="details-section">
               <h4 className="section-title">📊 Критерии оценки</h4>
@@ -166,7 +156,7 @@ const SubmissionDetailsModal = ({
               Скачать файл
             </Button>
           )}
-          {submission.status === 'submitted' || submission.status === 'на проверке' ? (
+          {submission.status === 'submitted' ? (
             <Button 
               variant="primary" 
               onClick={() => {

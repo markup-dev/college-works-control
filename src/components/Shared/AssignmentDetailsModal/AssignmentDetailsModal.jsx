@@ -3,9 +3,9 @@ import Modal from '../../UI/Modal/Modal';
 import { 
   formatDate, 
   getPriorityInfo, 
-  getStatusInfo, 
+  getAssignmentStatusInfo, 
   getDaysUntilDeadline 
-} from '../../../utils/assignmentHelpers';
+} from '../../../utils';
 import './AssignmentDetailsModal.scss';
 
 const AssignmentDetailsModal = ({
@@ -20,7 +20,7 @@ const AssignmentDetailsModal = ({
     return null;
   }
 
-  const statusInfo = getStatusInfo(assignment);
+  const statusInfo = getAssignmentStatusInfo(assignment);
   const priorityInfo = getPriorityInfo(assignment.priority);
   const deadline = assignment.deadline ? formatDate(assignment.deadline) : '—';
   const createdAt = assignment.createdAt ? formatDate(assignment.createdAt) : '—';

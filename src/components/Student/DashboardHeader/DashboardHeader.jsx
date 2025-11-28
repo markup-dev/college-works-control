@@ -2,7 +2,7 @@ import React from 'react';
 import FiltersSection from '../FiltersSection/FiltersSection';
 import './DashboardHeader.scss';
 
-const DashboardHeader = ({ 
+const DashboardHeader = ({
   title = "Мои задания",
   subtitle = "Управление учебными работами",
   stats = {
@@ -13,18 +13,23 @@ const DashboardHeader = ({
   },
   searchTerm = "",
   onSearchChange,
-  sortBy = "deadline",
+  sortBy = "priority",
   onSortChange,
   activeFilter = "all",
   filters = [],
   filterCounts = {},
   onFilterChange,
+  courseFilter = "all",
+  onCourseFilterChange,
+  availableCourses = [],
+  teacherFilter = "all",
+  onTeacherFilterChange,
+  availableTeachers = [],
   className = "",
   loading = false
 }) => {
   return (
     <div className={`dashboard-header ${className}`}>
-      {/* Заголовок и статистика */}
       <div className="header-main">
         <div className="header-info">
           <h1 className="header-title">{title}</h1>
@@ -67,7 +72,6 @@ const DashboardHeader = ({
         </div>
       </div>
 
-      {/* Фильтры и поиск */}
       <FiltersSection
         activeFilter={activeFilter}
         filters={filters}
@@ -77,6 +81,12 @@ const DashboardHeader = ({
         onSearchChange={onSearchChange}
         sortBy={sortBy}
         onSortChange={onSortChange}
+        courseFilter={courseFilter}
+        onCourseFilterChange={onCourseFilterChange}
+        availableCourses={availableCourses}
+        teacherFilter={teacherFilter}
+        onTeacherFilterChange={onTeacherFilterChange}
+        availableTeachers={availableTeachers}
         loading={loading}
       />
     </div>

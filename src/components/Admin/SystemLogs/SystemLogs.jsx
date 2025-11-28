@@ -17,7 +17,6 @@ const SystemLogs = ({ logs }) => {
   const filteredLogs = useMemo(() => {
     let filtered = [...logs];
 
-    // Фильтр по типу действия
     if (filter !== 'all') {
       filtered = filtered.filter(log => {
         if (filter === 'login') return log.action.includes('login');
@@ -28,7 +27,6 @@ const SystemLogs = ({ logs }) => {
       });
     }
 
-    // Фильтр по дате
     if (dateRange !== 'all') {
       const now = new Date();
       const filterDate = new Date();
@@ -50,7 +48,6 @@ const SystemLogs = ({ logs }) => {
       filtered = filtered.filter(log => new Date(log.timestamp) >= filterDate);
     }
 
-    // Поиск
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(log => 
@@ -132,9 +129,10 @@ const SystemLogs = ({ logs }) => {
         log.details,
         log.ip || 'N/A'
       ])
-    ].map(row => row.join(',')).join('\n');
+    ].map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -150,7 +148,6 @@ const SystemLogs = ({ logs }) => {
   };
 
   const confirmClearLogs = () => {
-    // В реальном приложении здесь был бы вызов API
     showSuccess('Логи очищены (в демо-версии это только имитация)');
     setShowClearConfirm(false);
   };

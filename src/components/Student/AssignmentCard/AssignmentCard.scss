@@ -58,7 +58,7 @@
 .assignment-title-section {
   flex: 1;
   min-width: 0;
-  padding-right: 100px; /* Оставляем место для бейджа приоритета */
+  padding-right: 100px;
 }
 
 .assignment-title {
@@ -103,7 +103,7 @@
   gap: 8px;
   align-items: flex-end;
   flex-shrink: 0;
-  min-width: 120px; /* Минимальная ширина для статусов */
+  min-width: 120px;
 }
 
 .status-badge {
@@ -356,7 +356,6 @@
   }
 }
 
-// Адаптивность
 @media (max-width: 768px) {
   .assignment-header {
     flex-direction: column;
@@ -393,7 +392,7 @@
     right: auto;
     align-self: flex-start;
     margin-bottom: 8px;
-    order: -1; /* Перемещаем в начало на мобильных */
+    order: -1;
   }
   
   .assignment-actions__group {
@@ -433,16 +432,14 @@
   }
 }
 
-// Специальные стили для случаев с высоким приоритетом
 .assignment-card:has(.assignment-priority-badge) {
   .assignment-title-section {
-    padding-right: 120px; /* Больше места для бейджа приоритета */
+    padding-right: 120px;
   }
 }
 
-// Гарантия отсутствия конфликтов
 .assignment-priority-badge {
-  pointer-events: none; /* Чтобы не мешал кликам */
+  pointer-events: none;
 }
 
 .assignment-status {

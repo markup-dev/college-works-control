@@ -29,7 +29,6 @@ const DashboardHeader = ({
 
   return (
     <header className={`admin-dashboard-header ${className}`}>
-      {/* Верхняя часть с заголовком и пользователем */}
       <div className="admin-header__top">
         <div className="admin-header__info">
           <div className="admin-header__title-section">
@@ -53,10 +52,8 @@ const DashboardHeader = ({
         </div>
       </div>
 
-      {/* Статистика системы */}
       <div className="admin-stats">
         {loading ? (
-          // Скелетоны загрузки
           <>
             {[...Array(4)].map((_, index) => (
               <StatCardSkeleton key={index} />
@@ -110,7 +107,6 @@ const DashboardHeader = ({
         )}
       </div>
 
-      {/* Навигационные вкладки */}
       <nav className="admin-tabs">
         {tabs.map(tab => (
           <TabButton

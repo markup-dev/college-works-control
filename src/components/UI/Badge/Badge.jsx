@@ -1,4 +1,3 @@
-// src/components/UI/Badge/Badge.jsx
 import React from 'react';
 import './Badge.scss';
 

@@ -1,0 +1,202 @@
+.assignment-management {
+  padding: 0;
+}
+
+.management-header {
+  margin-bottom: 2rem;
+  
+  .header-content {
+    h2 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 0.5rem 0;
+    }
+    
+    p {
+      color: #666;
+      margin: 0;
+      font-size: 0.95rem;
+    }
+  }
+}
+
+.filters-card {
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+}
+
+.filters-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  
+  .search-box {
+    flex: 1;
+    min-width: 250px;
+    
+    .search-input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 2px solid #e1e5e9;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      transition: all 0.3s ease;
+      background: white;
+      
+      &:focus {
+        outline: none;
+        border-color: #2c5aa0;
+        box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.1);
+      }
+      
+      &::placeholder {
+        color: #999;
+      }
+    }
+  }
+  
+  .filter-select,
+  .sort-select {
+    padding: 0.75rem 1rem;
+    border: 2px solid #e1e5e9;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    background: white;
+    cursor: pointer;
+    min-width: 150px;
+    transition: all 0.3s ease;
+    
+    &:focus {
+      outline: none;
+      border-color: #2c5aa0;
+      box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.1);
+    }
+  }
+}
+
+.assignments-table-card {
+  padding: 1.5rem;
+}
+
+.table-info {
+  margin-bottom: 1rem;
+  
+  .assignments-count {
+    font-size: 0.9rem;
+    color: #666;
+    
+    strong {
+      color: #333;
+      font-weight: 600;
+    }
+  }
+}
+
+.assignments-table {
+  .assignment-title-cell {
+    .assignment-title-link {
+      font-weight: 600;
+      color: #2c5aa0;
+      cursor: pointer;
+      text-decoration: none;
+      transition: color 0.2s;
+      
+      &:hover {
+        color: #1e3f73;
+        text-decoration: underline;
+      }
+    }
+    
+    .assignment-course {
+      font-size: 0.85rem;
+      color: #666;
+      margin-top: 0.25rem;
+    }
+  }
+  
+  .teacher-cell {
+    font-size: 0.95rem;
+    color: #333;
+  }
+  
+  .deadline-cell {
+    font-size: 0.95rem;
+    
+    &.urgent {
+      color: #f59e0b;
+      font-weight: 600;
+    }
+    
+    &.overdue {
+      color: #ef4444;
+      font-weight: 600;
+    }
+    
+    .days-left {
+      font-size: 0.8rem;
+      margin-top: 0.25rem;
+      opacity: 0.8;
+    }
+  }
+  
+  .submissions-cell {
+    .total-count {
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .pending-count {
+      font-size: 0.8rem;
+      color: #f59e0b;
+      margin-top: 0.25rem;
+    }
+  }
+  
+  .assignment-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #666;
+  
+  .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+  
+  p {
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .filters-row {
+    flex-direction: column;
+    align-items: stretch;
+    
+    .search-box,
+    .filter-select,
+    .sort-select {
+      width: 100%;
+      min-width: auto;
+    }
+  }
+  
+  .assignment-actions {
+    flex-direction: column;
+    
+    button {
+      width: 100%;
+    }
+  }
+}
+

@@ -1,4 +1,3 @@
-// src/pages/Login/Login.scss
 .login-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #2c5aa0 0%, #4a76a8 100%);
@@ -35,9 +34,9 @@
   margin-bottom: 32px;
 }
 
-.login-logo {
-  font-size: 48px;
-  margin-bottom: 16px;
+.login-logo img {
+  height: 100px;
+  color: black;
 }
 
 .login-title {
@@ -177,8 +176,6 @@
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
-
-// Добавьте в конец файла src/pages/Login/Login.scss
 
 .form-error {
   margin: 16px 0;
@@ -330,7 +327,6 @@
   }
 }
 
-// Адаптивность
 @media (max-width: 480px) {
   .login-container {
     padding: 24px;

@@ -1,4 +1,3 @@
-// src/components/Teacher/AssignmentModal/AssignmentModal.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Button from '../../UI/Button/Button';
 import { useNotification } from '../../../context/NotificationContext';
@@ -23,7 +22,6 @@ const AssignmentModal = ({
     criteria: []
   }));
 
-  // Инициализация формы при открытии модалки
   const getDefaultGroup = useCallback(() => {
     if (assignment?.studentGroups?.length) {
       return assignment.studentGroups[0];
@@ -44,7 +42,6 @@ const AssignmentModal = ({
 
   useEffect(() => {
     if (assignment) {
-      // Преобразуем критерии из строк в объекты, если нужно
       const criteria = (assignment.criteria || []).map(criterion => {
         if (typeof criterion === 'string') {
           return { text: criterion, maxPoints: 0 };
@@ -52,7 +49,6 @@ const AssignmentModal = ({
         return criterion;
       });
       
-      // Определяем группу из studentGroups
       const group = getDefaultGroup();
 
       setFormData({
@@ -88,50 +84,50 @@ const AssignmentModal = ({
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Валидация
-    if (!formData.title.trim()) {
-      showError('Введите название задания');
-      return;
-    }
-    if (!formData.deadline) {
-      showError('Укажите срок сдачи');
-      return;
-    }
-    if (!formData.description.trim()) {
-      showError('Введите описание задания');
-      return;
-    }
-    if (!formData.maxScore || formData.maxScore < 1 || formData.maxScore > 100) {
-      showError('Максимальный балл должен быть в пределах 1-100');
+    const trimmedFormData = {
+      ...formData,
+      title: formData.title?.trim() || '',
+      course: formData.course?.trim() || '',
+      description: formData.description?.trim() || ''
+    };
+
+    const { validateAssignmentForm } = require('../../../utils/validation');
+    const validation = validateAssignmentForm({
+      ...trimmedFormData,
+      studentGroups: formData.group && formData.group !== 'Все группы' 
+        ? [formData.group.trim()] 
+        : []
+    });
+    
+    if (!validation.isValid) {
+      const firstError = Object.values(validation.errors)[0];
+      showError(firstError);
       return;
     }
 
-    // Преобразование данных
     const studentGroups = formData.group && formData.group !== 'Все группы' 
-      ? [formData.group] 
+      ? [formData.group.trim()] 
       : [];
     
-    // Преобразуем критерии в массив строк, если они в формате объектов
     const criteriaArray = formData.criteria.map(criterion => {
       if (typeof criterion === 'string') {
-        return criterion;
+        return criterion.trim();
       }
-      return criterion.text || criterion;
-    });
+      return (criterion.text || criterion)?.trim() || '';
+    }).filter(c => c);
 
     const submissionData = {
-      ...formData,
-      deadline: `${formData.deadline}T23:59:00`,
-      maxScore: parseInt(formData.maxScore),
+      ...trimmedFormData,
+      deadline: `${trimmedFormData.deadline}T23:59:00`,
+      maxScore: parseInt(trimmedFormData.maxScore),
       studentGroups: studentGroups,
       criteria: criteriaArray,
-      priority: formData.priority || 'medium'
+      priority: trimmedFormData.priority || 'medium'
     };
 
     if (onSubmit) {
       onSubmit(submissionData);
     } else {
-      console.log('Сохранение задания:', submissionData);
       onClose();
     }
   };
@@ -275,7 +271,6 @@ const AssignmentModal = ({
                     >
                       <option value="file">📎 Файл</option>
                       <option value="demo">🎤 Демонстрация</option>
-                      <option value="both">📎 Файл + 🎤 Демонстрация</option>
                     </select>
                   </FormGroup>
                 </div>

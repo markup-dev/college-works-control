@@ -151,13 +151,11 @@
   }
 }
 
-// Стили для таблицы логов
 .table-container {
   max-height: 600px;
   overflow-y: auto;
 }
 
-// Адаптивность
 @include mobile {
   .logs-filters .filters-grid {
     grid-template-columns: 1fr;

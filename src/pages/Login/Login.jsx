@@ -1,9 +1,9 @@
-// src/pages/Login/Login.jsx (исправленная версия)
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { validateLoginForm } from '../../utils/validation';
+import { validateLoginForm } from '../../utils';
 import './Login.scss';
+import logo from '../../assets/logo-black.svg';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -18,14 +18,12 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Если пользователь уже авторизован - редирект на его дашборд
   useEffect(() => {
     if (user) {
       navigate(`/${user.role}`);
     }
   }, [user, navigate]);
 
-  // Обработка предварительного выбора роли из welcome-страницы
   useEffect(() => {
     if (location.state?.preselectedRole) {
       setFormData((prev) => ({
@@ -42,14 +40,12 @@ const Login = () => {
     }
   }, [location, navigate]);
 
-  // Обработчик изменения полей
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
     }));
 
-    // Очищаем ошибку при вводе
     if (errors[field]) {
       setErrors((prev) => ({
         ...prev,
@@ -58,12 +54,10 @@ const Login = () => {
     }
   };
 
-  // Обработчик входа
   const handleLogin = async (e) => {
     e.preventDefault();
 
     setErrors((prev) => ({ ...prev, submit: '' }));
-    // Валидация формы
     const validation = validateLoginForm(formData);
     if (!validation.isValid) {
       setErrors(validation.errors);
@@ -73,21 +67,16 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // Правильный вызов login - передаем два аргумента, а не объект
       const result = await login(formData.login, formData.password, formData.role);
       
       if (result.success) {
-        // Успешный вход - навигация произойдет автоматически через useEffect выше
-        console.log('Вход выполнен успешно');
       } else {
-        // Показываем ошибку от сервера
         setErrors((prev) => ({ 
           ...prev,
           submit: result.error || 'Ошибка входа. Проверьте логин и пароль.' 
         }));
       }
     } catch (error) {
-      console.error('Login error:', error);
       setErrors((prev) => ({ 
         ...prev,
         submit: 'Произошла ошибка при входе в систему. Попробуйте еще раз.' 
@@ -113,7 +102,9 @@ const Login = () => {
         </button>
 
         <div className='login-header'>
-           <Link to="/welcome" className='login-logo'>🎓</Link>
+           <Link to='/welcome' className='login-logo'>
+            <img src={logo} alt='Логотип' />
+          </Link>
            <h1 className='login-title'>Вход в систему</h1>
            <p className='login-subtitle'>
              Выберите роль и введите данные для входа
@@ -149,7 +140,7 @@ const Login = () => {
 
           <div className='form-group'>
             <label htmlFor='login' className='form-label'>
-              Логин или Email:
+              Логин:
             </label>
             <input
               id='login'
@@ -157,7 +148,7 @@ const Login = () => {
               className={`form-input ${errors.login ? 'error' : ''}`}
               value={formData.login}
               onChange={(e) => handleInputChange('login', e.target.value)}
-              placeholder='Введите ваш логин или email'
+              placeholder='Введите ваш логин'
               disabled={isLoading}
             />
             {errors.login && (
@@ -183,7 +174,6 @@ const Login = () => {
             )}
           </div>
 
-          {/* Общая ошибка формы */}
           {(errors.submit || authError) && (
             <div className='form-error'>
               <span className='error-message'>{errors.submit || authError}</span>
@@ -223,7 +213,7 @@ const Login = () => {
           <h3>Демо-доступ:</h3>
           <div className='demo-accounts'>
             <div className='demo-account'>
-              <strong>Студент:</strong> student_ivanov / Password123
+              <strong>Студент:</strong> student_zabiryuchenko / Password123
             </div>
             <div className='demo-account'>
               <strong>Преподаватель:</strong> teacher_kartseva / Password123

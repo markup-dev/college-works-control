@@ -14,7 +14,7 @@ import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsMod
 import { useAuth } from '../../context/AuthContext';
 import { useTeacher } from '../../context/TeacherContext';
 import { useNotification } from '../../context/NotificationContext';
-import { calculateSubmissionStats } from '../../utils/assignmentHelpers';
+import { calculateSubmissionStats } from '../../utils';
 import './TeacherDashboard.scss';
 
 const DEFAULT_GROUPS = ['ИСП-029', 'ИСП-029А'];
@@ -34,7 +34,7 @@ const TeacherDashboard = () => {
     deleteAssignment,
     error 
   } = useTeacher();
-  const { showSuccess, showError, showWarning, showInfo } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
   
   const [activeTab, setActiveTab] = useState('assignments');
   const [selectedAssignment, setSelectedAssignment] = useState(null);
@@ -51,6 +51,7 @@ const TeacherDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [assignmentSearchTerm, setAssignmentSearchTerm] = useState('');
   const [assignmentGroupFilter, setAssignmentGroupFilter] = useState('all');
+  const [assignmentSortBy, setAssignmentSortBy] = useState('priority');
   const [assignmentToDelete, setAssignmentToDelete] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [detailsAssignment, setDetailsAssignment] = useState(null);
@@ -69,9 +70,9 @@ const TeacherDashboard = () => {
   const { dashboardStats, filteredSubmissions, filteredAssignments } = useMemo(() => {
     const dashboardStats = {
       totalAssignments: assignments.length,
-      pendingSubmissions: submissions.filter(s => s.status === 'на проверке').length,
-      gradedSubmissions: submissions.filter(s => s.status === 'зачтена').length,
-      returnedSubmissions: submissions.filter(s => s.status === 'возвращена').length,
+      pendingSubmissions: submissions.filter(s => s.status === 'submitted').length,
+      gradedSubmissions: submissions.filter(s => s.status === 'graded').length,
+      returnedSubmissions: submissions.filter(s => s.status === 'returned').length,
       totalSubmissions: submissions.length
     };
 
@@ -108,12 +109,35 @@ const TeacherDashboard = () => {
       );
     }
 
+    filteredAssigns.sort((a, b) => {
+      switch (assignmentSortBy) {
+        case 'priority':
+          const priorityOrder = { high: 3, medium: 2, low: 1 };
+          const priorityDiff = (priorityOrder[b?.priority] || 0) - (priorityOrder[a?.priority] || 0);
+          if (priorityDiff !== 0) return priorityDiff;
+          return new Date(a?.deadline || 0) - new Date(b?.deadline || 0);
+        case 'deadline':
+          return new Date(a?.deadline || 0) - new Date(b?.deadline || 0);
+        case 'course':
+          return (a?.course || '').localeCompare(b?.course || '');
+        case 'title':
+          return (a?.title || '').localeCompare(b?.title || '');
+        case 'submissions':
+          return (b?.submissionsCount || 0) - (a?.submissionsCount || 0);
+        default:
+          const defaultPriorityOrder = { high: 3, medium: 2, low: 1 };
+          const defaultPriorityDiff = (defaultPriorityOrder[b?.priority] || 0) - (defaultPriorityOrder[a?.priority] || 0);
+          if (defaultPriorityDiff !== 0) return defaultPriorityDiff;
+          return new Date(a?.deadline || 0) - new Date(b?.deadline || 0);
+      }
+    });
+
     return {
       dashboardStats,
       filteredSubmissions: filteredSubs,
       filteredAssignments: filteredAssigns
     };
-  }, [assignments, submissions, assignmentFilter, groupFilter, statusFilter, searchTerm, assignmentGroupFilter, assignmentSearchTerm]);
+  }, [assignments, submissions, assignmentFilter, groupFilter, statusFilter, searchTerm, assignmentGroupFilter, assignmentSearchTerm, assignmentSortBy]);
 
   const availableGroups = useMemo(() => {
     const groupSet = new Set();
@@ -160,13 +184,23 @@ const TeacherDashboard = () => {
   };
 
   const handleSubmitGrade = async () => {
-    if (!gradeData.score || gradeData.score < 0 || gradeData.score > (selectedSubmission.maxScore || 100)) {
-      showWarning(`Пожалуйста, введите корректную оценку (0-${selectedSubmission.maxScore || 100})`);
+    const { validateScore, validateGradingComment } = await import('../../utils/teacherHelpers');
+    
+    const scoreValidation = validateScore(gradeData.score, selectedSubmission.maxScore || 100);
+    if (!scoreValidation.isValid) {
+      showError(scoreValidation.error);
+      return;
+    }
+    
+    const commentValidation = validateGradingComment(gradeData.comment || '');
+    if (!commentValidation.isValid) {
+      showError(commentValidation.error);
       return;
     }
 
     try {
-      const result = await gradeSubmission(selectedSubmission.id, gradeData.score, gradeData.comment);
+      const trimmedComment = (gradeData.comment || '').trim();
+      const result = await gradeSubmission(selectedSubmission.id, parseInt(gradeData.score), trimmedComment);
       if (result.success) {
         setShowGradingModal(false);
         setSelectedSubmission(null);
@@ -333,8 +367,10 @@ const TeacherDashboard = () => {
             searchTerm={searchTerm}
             assignmentSearchTerm={assignmentSearchTerm}
             assignmentGroupFilter={assignmentGroupFilter}
+            assignmentSortBy={assignmentSortBy}
             availableGroups={availableGroups}
             onAssignmentFilterChange={setAssignmentFilter}
+            onAssignmentSortChange={setAssignmentSortBy}
             onGroupFilterChange={setGroupFilter}
             onStatusFilterChange={setStatusFilter}
             onSearchChange={setSearchTerm}
@@ -448,6 +484,7 @@ const DashboardContent = ({
   searchTerm,
   assignmentSearchTerm,
   assignmentGroupFilter,
+  assignmentSortBy,
   availableGroups,
   onAssignmentFilterChange,
   onGroupFilterChange,
@@ -455,6 +492,7 @@ const DashboardContent = ({
   onSearchChange,
   onAssignmentSearchChange,
   onAssignmentGroupFilterChange,
+  onAssignmentSortChange,
   onCreateAssignment,
   onViewSubmissions,
   onEditAssignment,
@@ -475,8 +513,10 @@ const DashboardContent = ({
             searchTerm={assignmentSearchTerm}
             groupFilter={assignmentGroupFilter}
             availableGroups={availableGroups}
+            sortBy={assignmentSortBy}
             onSearchChange={onAssignmentSearchChange}
             onGroupFilterChange={onAssignmentGroupFilterChange}
+            onSortChange={onAssignmentSortChange}
             onCreateAssignment={onCreateAssignment}
             onViewSubmissions={onViewSubmissions}
             onEditAssignment={onEditAssignment}
@@ -535,8 +575,10 @@ const AssignmentsSection = ({
   searchTerm,
   groupFilter,
   availableGroups,
+  sortBy,
   onSearchChange,
   onGroupFilterChange,
+  onSortChange,
   onCreateAssignment,
   onViewSubmissions,
   onEditAssignment,
@@ -575,6 +617,19 @@ const AssignmentsSection = ({
                 {group}
               </option>
             ))}
+          </select>
+        </div>
+        <div className="sort-filter">
+          <select
+            value={sortBy}
+            onChange={(e) => onSortChange(e.target.value)}
+            className="sort-select"
+          >
+            <option value="priority">🎯 По приоритету</option>
+            <option value="deadline">📅 По сроку сдачи</option>
+            <option value="course">📚 По дисциплине</option>
+            <option value="title">📝 По названию</option>
+            <option value="submissions">📋 По количеству работ</option>
           </select>
         </div>
       </div>
@@ -656,9 +711,9 @@ const SubmissionsSection = ({
           className="filter-select"
         >
           <option value="all">Все статусы</option>
-          <option value="на проверке">На проверке</option>
-          <option value="зачтена">Зачтена</option>
-          <option value="возвращена">Возвращена</option>
+          <option value="submitted">На проверке</option>
+          <option value="graded">Зачтена</option>
+          <option value="returned">Возвращена</option>
         </select>
       </div>
     </div>

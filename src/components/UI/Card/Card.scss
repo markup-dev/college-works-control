@@ -4,7 +4,6 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
 
-  // Отступы
   &--small {
     padding: 16px;
   }
@@ -17,12 +16,10 @@
     padding: 24px;
   }
 
-  // Границы
   &--bordered {
     border: 1px solid #e5e7eb;
   }
 
-  // Тени
   &--shadow-none {
     box-shadow: none;
   }
@@ -39,7 +36,6 @@
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   }
 
-  // Эффект при наведении
   &--hoverable {
     cursor: pointer;
     
@@ -55,7 +51,6 @@
   }
 }
 
-// Адаптивность
 @media (max-width: 768px) {
   .card {
     &--medium {

@@ -10,9 +10,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useStudent } from '../../context/StudentContext';
 import { useNotification } from '../../context/NotificationContext';
 import { 
-  filters,
+  assignmentFilters,
   getDaysUntilDeadline 
-} from '../../utils/assignmentHelpers';
+} from '../../utils';
 import './StudentDashboard.scss';
 
 const StudentDashboard = () => {
@@ -27,8 +27,10 @@ const StudentDashboard = () => {
   const { showSuccess, showError, showWarning } = useNotification();
   
   const [activeFilter, setActiveFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('deadline');
+  const [sortBy, setSortBy] = useState('priority');
   const [searchTerm, setSearchTerm] = useState('');
+  const [courseFilter, setCourseFilter] = useState('all');
+  const [teacherFilter, setTeacherFilter] = useState('all');
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [showResultsModal, setShowResultsModal] = useState(false);
@@ -82,6 +84,36 @@ const StudentDashboard = () => {
     setActiveFilter(value);
   }, []);
 
+  const handleCourseFilterChange = useCallback((value) => {
+    setCourseFilter(value);
+  }, []);
+
+  const handleTeacherFilterChange = useCallback((value) => {
+    setTeacherFilter(value);
+  }, []);
+
+  const availableCourses = useMemo(() => {
+    if (!assignments || !Array.isArray(assignments)) return [];
+    const courses = new Set();
+    assignments.forEach(assignment => {
+      if (assignment?.course) {
+        courses.add(assignment.course);
+      }
+    });
+    return Array.from(courses).sort();
+  }, [assignments]);
+
+  const availableTeachers = useMemo(() => {
+    if (!assignments || !Array.isArray(assignments)) return [];
+    const teachers = new Set();
+    assignments.forEach(assignment => {
+      if (assignment?.teacher) {
+        teachers.add(assignment.teacher);
+      }
+    });
+    return Array.from(teachers).sort();
+  }, [assignments]);
+
   const filteredAssignments = useMemo(() => {
     if (!assignments || !Array.isArray(assignments)) {
       return [];
@@ -98,19 +130,39 @@ const StudentDashboard = () => {
       );
     }
     
+    if (courseFilter !== 'all') {
+      filtered = filtered.filter(assignment => assignment?.course === courseFilter);
+    }
+    
+    if (teacherFilter !== 'all') {
+      filtered = filtered.filter(assignment => assignment?.teacher === teacherFilter);
+    }
+    
     if (activeFilter !== 'all') {
       if (activeFilter === 'urgent') {
         filtered = filtered.filter(assignment => {
           const days = getDaysUntilDeadline(assignment?.deadline);
-          return days <= 3 && assignment?.status === 'not_submitted';
+          return days !== null && days <= 3 && days >= 0 && assignment?.status === 'not_submitted';
         });
       } else {
-        filtered = filtered.filter(assignment => assignment?.status === activeFilter);
+        filtered = filtered.filter(assignment => {
+          const status = assignment?.status;
+          if (activeFilter === 'not_submitted') return status === 'not_submitted';
+          if (activeFilter === 'submitted') return status === 'submitted';
+          if (activeFilter === 'graded') return status === 'graded';
+          if (activeFilter === 'returned') return status === 'returned';
+          return false;
+        });
       }
     }
     
     filtered.sort((a, b) => {
       switch (sortBy) {
+        case 'priority':
+          const priorityOrder = { high: 3, medium: 2, low: 1 };
+          const priorityDiff = (priorityOrder[b?.priority] || 0) - (priorityOrder[a?.priority] || 0);
+          if (priorityDiff !== 0) return priorityDiff;
+          return new Date(a?.deadline || 0) - new Date(b?.deadline || 0);
         case 'deadline':
           return new Date(a?.deadline || 0) - new Date(b?.deadline || 0);
         case 'course':
@@ -119,16 +171,16 @@ const StudentDashboard = () => {
           return (a?.status || '').localeCompare(b?.status || '');
         case 'title':
           return (a?.title || '').localeCompare(b?.title || '');
-        case 'priority':
-          const priorityOrder = { high: 3, medium: 2, low: 1 };
-          return (priorityOrder[b?.priority] || 0) - (priorityOrder[a?.priority] || 0);
         default:
+          const defaultPriorityOrder = { high: 3, medium: 2, low: 1 };
+          const defaultPriorityDiff = (defaultPriorityOrder[b?.priority] || 0) - (defaultPriorityOrder[a?.priority] || 0);
+          if (defaultPriorityDiff !== 0) return defaultPriorityDiff;
           return new Date(a?.deadline || 0) - new Date(b?.deadline || 0);
       }
     });
     
     return filtered;
-  }, [assignments, activeFilter, sortBy, searchTerm]);
+  }, [assignments, activeFilter, sortBy, searchTerm, courseFilter, teacherFilter]);
 
   const dashboardStats = useMemo(() => {
     if (!assignments || !Array.isArray(assignments)) {
@@ -137,7 +189,7 @@ const StudentDashboard = () => {
     
     let urgentCount = 0;
     let notSubmittedCount = 0;
-    
+
     for (let i = 0; i < assignments.length; i++) {
       const assignment = assignments[i];
       if (assignment?.status === 'not_submitted') {
@@ -152,7 +204,8 @@ const StudentDashboard = () => {
     return {
       total: assignments.length,
       urgent: urgentCount,
-      pending: notSubmittedCount
+      pending: notSubmittedCount,
+      completed: assignments.filter(a => a?.status === 'graded').length
     };
   }, [assignments]);
 
@@ -179,14 +232,16 @@ const StudentDashboard = () => {
   }, [assignments, dashboardStats.urgent]);
 
   const handleSubmission = useCallback(async () => {
-    if (!submissionFile) {
-      showWarning('Пожалуйста, выберите файл для загрузки');
-      return;
-    }
+    if (selectedAssignment.submissionType === 'file') {
+      if (!submissionFile) {
+        showWarning('Пожалуйста, выберите файл для загрузки');
+        return;
+      }
 
-    if (submissionFile.size > 50 * 1024 * 1024) {
-      showError('Файл слишком большой. Максимальный размер: 50 МБ');
-      return;
+      if (submissionFile.size > 50 * 1024 * 1024) {
+        showError('Файл слишком большой. Максимальный размер: 50 МБ');
+        return;
+      }
     }
 
     try {
@@ -230,9 +285,15 @@ const StudentDashboard = () => {
             sortBy={sortBy}
             onSortChange={handleSortChange}
             activeFilter={activeFilter}
-            filters={filters}
+            filters={assignmentFilters}
             filterCounts={filterCounts}
             onFilterChange={handleFilterChange}
+            courseFilter={courseFilter}
+            onCourseFilterChange={handleCourseFilterChange}
+            availableCourses={availableCourses}
+            teacherFilter={teacherFilter}
+            onTeacherFilterChange={handleTeacherFilterChange}
+            availableTeachers={availableTeachers}
           />
 
           <DashboardContent
@@ -315,9 +376,9 @@ const DashboardContent = React.memo(({
 
   return (
     <div className="assignments-grid">
-      {assignments.map(assignment => (
+      {assignments.map((assignment, index) => (
         <AssignmentCard
-          key={assignment?.id || Math.random()}
+          key={assignment?.id ?? `assignment-${index}`}
           assignment={assignment}
           onSubmitWork={onSubmitWork}
           onViewResults={onViewResults}

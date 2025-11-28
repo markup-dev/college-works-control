@@ -1,45 +1,76 @@
-// src/services/userService.js
-import usersDatabase from '../data/usersDatabase';
+import collegeDatabase from '../data/usersDatabase.js';
+
+const sanitizeUser = (user) => {
+  if (!user) return null;
+  const { passwordHash, password, ...safeUser } = user;
+  return safeUser;
+};
 
 class UserService {
   getAllUsers() {
-    return usersDatabase.getUsers();
+    return collegeDatabase.getUsers().map(user => sanitizeUser(user));
   }
 
   getUserById(userId) {
-    return usersDatabase.getUserById(userId);
+    const user = collegeDatabase.getUserById(userId);
+    return sanitizeUser(user);
   }
 
   findByLoginOrEmail(identifier) {
-    return usersDatabase.getUserByLoginOrEmail(identifier);
+    const user = collegeDatabase.getUserByLoginOrEmail(identifier);
+    return user ? { ...user } : null;
   }
 
   createUser(userData) {
-    return usersDatabase.addUser(userData);
+    const user = collegeDatabase.addUser(userData);
+    return sanitizeUser(user);
   }
 
   updateUser(userId, updates) {
-    return usersDatabase.updateUser(userId, updates);
+    const user = collegeDatabase.updateUser(userId, updates);
+    return sanitizeUser(user);
   }
 
   deleteUser(userId) {
-    return usersDatabase.deleteUser(userId);
+    const user = collegeDatabase.deleteUser(userId);
+    return sanitizeUser(user);
   }
 
   setCurrentUser(user) {
-    usersDatabase.setCurrentUser(user);
+    collegeDatabase.setCurrentUser(sanitizeUser(user));
   }
 
   getCurrentUser() {
-    return usersDatabase.getCurrentUser();
+    return collegeDatabase.getCurrentUser();
   }
 
   clearCurrentUser() {
-    usersDatabase.clearCurrentUser();
+    collegeDatabase.clearCurrentUser();
+  }
+
+  getStudentsByTeacher(teacherLogin) {
+    const students = collegeDatabase.getStudentsByTeacher(teacherLogin);
+    return students.map(student => sanitizeUser(student));
+  }
+
+  getTeacherByStudent(studentLogin) {
+    const teacher = collegeDatabase.getTeacherByStudent(studentLogin);
+    return sanitizeUser(teacher);
+  }
+
+  searchUsers(query) {
+    const users = collegeDatabase.getUsers();
+    const searchTerm = query.toLowerCase();
+    
+    return users
+      .filter(user => 
+        user.name.toLowerCase().includes(searchTerm) ||
+        user.login.toLowerCase().includes(searchTerm) ||
+        user.email.toLowerCase().includes(searchTerm)
+      )
+      .map(user => sanitizeUser(user));
   }
 }
 
 const userService = new UserService();
-
 export default userService;
-

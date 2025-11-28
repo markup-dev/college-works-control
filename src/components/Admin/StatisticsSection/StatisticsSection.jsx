@@ -40,7 +40,6 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
       </div>
       
       <div className="stats-grid">
-        {/* Основные метрики */}
         <Card className="stat-card overview-card" hoverable>
           <div className="card-header">
             <div className="card-icon">📈</div>
@@ -78,7 +77,6 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
           </div>
         </Card>
 
-        {/* Статистика пользователей */}
         <Card className="stat-card users-card" hoverable>
           <div className="card-header">
             <div className="card-icon">👥</div>
@@ -125,7 +123,6 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
           </div>
         </Card>
 
-        {/* Статистика курсов */}
         <Card className="stat-card courses-card" hoverable>
           <div className="card-header">
             <div className="card-icon">📚</div>
@@ -170,7 +167,6 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
           </div>
         </Card>
 
-        {/* Статистика работ */}
         <Card className="stat-card submissions-card" hoverable style={{ gridColumn: '1 / -1' }}>
           <div className="card-header">
             <div className="card-icon">📝</div>
@@ -228,7 +224,6 @@ const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
   );
 };
 
-// Вспомогательные компоненты
 const MetricCard = ({ icon, value, label, trend, color }) => (
   <div className={`metric-card metric-card--${color}`}>
     <div className="metric-icon">{icon}</div>

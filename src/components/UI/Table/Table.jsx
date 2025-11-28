@@ -1,4 +1,3 @@
-// src/components/UI/Table/Table.jsx
 import React from 'react';
 import './Table.scss';
 
@@ -42,15 +41,21 @@ const Table = ({
           </tr>
         </thead>
         <tbody>
-          {data.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {columns.map((column, colIndex) => (
-                <td key={colIndex} className={column.cellClassName}>
-                  {column.render ? column.render(row[column.key], row, rowIndex) : row[column.key]}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {data.map((row, rowIndex) => {
+            const rowKey = row.id ?? row.key ?? `row-${rowIndex}`;
+            return (
+              <tr key={rowKey}>
+                {columns.map((column, colIndex) => {
+                  const cellKey = `${rowKey}-${column.key || colIndex}`;
+                  return (
+                    <td key={cellKey} className={column.cellClassName}>
+                      {column.render ? column.render(row[column.key], row, rowIndex) : row[column.key]}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

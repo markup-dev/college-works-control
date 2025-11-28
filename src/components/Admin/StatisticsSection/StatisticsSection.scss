@@ -116,7 +116,6 @@
   }
 }
 
-// Метрики Overview
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -223,7 +222,6 @@
   }
 }
 
-// Users Chart
 .users-chart {
   width: 100%;
   .chart-bars {
@@ -343,7 +341,6 @@
   }
 }
 
-// Courses Stats
 .courses-stats {
   .stats-row {
     display: grid;
@@ -385,7 +382,6 @@
   }
 }
 
-// Submissions Stats
 .submissions-overview {
   width: 100%;
   .submission-stats-grid {
@@ -504,7 +500,6 @@
   }
 }
 
-// Анимации
 @keyframes slideInUp {
   from {
     opacity: 0;

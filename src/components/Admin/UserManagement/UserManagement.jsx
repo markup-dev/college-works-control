@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Table from '../../UI/Table/Table';
 import Button from '../../UI/Button/Button';
 import Badge from '../../UI/Badge/Badge';
@@ -7,7 +7,7 @@ import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import { useNotification } from '../../../context/NotificationContext';
 import './UserManagement.scss';
 
-const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => {
+const UserManagement = ({ users, assignments = [], onCreateUser, onUpdateUser, onDeleteUser }) => {
   const { showError } = useNotification();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -20,11 +20,38 @@ const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => 
     password: '',
     role: 'student',
     group: '',
-    department: ''
+    department: '',
+    teacherLogin: ''
   });
+  const [newGroupName, setNewGroupName] = useState('');
+
+  const availableGroups = useMemo(() => {
+    const groupSet = new Set();
+    
+    users.forEach(user => {
+      if (user.role === 'student' && user.group) {
+        groupSet.add(user.group);
+      }
+    });
+    
+    assignments.forEach(assignment => {
+      if (Array.isArray(assignment.studentGroups)) {
+        assignment.studentGroups.forEach(group => {
+          if (group) groupSet.add(group);
+        });
+      }
+    });
+    
+    return Array.from(groupSet).sort();
+  }, [users, assignments]);
+
+  const teachers = useMemo(() => {
+    return users.filter(user => user.role === 'teacher');
+  }, [users]);
 
   const handleCreate = () => {
-    setFormData({ login: '', name: '', email: '', password: '', role: 'student', group: '', department: '' });
+    setFormData({ login: '', name: '', email: '', password: '', role: 'student', group: '', department: '', teacherLogin: '' });
+    setNewGroupName('');
     setEditingUser(null);
     setShowCreateForm(true);
   };
@@ -34,10 +61,11 @@ const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => 
       login: user.login,
       name: user.name,
       email: user.email || '',
-      password: '', // не показываем существующий пароль
+      password: '',
       role: user.role,
       group: user.group || '',
-      department: user.department || ''
+      department: user.department || '',
+      teacherLogin: user.teacherLogin || ''
     });
     setEditingUser(user);
     setShowCreateForm(true);
@@ -46,13 +74,47 @@ const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const submitData = { 
+        ...formData,
+        name: formData.name?.trim() || '',
+        login: formData.login?.trim() || '',
+        email: formData.email?.trim() || '',
+        department: formData.department?.trim() || '',
+        teacherLogin: formData.teacherLogin?.trim() || ''
+      };
+      
+      if (submitData.group === '__new__') {
+        const trimmedGroupName = newGroupName.trim();
+        if (!trimmedGroupName) {
+          showError('Введите название новой группы');
+          return;
+        }
+        if (!/^[А-ЯЁA-Z\-\d]+$/i.test(trimmedGroupName)) {
+          showError('Группа должна содержать только буквы, цифры и дефис (например, ИСП-401)');
+          return;
+        }
+        submitData.group = trimmedGroupName;
+      } else if (submitData.group) {
+        submitData.group = submitData.group.trim();
+      }
+      
+      const { validateUserData } = await import('../../../utils/adminHelpers');
+      const validation = validateUserData(submitData, !!editingUser);
+      
+      if (!validation.isValid) {
+        const firstError = Object.values(validation.errors)[0];
+        showError(firstError);
+        return;
+      }
+      
       if (editingUser) {
-        await onUpdateUser(editingUser.id, formData);
+        await onUpdateUser(editingUser.id, submitData);
       } else {
-        await onCreateUser(formData);
+        await onCreateUser(submitData);
       }
       setShowCreateForm(false);
       setEditingUser(null);
+      setNewGroupName('');
     } catch (error) {
       showError(error.message);
     }
@@ -206,20 +268,70 @@ const UserManagement = ({ users, onCreateUser, onUpdateUser, onDeleteUser }) => 
                   <option value="admin">Администратор</option>
                 </select>
               </div>
-              <div className="form-group">
-                <label>
-                  {formData.role === 'student' ? 'Группа' : 'Кафедра'}
-                </label>
-                <input
-                  type="text"
-                  value={formData.role === 'student' ? formData.group : formData.department}
-                  onChange={(e) => setFormData(prev => ({ 
-                    ...prev, 
-                    [formData.role === 'student' ? 'group' : 'department']: e.target.value 
-                  }))}
-                />
-              </div>
+              {formData.role === 'student' ? (
+                <div className="form-group">
+                  <label>Группа *</label>
+                  <select
+                    value={formData.group === '__new__' ? '__new__' : formData.group}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '__new__') {
+                        setFormData(prev => ({ ...prev, group: '__new__' }));
+                        setNewGroupName('');
+                      } else {
+                        setFormData(prev => ({ ...prev, group: value }));
+                        setNewGroupName('');
+                      }
+                    }}
+                    required
+                  >
+                    <option value="">Выберите группу</option>
+                    {availableGroups.map(group => (
+                      <option key={group} value={group}>{group}</option>
+                    ))}
+                    <option value="__new__">+ Добавить новую группу</option>
+                  </select>
+                  {formData.group === '__new__' && (
+                    <input
+                      type="text"
+                      placeholder="Введите название новой группы (например, ИСП-401)"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      style={{ marginTop: '0.5rem', width: '100%', padding: '0.5rem' }}
+                      autoFocus
+                      required
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="form-group">
+                  <label>Кафедра</label>
+                  <input
+                    type="text"
+                    value={formData.department}
+                    onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
+                  />
+                </div>
+              )}
             </div>
+            {formData.role === 'student' && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Преподаватель</label>
+                  <select
+                    value={formData.teacherLogin}
+                    onChange={(e) => setFormData(prev => ({ ...prev, teacherLogin: e.target.value }))}
+                  >
+                    <option value="">Не назначен</option>
+                    {teachers.map(teacher => (
+                      <option key={teacher.id} value={teacher.login}>
+                        {teacher.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
             <div className="form-actions">
               <Button type="submit" variant="primary">
                 {editingUser ? 'Сохранить' : 'Создать'}

@@ -22,7 +22,6 @@ const CourseManagement = ({
     code: '',
     teacherId: '',
     description: '',
-    credits: 3,
     semester: 1,
     status: 'active'
   });
@@ -36,7 +35,6 @@ const CourseManagement = ({
       code: '',
       teacherId: '',
       description: '',
-      credits: 3,
       semester: 1,
       status: 'active'
     });
@@ -51,7 +49,6 @@ const CourseManagement = ({
       code: course.code || '',
       teacherId: course.teacherId || course.teacher?.id || '',
       description: course.description || '',
-      credits: course.credits || 3,
       semester: course.semester || 1,
       status: course.status
     });
@@ -63,16 +60,35 @@ const CourseManagement = ({
   const validateForm = () => {
     const errors = {};
 
-    if (!formData.name.trim()) {
+    const trimmedName = formData.name?.trim() || '';
+    if (!trimmedName) {
       errors.name = 'Название курса обязательно';
+    } else if (trimmedName.length < 3) {
+      errors.name = 'Название курса должно содержать минимум 3 символа';
+    } else if (trimmedName.length > 100) {
+      errors.name = 'Название курса не должно превышать 100 символов';
     }
 
-    if (!formData.code.trim()) {
+    const trimmedCode = formData.code?.trim() || '';
+    if (!trimmedCode) {
       errors.code = 'Код курса обязателен';
+    } else if (trimmedCode.length < 2) {
+      errors.code = 'Код курса должен содержать минимум 2 символа';
+    } else if (trimmedCode.length > 20) {
+      errors.code = 'Код курса не должен превышать 20 символов';
+    } else if (!/^[А-ЯЁA-Z\-\d]+$/i.test(trimmedCode)) {
+      errors.code = 'Код курса должен содержать только буквы, цифры и дефис (например, БД-101)';
     }
 
     if (!formData.teacherId) {
       errors.teacherId = 'Выберите преподавателя';
+    }
+
+    if (formData.semester) {
+      const semesterNum = Number(formData.semester);
+      if (isNaN(semesterNum) || semesterNum < 1 || semesterNum > 8) {
+        errors.semester = 'Семестр должен быть числом от 1 до 8';
+      }
     }
 
     setFormErrors(errors);
@@ -82,18 +98,25 @@ const CourseManagement = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    const trimmedFormData = {
+      ...formData,
+      name: formData.name?.trim() || '',
+      code: formData.code?.trim() || ''
+    };
+    
+    setFormData(trimmedFormData);
+    
     if (!validateForm()) return;
 
     try {
       if (editingCourse) {
-        await onUpdateCourse(editingCourse.id, formData);
+        await onUpdateCourse(editingCourse.id, trimmedFormData);
       } else {
-        await onCreateCourse(formData);
+        await onCreateCourse(trimmedFormData);
       }
       setShowForm(false);
       setEditingCourse(null);
     } catch (error) {
-      console.error('Ошибка сохранения курса:', error);
     }
   };
 
@@ -114,7 +137,6 @@ const CourseManagement = ({
         setShowDeleteConfirm(false);
         setCourseToDelete(null);
       } catch (error) {
-        console.error('Ошибка удаления курса:', error);
       }
     }
   };
@@ -146,7 +168,7 @@ const CourseManagement = ({
     {
       key: 'studentsCount',
       title: 'Студентов',
-      width: '10%',
+      width: '15%',
       render: (value) => (
         <div className="count-cell">
           <span className="count-value">{value || 0}</span>
@@ -154,19 +176,9 @@ const CourseManagement = ({
       )
     },
     {
-      key: 'credits',
-      title: 'Кредиты',
-      width: '8%',
-      render: (value) => (
-        <div className="count-cell">
-          <span className="count-value">{value || 3}</span>
-        </div>
-      )
-    },
-    {
       key: 'semester',
       title: 'Семестр',
-      width: '8%',
+      width: '10%',
       render: (value) => (
         <div className="count-cell">
           <span className="count-value">{value || 1}</span>
@@ -274,17 +286,6 @@ const CourseManagement = ({
                   ))}
                 </select>
                 {formErrors.teacherId && <div className="error-text">{formErrors.teacherId}</div>}
-              </div>
-
-              <div className="form-group">
-                <label>Кредиты</label>
-                <input
-                  type="number"
-                  value={formData.credits}
-                  onChange={(e) => setFormData(prev => ({ ...prev, credits: parseInt(e.target.value) || 3 }))}
-                  min="1"
-                  max="10"
-                />
               </div>
 
               <div className="form-group">

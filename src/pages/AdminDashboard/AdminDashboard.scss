@@ -47,7 +47,6 @@
   100% { transform: rotate(360deg); }
 }
 
-// Адаптивность
 @include mobile {
   .dashboard-container {
     padding: 16px;

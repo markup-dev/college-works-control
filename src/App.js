@@ -12,6 +12,7 @@ import StudentDashboard from './pages/StudentDashboard/StudentDashboard';
 import TeacherDashboard from './pages/TeacherDashboard/TeacherDashboard';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import Profile from './pages/Profile/Profile';
+import NotFound from './pages/NotFound/NotFound';
 import Header from './components/Layout/Header/Header';
 import Footer from './components/Layout/Footer/Footer';
 import ConfirmModal from './components/UI/Modal/ConfirmModal';
@@ -169,6 +170,7 @@ function AppContent() {
                 <Navigate to={user ? `/${user.role}` : '/welcome'} replace />
               } 
             />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
         <Footer />

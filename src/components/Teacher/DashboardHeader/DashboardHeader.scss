@@ -272,7 +272,6 @@
   border-radius: 3px 3px 0 0;
 }
 
-// Адаптивность
 @media (max-width: 1200px) {
   .stats-overview {
     grid-template-columns: repeat(2, 1fr);

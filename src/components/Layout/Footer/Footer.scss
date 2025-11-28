@@ -38,7 +38,6 @@
     transform: translateY(30px);
     animation: fadeInUp 0.8s ease forwards;
 
-    // Разные задержки для секций
     &:nth-child(1) { animation-delay: 0.1s; }
     &:nth-child(2) { animation-delay: 0.2s; }
     &:nth-child(3) { animation-delay: 0.3s; }
@@ -234,7 +233,6 @@
   }
 }
 
-// Анимации
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -255,7 +253,6 @@
   }
 }
 
-// Темная тема поддержка
 @media (prefers-color-scheme: dark) {
   .footer {
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
@@ -266,7 +263,6 @@
   }
 }
 
-// Улучшенная доступность
 @media (prefers-reduced-motion: reduce) {
   .footer * {
     animation: none !important;

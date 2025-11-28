@@ -1,6 +1,6 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import authService from '../services/authService';
+import userService from '../services/userService';
 
 const AuthContext = createContext();
 
@@ -17,7 +17,6 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Загрузка текущего пользователя при инициализации
   useEffect(() => {
     const currentUser = authService.getCurrentUser();
     if (currentUser) {
@@ -25,7 +24,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Вход в систему
   const login = useCallback(async (login, password, role) => {
     setLoading(true);
     setError(null);
@@ -40,7 +38,6 @@ export const AuthProvider = ({ children }) => {
       
       return result;
     } catch (err) {
-      console.error('Login error:', err);
       const errorMsg = 'Ошибка при входе в систему';
       setError(errorMsg);
       return { success: false, error: errorMsg };
@@ -49,14 +46,12 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Выход из системы
   const logout = useCallback(() => {
     authService.logout();
     setUser(null);
     setError(null);
   }, []);
 
-  // Регистрация
   const register = useCallback(async (userData) => {
     setLoading(true);
     setError(null);
@@ -67,7 +62,6 @@ export const AuthProvider = ({ children }) => {
       }
       return result;
     } catch (err) {
-      console.error('Registration error:', err);
       const errorMsg = 'Ошибка при регистрации';
       setError(errorMsg);
       return { success: false, error: errorMsg };
@@ -82,15 +76,17 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const result = await authService.updateUser(user.id, updates);
-      if (result.success) {
-        setUser(result.user);
+      const updatedUser = userService.updateUser(user.id, updates);
+      if (updatedUser) {
+        setUser(updatedUser);
+        authService.getCurrentUser();
+        return { success: true, user: updatedUser };
       } else {
-        setError(result.error);
+        const errorMsg = 'Ошибка обновления профиля';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
       }
-      return result;
     } catch (err) {
-      console.error('Update profile error:', err);
       return { success: false, error: 'Ошибка обновления профиля' };
     }
   }, [user]);
@@ -107,7 +103,6 @@ export const AuthProvider = ({ children }) => {
       }
       return result;
     } catch (err) {
-      console.error('Change password error:', err);
       return { success: false, error: 'Ошибка смены пароля' };
     }
   }, [user]);
@@ -126,4 +121,3 @@ export const AuthProvider = ({ children }) => {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
-

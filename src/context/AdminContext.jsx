@@ -1,31 +1,11 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import authService from '../services/authService';
+import userService from '../services/userService';
 import { mockAdminCourses, mockSystemLogs } from '../data/mockData/adminData';
-import { mockStudentSubmissions } from '../data/mockData/studentData';
-import { mockTeacherSubmissions } from '../data/mockData/teacherData';
+import { readFromStorage, writeToStorage, STORAGE_KEYS, generateId } from '../utils/storageUtils';
 
-const ADMIN_COURSES_KEY = 'admin_courses';
-const ADMIN_LOGS_KEY = 'admin_logs';
-
-const readFromStorage = (key, fallback) => {
-  try {
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (error) {
-    console.error(`Error reading ${key} from storage:`, error);
-  }
-  return fallback;
-};
-
-const writeToStorage = (key, value) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(`Error writing ${key} to storage:`, error);
-  }
-};
+const ADMIN_COURSES_KEY = STORAGE_KEYS.ADMIN_COURSES;
+const ADMIN_LOGS_KEY = STORAGE_KEYS.ADMIN_LOGS;
 
 const AdminContext = createContext();
 
@@ -40,7 +20,8 @@ export const useAdmin = () => {
 export const AdminProvider = ({ children }) => {
   const [users, setUsers] = useState([]);
   const [courses, setCourses] = useState([]);
-  const [submissions] = useState([...mockStudentSubmissions, ...mockTeacherSubmissions]);
+  const [assignments, setAssignments] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
   const [systemLogs, setSystemLogs] = useState([]);
   const [adminStats, setAdminStats] = useState({
     totalUsers: 0,
@@ -54,54 +35,57 @@ export const AdminProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Загрузка данных администратора
   const loadAdminData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // Имитация загрузки данных
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const allUsers = userService.getAllUsers();
+      const storedCourses = readFromStorage(ADMIN_COURSES_KEY, mockAdminCourses);
+      const storedLogs = readFromStorage(ADMIN_LOGS_KEY, mockSystemLogs);
+      const storedAssignments = readFromStorage(STORAGE_KEYS.ASSIGNMENTS, []);
+      const storedSubmissions = readFromStorage(STORAGE_KEYS.SUBMISSIONS, []);
 
-      // Получаем реальных пользователей из authService
-      const allUsers = authService.getAllUsers();
-      const mockStats = {
+      const totalAssignments = storedAssignments.length;
+      const pendingSubmissions = storedSubmissions.filter(s => s.status === 'submitted').length;
+
+      const calculatedStats = {
         totalUsers: allUsers.length,
-        activeUsers: allUsers.filter((u) => u.isActive).length,
-        totalCourses: mockAdminCourses.length,
-        activeCourses: mockAdminCourses.filter((c) => c.status === 'active').length,
-        totalAssignments: 45,
-        pendingSubmissions: 12,
+        activeUsers: allUsers.filter((u) => u.isActive === true).length,
+        totalCourses: storedCourses.length,
+        activeCourses: storedCourses.filter((c) => c.status === 'active').length,
+        totalAssignments: totalAssignments,
+        pendingSubmissions: pendingSubmissions,
         systemUptime: '99.8%',
       };
 
-      const storedCourses = readFromStorage(ADMIN_COURSES_KEY, mockAdminCourses);
-      const storedLogs = readFromStorage(ADMIN_LOGS_KEY, mockSystemLogs);
-
       setUsers(allUsers);
       setCourses(storedCourses);
+      setAssignments(storedAssignments);
+      setSubmissions(storedSubmissions);
       setSystemLogs(storedLogs);
-      writeToStorage(ADMIN_COURSES_KEY, storedCourses);
-      writeToStorage(ADMIN_LOGS_KEY, storedLogs);
-      setAdminStats(mockStats);
+      setAdminStats(calculatedStats);
     } catch (err) {
       setError('Ошибка загрузки данных администратора');
-      console.error('Error loading admin data:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Функции управления пользователями
   const createUser = useCallback(async (userData) => {
     try {
       const result = await authService.register(userData);
       if (result.success) {
-        const updatedUsers = authService.getAllUsers();
+        const updatedUsers = userService.getAllUsers();
         setUsers(updatedUsers);
+        setAdminStats(prev => ({
+          ...prev,
+          totalUsers: updatedUsers.length,
+          activeUsers: updatedUsers.filter((u) => u.isActive === true).length,
+        }));
         setSystemLogs(prev => {
           const updatedLogs = [
             {
-              id: Date.now(),
+              id: generateId(),
               timestamp: new Date().toLocaleString('ru-RU'),
               user: userData.login,
               action: 'create_user',
@@ -121,15 +105,21 @@ export const AdminProvider = ({ children }) => {
 
   const updateUser = useCallback(async (userId, userData) => {
     try {
-      const result = await authService.updateUser(userId, userData);
-      if (result.success) {
-        setUsers(authService.getAllUsers());
+      const result = await userService.updateUser(userId, userData);
+      if (result) {
+        const updatedUsers = userService.getAllUsers();
+        setUsers(updatedUsers);
+        setAdminStats(prev => ({
+          ...prev,
+          totalUsers: updatedUsers.length,
+          activeUsers: updatedUsers.filter((u) => u.isActive === true).length,
+        }));
         setSystemLogs(prev => {
           const updatedLogs = [
             {
-              id: Date.now(),
+              id: generateId(),
               timestamp: new Date().toLocaleString('ru-RU'),
-              user: result.user?.login || 'system',
+              user: 'system',
               action: 'update_user',
               details: `Изменены данные пользователя ID ${userId}`
             },
@@ -138,8 +128,9 @@ export const AdminProvider = ({ children }) => {
           writeToStorage(ADMIN_LOGS_KEY, updatedLogs);
           return updatedLogs;
         });
+        return { success: true };
       }
-      return result;
+      return { success: false, error: 'Ошибка обновления пользователя' };
     } catch (error) {
       return { success: false, error: 'Ошибка обновления пользователя' };
     }
@@ -147,13 +138,19 @@ export const AdminProvider = ({ children }) => {
 
   const deleteUser = useCallback(async (userId) => {
     try {
-      const result = await authService.deleteUser(userId);
-      if (result.success) {
-        setUsers(authService.getAllUsers());
+      const result = userService.deleteUser(userId);
+      if (result) {
+        const updatedUsers = userService.getAllUsers();
+        setUsers(updatedUsers);
+        setAdminStats(prev => ({
+          ...prev,
+          totalUsers: updatedUsers.length,
+          activeUsers: updatedUsers.filter((u) => u.isActive === true).length,
+        }));
         setSystemLogs(prev => {
           const updatedLogs = [
             {
-              id: Date.now(),
+              id: generateId(),
               timestamp: new Date().toLocaleString('ru-RU'),
               user: 'system',
               action: 'delete_user',
@@ -164,18 +161,18 @@ export const AdminProvider = ({ children }) => {
           writeToStorage(ADMIN_LOGS_KEY, updatedLogs);
           return updatedLogs;
         });
+        return { success: true };
       }
-      return result;
+      return { success: false, error: 'Ошибка удаления пользователя' };
     } catch (error) {
       return { success: false, error: 'Ошибка удаления пользователя' };
     }
   }, []);
 
-  // Функции управления курсами
   const createCourse = useCallback(async (courseData) => {
     try {
       const newCourse = {
-        id: Date.now(),
+        id: generateId(),
         ...courseData,
         studentsCount: 0,
         assignmentsCount: 0,
@@ -183,12 +180,17 @@ export const AdminProvider = ({ children }) => {
       setCourses((prev) => {
         const updated = [...prev, newCourse];
         writeToStorage(ADMIN_COURSES_KEY, updated);
+        setAdminStats(prevStats => ({
+          ...prevStats,
+          totalCourses: updated.length,
+          activeCourses: updated.filter((c) => c.status === 'active').length,
+        }));
         return updated;
       });
       setSystemLogs(prev => {
         const updatedLogs = [
           {
-            id: Date.now(),
+            id: generateId(),
             timestamp: new Date().toLocaleString('ru-RU'),
             user: 'system',
             action: 'create_course',
@@ -212,12 +214,17 @@ export const AdminProvider = ({ children }) => {
           course.id === courseId ? { ...course, ...courseData } : course
         );
         writeToStorage(ADMIN_COURSES_KEY, updated);
+        setAdminStats(prevStats => ({
+          ...prevStats,
+          totalCourses: updated.length,
+          activeCourses: updated.filter((c) => c.status === 'active').length,
+        }));
         return updated;
       });
       setSystemLogs(prev => {
         const updatedLogs = [
           {
-            id: Date.now(),
+            id: generateId(),
             timestamp: new Date().toLocaleString('ru-RU'),
             user: 'system',
             action: 'update_course',
@@ -239,12 +246,17 @@ export const AdminProvider = ({ children }) => {
       setCourses((prev) => {
         const updated = prev.filter((course) => course.id !== courseId);
         writeToStorage(ADMIN_COURSES_KEY, updated);
+        setAdminStats(prevStats => ({
+          ...prevStats,
+          totalCourses: updated.length,
+          activeCourses: updated.filter((c) => c.status === 'active').length,
+        }));
         return updated;
       });
       setSystemLogs(prev => {
         const updatedLogs = [
           {
-            id: Date.now(),
+            id: generateId(),
             timestamp: new Date().toLocaleString('ru-RU'),
             user: 'system',
             action: 'delete_course',
@@ -261,9 +273,67 @@ export const AdminProvider = ({ children }) => {
     }
   }, []);
 
+  const deleteAssignment = useCallback(async (assignmentId) => {
+    try {
+      const storedAssignments = readFromStorage(STORAGE_KEYS.ASSIGNMENTS, []);
+      const updatedAssignments = storedAssignments.filter(a => a.id !== assignmentId);
+      writeToStorage(STORAGE_KEYS.ASSIGNMENTS, updatedAssignments);
+      setAssignments(updatedAssignments);
+      
+      const storedSubmissions = readFromStorage(STORAGE_KEYS.SUBMISSIONS, []);
+      const updatedSubmissions = storedSubmissions.filter(s => s.assignmentId !== assignmentId);
+      writeToStorage(STORAGE_KEYS.SUBMISSIONS, updatedSubmissions);
+      setSubmissions(updatedSubmissions);
+      
+      setAdminStats(prev => ({
+        ...prev,
+        totalAssignments: updatedAssignments.length,
+        pendingSubmissions: updatedSubmissions.filter(s => s.status === 'submitted').length,
+      }));
+      
+      setSystemLogs(prev => {
+        const updatedLogs = [
+          {
+            id: generateId(),
+            timestamp: new Date().toLocaleString('ru-RU'),
+            user: 'system',
+            action: 'delete_assignment',
+            details: `Удалено задание ID ${assignmentId}`
+          },
+          ...prev
+        ];
+        writeToStorage(ADMIN_LOGS_KEY, updatedLogs);
+        return updatedLogs;
+      });
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Ошибка удаления задания' };
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.detail?.key === STORAGE_KEYS.ASSIGNMENTS || e.detail?.key === STORAGE_KEYS.SUBMISSIONS) {
+        const storedAssignments = readFromStorage(STORAGE_KEYS.ASSIGNMENTS, []);
+        const storedSubmissions = readFromStorage(STORAGE_KEYS.SUBMISSIONS, []);
+        setAssignments(storedAssignments);
+        setSubmissions(storedSubmissions);
+        setAdminStats(prev => ({
+          ...prev,
+          totalAssignments: storedAssignments.length,
+          pendingSubmissions: storedSubmissions.filter(s => s.status === 'submitted').length,
+        }));
+      }
+    };
+
+    window.addEventListener('storageChange', handleStorageChange);
+    return () => window.removeEventListener('storageChange', handleStorageChange);
+  }, []);
+
   const value = {
     users,
     courses,
+    assignments,
     submissions,
     systemLogs,
     adminStats,
@@ -276,8 +346,8 @@ export const AdminProvider = ({ children }) => {
     createCourse,
     updateCourse,
     deleteCourse,
+    deleteAssignment,
   };
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 };
-

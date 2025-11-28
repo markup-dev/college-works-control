@@ -2,12 +2,12 @@ import React from 'react';
 import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
 import { 
-  getStatusInfo, 
+  getAssignmentStatusInfo, 
   getPriorityInfo, 
   getDaysUntilDeadline, 
   formatDate,
   calculateSubmissionStats 
-} from '../../../utils/assignmentHelpers';
+} from '../../../utils';
 import './AssignmentCard.scss';
 
 const AssignmentCard = React.memo(({
@@ -33,9 +33,8 @@ const AssignmentCard = React.memo(({
     createdAt
   } = assignment;
 
-  // Вычисляем статистику
   const stats = calculateSubmissionStats(submissions);
-  const statusInfo = getStatusInfo(status);
+  const statusInfo = getAssignmentStatusInfo(status);
   const priorityInfo = getPriorityInfo(priority);
   const daysUntilDeadline = getDaysUntilDeadline(deadline);
   const isUrgent = daysUntilDeadline <= 3;
@@ -43,7 +42,6 @@ const AssignmentCard = React.memo(({
   const isActive = status === 'active';
   const isDraft = status === 'draft';
 
-  // Обработчики
   const handleViewSubmissions = (e) => {
     e.stopPropagation();
     onViewSubmissions(assignment.id);
@@ -143,7 +141,6 @@ const AssignmentCard = React.memo(({
       onClick={handleViewDetails}
       style={{ cursor: 'pointer' }}
     >
-      {/* Хедер с заголовком и статусами */}
       <div className="assignment-header">
         <div className="assignment-title-section">
           <div className="assignment-title-wrapper">
@@ -195,15 +192,12 @@ const AssignmentCard = React.memo(({
         </div>
       </div>
 
-      {/* Описание задания */}
       <p className="assignment-description">{description}</p>
 
-      {/* Прогресс сдачи работ */}
       {!isDraft && (
         <SubmissionProgress stats={stats} />
       )}
 
-      {/* Детали задания */}
       <div className="assignment-details">
         <DetailRow 
           icon="📅"
@@ -241,12 +235,10 @@ const AssignmentCard = React.memo(({
         />
       </div>
 
-      {/* Критерии оценки */}
       {criteria && criteria.length > 0 && (
         <CriteriaSection criteria={criteria} />
       )}
       
-      {/* Действия */}
       <div className="assignment-actions">
         {renderActions()}
       </div>
@@ -254,7 +246,6 @@ const AssignmentCard = React.memo(({
   );
 });
 
-// Компонент прогресса сдачи работ
 const SubmissionProgress = React.memo(({ stats }) => (
   <div className="submissions-progress">
     <div className="progress-header">
@@ -289,7 +280,6 @@ const SubmissionProgress = React.memo(({ stats }) => (
   </div>
 ));
 
-// Компонент строки деталей
 const DetailRow = React.memo(({ icon, label, value }) => (
   <div className="detail-row">
     <div className="detail-label">
@@ -302,7 +292,6 @@ const DetailRow = React.memo(({ icon, label, value }) => (
   </div>
 ));
 
-// Компонент секции критериев
 const CriteriaSection = React.memo(({ criteria }) => (
   <div className="criteria-section">
     <div className="criteria-header">

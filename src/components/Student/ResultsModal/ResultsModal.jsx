@@ -1,7 +1,6 @@
-// src/components/Student/ResultsModal/ResultsModal.jsx
 import React from 'react';
 import Button from '../../UI/Button/Button';
-import { formatDate } from '../../../utils/assignmentHelpers';
+import { formatDate } from '../../../utils';
 import './ResultsModal.scss';
 
 const ResultsModal = ({ 
@@ -35,7 +34,6 @@ const ResultsModal = ({
         </div>
         
         <div className="modal-body">
-          {/* Информация о задании */}
           <div className="results-section">
             <h4 className="section-title">📝 Задание</h4>
             <div className="info-grid">
@@ -70,7 +68,6 @@ const ResultsModal = ({
             </div>
           </div>
 
-          {/* Оценка */}
           {score !== null && score !== undefined && (
             <div className="results-section">
               <h4 className="section-title">✅ Оценка</h4>
@@ -94,7 +91,6 @@ const ResultsModal = ({
             </div>
           )}
 
-          {/* Комментарий преподавателя */}
           {assignment.feedback && (
             <div className="results-section">
               <h4 className="section-title">💬 Комментарий преподавателя</h4>
@@ -104,7 +100,6 @@ const ResultsModal = ({
             </div>
           )}
 
-          {/* Критерии оценки, если есть */}
           {assignment.criteria && assignment.criteria.length > 0 && (
             <div className="results-section">
               <h4 className="section-title">📊 Критерии оценки</h4>
@@ -119,7 +114,6 @@ const ResultsModal = ({
             </div>
           )}
 
-          {/* Описание задания, если есть */}
           {assignment.description && (
             <div className="results-section">
               <h4 className="section-title">📋 Описание задания</h4>

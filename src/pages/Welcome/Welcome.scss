@@ -18,18 +18,21 @@
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 0;
+  z-index: 1;
+  pointer-events: none;
 
   .shape {
     position: absolute;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    animation: float 6s ease-in-out infinite;
+    background: rgba(255, 255, 255, 0.15);
+    animation: float 8s ease-in-out infinite;
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.1);
+    pointer-events: none;
 
     &.shape-1 {
       width: 300px;
       height: 300px;
-      top: -150px;
+      top: 20px;
       right: -100px;
       animation-delay: 0s;
     }
@@ -37,24 +40,31 @@
     &.shape-2 {
       width: 200px;
       height: 200px;
-      bottom: 100px;
-      left: -50px;
+      bottom: 55px;
+      left: 170px;
       animation-delay: 2s;
     }
 
     &.shape-3 {
       width: 150px;
       height: 150px;
-      top: 50%;
-      right: 20%;
+      top: 88%;
+      right: 4%;
       animation-delay: 4s;
     }
   }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(-20px) rotate(180deg); }
+  0%, 100% { 
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  33% { 
+    transform: translateY(-25px) rotate(120deg) scale(1.05);
+  }
+  66% { 
+    transform: translateY(15px) rotate(240deg) scale(0.95);
+  }
 }
 
 .welcome-nav {
@@ -84,8 +94,35 @@
     color: white;
   }
 
-  .nav-logo {
-    font-size: 24px;
+  .logo {
+    height: 50px;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    img {
+      height: 100%;
+      width: auto;
+    }
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.4),
+        transparent
+      );
+      transition: left 0.5s;
+    }
+
+    &:hover::before {
+      left: 100%;
+    }
   }
 
   .nav-title {
@@ -130,7 +167,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: -1;
+  z-index: 0;
 
   .hero-orbit {
     position: absolute;
@@ -141,8 +178,8 @@
     &.orbit-1 {
       width: 400px;
       height: 400px;
-      top: 50%;
-      left: 60%;
+      top: 40%;
+      left: 58%;
       animation-delay: 0s;
     }
 
@@ -162,11 +199,6 @@
       animation-delay: -10s;
     }
   }
-}
-
-@keyframes orbit {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
 
 .hero-content {

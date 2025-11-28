@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { validateRegisterForm } from '../../utils/validation';
+import { validateRegisterForm } from '../../utils';
 import './Register.scss';
+import logo from '../../assets/logo-black.svg';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -81,9 +82,8 @@ const Register = () => {
         setIsLoading(false);
       }
     } catch (error) {
-      console.error('Register error:', error);
-      setErrors({ 
-        submit: 'Произошла ошибка при регистрации. Попробуйте еще раз.' 
+      setErrors({
+        submit: 'Произошла ошибка при регистрации. Попробуйте еще раз.'
       });
       setIsLoading(false);
     }
@@ -105,7 +105,9 @@ const Register = () => {
         </button>
 
         <div className='register-header'>
-           <Link to="/welcome" className='register-logo'>🎓</Link>
+           <Link to='/welcome' className='login-logo'>
+            <img src={logo} alt='Логотип' />
+          </Link>
            <h1 className='register-title'>Регистрация</h1>
            <p className='register-subtitle'>
              Создайте новый аккаунт для доступа к системе
@@ -284,4 +286,3 @@ const Register = () => {
 };
 
 export default Register;
-

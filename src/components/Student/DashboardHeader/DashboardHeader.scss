@@ -22,7 +22,7 @@
   gap: 2rem;
 }
 
-.header-info {  
+.header-info {
   .header-title {
     font-size: 2rem;
     font-weight: 800;
@@ -34,7 +34,7 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
-  
+
   .header-subtitle {
     color: #718096;
     margin: 0;
@@ -154,7 +154,6 @@
   margin-bottom: 0.25rem;
 }
 
-// Адаптивность
 @media (max-width: 1200px) {
   .stat-card {
     max-width: 230px;

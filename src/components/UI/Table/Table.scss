@@ -42,14 +42,12 @@
     color: $text-primary;
   }
 
-  // Striped вариант
   &--striped {
     tbody tr:nth-child(even) {
       background: #f8f9fa;
     }
   }
 
-  // Hoverable вариант
   &--hoverable {
     tbody tr {
       transition: background-color 0.2s ease;
@@ -61,7 +59,6 @@
     }
   }
 
-  // Компактный вариант
   &--compact {
     th, td {
       padding: 8px 12px;
@@ -69,7 +66,6 @@
     }
   }
 
-  // Выравнивание
   .text-center {
     text-align: center;
   }
@@ -108,7 +104,6 @@
   }
 }
 
-// Адаптивность
 @include mobile {
   .table-container {
     border-radius: 0;

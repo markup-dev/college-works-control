@@ -1,7 +1,7 @@
 import React from 'react';
 import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
-import { getStatusInfo, getPriorityInfo, getDaysUntilDeadline, formatDate } from '../../../utils/assignmentHelpers';
+import { getAssignmentStatusInfo, getPriorityInfo, getDaysUntilDeadline, formatDate } from '../../../utils';
 import './AssignmentCard.scss';
 
 const AssignmentCard = ({ 
@@ -12,7 +12,7 @@ const AssignmentCard = ({
   onViewDetails,
   className = "" 
 }) => {
-  const statusInfo = getStatusInfo(assignment);
+  const statusInfo = getAssignmentStatusInfo(assignment);
   const priorityInfo = getPriorityInfo(assignment.priority);
   const daysUntilDeadline = getDaysUntilDeadline(assignment.deadline);
   const isUrgent = daysUntilDeadline <= 3 && assignment.status === 'not_submitted';
@@ -23,14 +23,17 @@ const AssignmentCard = ({
     switch (assignment.status) {
       case 'not_submitted':
         return (
-          <Button 
+          <Button
             variant={isOverdue ? "danger" : isUrgent ? "warning" : "primary"}
             size="medium"
-            onClick={() => onSubmitWork(assignment)}
-            icon="📤"
+            onClick={(e) => { e.stopPropagation(); onSubmitWork(assignment); }}
+            icon={assignment.submissionType === 'demo' ? "🎤" : "📤"}
             fullWidth
           >
-            {isOverdue ? "Сдать просроченную работу" : "Сдать работу"}
+            {isOverdue ?
+              (assignment.submissionType === 'demo' ? "Сообщить о готовности (просрочено)" : "Сдать просроченную работу") :
+              (assignment.submissionType === 'demo' ? "Сообщить о готовности" : "Сдать работу")
+            }
           </Button>
         );
       
@@ -49,10 +52,10 @@ const AssignmentCard = ({
       
       case 'graded':
         return (
-          <Button 
-            variant="success" 
+          <Button
+            variant="success"
             size="medium"
-            onClick={() => onViewResults(assignment)}
+            onClick={(e) => { e.stopPropagation(); onViewResults(assignment); }}
             icon="👁"
             fullWidth
           >
@@ -63,18 +66,18 @@ const AssignmentCard = ({
       case 'returned':
         return (
           <div className="assignment-actions__group">
-            <Button 
-              variant="warning" 
+            <Button
+              variant="warning"
               size="medium"
-              onClick={() => onResubmit(assignment)}
+              onClick={(e) => { e.stopPropagation(); onResubmit(assignment); }}
               icon="↩️"
             >
               Пересдать
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="small"
-              onClick={() => onViewResults(assignment)}
+              onClick={(e) => { e.stopPropagation(); onViewResults(assignment); }}
               icon="👁"
             >
               Комментарий
@@ -88,12 +91,13 @@ const AssignmentCard = ({
   };
 
   return (
-    <Card 
-      key={assignment.id} 
-      hoverable 
+    <Card
+      key={assignment.id}
+      hoverable
       className={`assignment-card ${className} ${isUrgent ? 'assignment-card--urgent' : ''} ${isOverdue ? 'assignment-card--overdue' : ''}`}
+      onClick={() => onViewDetails(assignment)}
+      style={{ cursor: 'pointer' }}
     >
-      {/* Бейдж приоритета */}
       {isHighPriority && (
         <div className="assignment-priority-badge">
           <span className="priority-dot"></span>
@@ -188,7 +192,7 @@ const AssignmentCard = ({
           />
         )}
         
-        {assignment.score !== null && (
+        {assignment.score !== null && assignment.score !== undefined && (
           <DetailRow 
             icon="⭐"
             label="Оценка:" 
@@ -211,24 +215,12 @@ const AssignmentCard = ({
       )}
       
       <div className="assignment-actions">
-        {onViewDetails && (
-          <Button 
-            variant="outline" 
-            size="small" 
-            icon="ℹ️"
-            onClick={() => onViewDetails(assignment)}
-            fullWidth={assignment.status === 'submitted'}
-          >
-            Подробнее
-          </Button>
-        )}
         {renderActions()}
       </div>
     </Card>
   );
 };
 
-// Вспомогательный компонент для строки деталей
 const DetailRow = ({ icon, label, value }) => (
   <div className="detail-row">
     <div className="detail-label">
@@ -241,7 +233,6 @@ const DetailRow = ({ icon, label, value }) => (
   </div>
 );
 
-// Компонент для секции критериев
 const CriteriaSection = ({ criteria }) => (
   <div className="criteria-section">
     <div className="criteria-header">

@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
+import logo from '../../../assets/logo-border-gradient.svg';
 import './Header.scss';
 
 const Header = ({ user, onLogout }) => {
@@ -21,7 +22,9 @@ const Header = ({ user, onLogout }) => {
       <div className="header__content">
         <div className="header__left">
           <h1 className="header__title">
-            <Link to="/welcome">🎓 Учебный портал</Link>
+            <Link to="/welcome">
+              <img src={logo} alt="Логотип" className="header__logo" />
+            </Link>
           </h1>
           <span className="header__role">
             {getRoleLabel(user?.role)}

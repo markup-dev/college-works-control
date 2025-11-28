@@ -49,7 +49,6 @@ const DashboardHeader = ({
 const StatsOverview = ({ stats, loading }) => (
   <div className="stats-overview">
     {loading ? (
-      // Скелетоны загрузки
       <>
         {[...Array(4)].map((_, index) => (
           <StatCardSkeleton key={index} />

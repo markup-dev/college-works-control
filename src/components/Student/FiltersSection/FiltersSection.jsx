@@ -9,15 +9,30 @@ const FiltersSection = ({
   searchTerm,
   onSearchChange,
   sortBy,
-  onSortChange 
+  onSortChange,
+  courseFilter,
+  onCourseFilterChange,
+  availableCourses,
+  teacherFilter,
+  onTeacherFilterChange,
+  availableTeachers
 }) => {
   return (
     <div className="filters-section">
-      {/* Поиск и сортировка */}
       <div className="controls-row">
         <SearchBox 
           searchTerm={searchTerm}
           onSearchChange={onSearchChange}
+        />
+        <CourseFilter
+          courseFilter={courseFilter}
+          onCourseFilterChange={onCourseFilterChange}
+          availableCourses={availableCourses}
+        />
+        <TeacherFilter
+          teacherFilter={teacherFilter}
+          onTeacherFilterChange={onTeacherFilterChange}
+          availableTeachers={availableTeachers}
         />
         <SortSelect 
           sortBy={sortBy}
@@ -25,7 +40,6 @@ const FiltersSection = ({
         />
       </div>
 
-      {/* Фильтры */}
       <div className="filters-row">
         <div className="filters-container">
           {filters.map(filter => (
@@ -55,6 +69,36 @@ const SearchBox = ({ searchTerm, onSearchChange }) => (
   </div>
 );
 
+const CourseFilter = ({ courseFilter, onCourseFilterChange, availableCourses }) => (
+  <div className="filter-select">
+    <select 
+      value={courseFilter} 
+      onChange={(e) => onCourseFilterChange(e.target.value)}
+      className="filter-select-input"
+    >
+      <option value="all">📚 Все дисциплины</option>
+      {availableCourses.map(course => (
+        <option key={course} value={course}>{course}</option>
+      ))}
+    </select>
+  </div>
+);
+
+const TeacherFilter = ({ teacherFilter, onTeacherFilterChange, availableTeachers }) => (
+  <div className="filter-select">
+    <select 
+      value={teacherFilter} 
+      onChange={(e) => onTeacherFilterChange(e.target.value)}
+      className="filter-select-input"
+    >
+      <option value="all">👩‍🏫 Все преподаватели</option>
+      {availableTeachers.map(teacher => (
+        <option key={teacher} value={teacher}>{teacher}</option>
+      ))}
+    </select>
+  </div>
+);
+
 const SortSelect = ({ sortBy, onSortChange }) => (
   <div className="sort-filter">
     <select 
@@ -62,11 +106,11 @@ const SortSelect = ({ sortBy, onSortChange }) => (
       onChange={(e) => onSortChange(e.target.value)}
       className="sort-select"
     >
+      <option value="priority">🎯 По приоритету</option>
       <option value="deadline">📅 По сроку сдачи</option>
       <option value="course">📚 По дисциплине</option>
       <option value="status">🔄 По статусу</option>
       <option value="title">📝 По названию</option>
-      <option value="priority">🎯 По приоритету</option>
     </select>
   </div>
 );

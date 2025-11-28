@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import Button from '../../UI/Button/Button';
-import { formatDate, getSubmissionStatusInfo, formatFileSize } from '../../../utils/teacherHelpers';
+import { formatDate, getSubmissionStatusInfo, formatFileSize } from '../../../utils';
 import './SubmissionsTable.scss';
 
 const SubmissionsTable = ({ 
@@ -11,19 +11,43 @@ const SubmissionsTable = ({
   onDownloadFile,
   onViewDetails,
   className = "",
-  loading = false
+  loading = false,
+  showLatestOnly = true
 }) => {
-  const [sortField, setSortField] = useState('submitDate');
+  const [sortField, setSortField] = useState('submissionDate');
   const [sortDirection, setSortDirection] = useState('desc');
 
+  const filteredSubmissions = useMemo(() => {
+    if (!showLatestOnly || submissions.length === 0) {
+      return submissions;
+    }
+
+    const latestSubmissions = [];
+    const seen = new Map();
+    
+    const sortedSubmissions = [...submissions].sort((a, b) => 
+      new Date(b.submissionDate) - new Date(a.submissionDate)
+    );
+
+    for (const submission of sortedSubmissions) {
+      const key = `${submission.assignmentId}_${submission.studentLogin}`;
+      if (!seen.has(key)) {
+        seen.set(key, true);
+        latestSubmissions.push(submission);
+      }
+    }
+
+    return latestSubmissions;
+  }, [submissions, showLatestOnly]);
+
   const sortedSubmissions = useMemo(() => {
-    return [...submissions].sort((a, b) => {
+    return [...filteredSubmissions].sort((a, b) => {
       let aValue = a[sortField];
       let bValue = b[sortField];
       
-      if (sortField === 'submitDate') {
-        aValue = new Date(aValue);
-        bValue = new Date(bValue);
+      if (sortField === 'submissionDate') {
+        aValue = new Date(aValue || 0);
+        bValue = new Date(bValue || 0);
       }
       
       if (sortField === 'score') {
@@ -35,7 +59,7 @@ const SubmissionsTable = ({
       if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [submissions, sortField, sortDirection]);
+  }, [filteredSubmissions, sortField, sortDirection]);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -46,24 +70,19 @@ const SubmissionsTable = ({
     }
   };
 
-  // Обработчики с защитой от множественных вызовов
   const handleGrade = (submission) => {
-    console.log('Оценить работу:', submission.id);
     onGradeSubmission?.(submission);
   };
 
   const handleReturn = (submission) => {
-    console.log('Вернуть работу:', submission.id);
     onReturnSubmission?.(submission);
   };
 
   const handleDownload = (submission) => {
-    console.log('Скачать файл:', submission.id);
     onDownloadFile?.(submission);
   };
 
   const handleViewDetails = (submission) => {
-    console.log('Посмотреть детали:', submission.id);
     onViewDetails?.(submission);
   };
 
@@ -71,7 +90,7 @@ const SubmissionsTable = ({
     return <TableSkeleton />;
   }
 
-  if (submissions.length === 0) {
+  if (filteredSubmissions.length === 0) {
     return (
       <div className="empty-state">
         <div className="empty-icon">📋</div>
@@ -86,7 +105,12 @@ const SubmissionsTable = ({
       <div className="table-header">
         <div className="table-info">
           <span className="table-count">
-            Найдено работ: <strong>{submissions.length}</strong>
+            Найдено работ: <strong>{filteredSubmissions.length}</strong>
+            {showLatestOnly && submissions.length > filteredSubmissions.length && (
+              <span className="duplicates-info">
+                (показаны только последние отправки)
+              </span>
+            )}
           </span>
           <span className="table-sort">
             Сортировка: {getSortFieldLabel(sortField)} ({sortDirection === 'asc' ? '↑' : '↓'})
@@ -108,7 +132,7 @@ const SubmissionsTable = ({
               <th className="assignment-column">Задание</th>
               <th className="group-column">Группа</th>
               <SortableHeader
-                field="submitDate"
+                field="submissionDate"
                 label="Дата сдачи"
                 sortField={sortField}
                 sortDirection={sortDirection}
@@ -171,6 +195,7 @@ const SortableHeader = ({ field, label, sortField, sortDirection, onSort, classN
 const SubmissionRow = React.memo(({ submission, assignment, onGrade, onReturn, onDownload, onViewDetails }) => {
   const statusInfo = getSubmissionStatusInfo(submission.status);
   const maxScore = assignment?.maxScore || submission.maxScore || 100;
+  const submissionDate = submission.submissionDate;
 
   return (
     <tr className="submission-row">
@@ -183,13 +208,14 @@ const SubmissionRow = React.memo(({ submission, assignment, onGrade, onReturn, o
       <td className="assignment-column">
         <AssignmentInfo 
           title={submission.assignmentTitle}
+          isResubmission={submission.isResubmission}
         />
       </td>
       <td className="group-column">
         <GroupTag group={submission.group} />
       </td>
       <td className="date-column">
-        <SubmitDate date={submission.submitDate} />
+        <SubmitDate date={submissionDate} />
       </td>
       <td className="file-column">
         <FileInfo 
@@ -223,14 +249,17 @@ const StudentInfo = ({ student, studentId }) => (
   <div className="student-info">
     <div className="student-name">{student}</div>
     {studentId && (
-      <div className="student-id">{studentId}</div>
+      <div className="student-id">ID: {studentId}</div>
     )}
   </div>
 );
 
-const AssignmentInfo = ({ title }) => (
+const AssignmentInfo = ({ title, isResubmission }) => (
   <div className="assignment-info">
     <div className="assignment-title">{title}</div>
+    {isResubmission && (
+      <div className="resubmission-badge">Пересдача</div>
+    )}
   </div>
 );
 
@@ -238,9 +267,18 @@ const GroupTag = ({ group }) => (
   <span className="group-tag">{group}</span>
 );
 
-const SubmitDate = ({ date }) => (
-  <div className="submit-date">{formatDate(date)}</div>
-);
+const SubmitDate = ({ date }) => {
+  if (!date || date === 'Дата не указана') {
+    return <div className="submit-date no-date">—</div>;
+  }
+  
+  try {
+    const formattedDate = formatDate(date);
+    return <div className="submit-date">{formattedDate}</div>;
+  } catch (error) {
+    return <div className="submit-date invalid-date">—</div>;
+  }
+};
 
 const FileInfo = ({ fileName, fileSize, onDownload }) => (
   <div className="file-info">
@@ -252,7 +290,7 @@ const FileInfo = ({ fileName, fileSize, onDownload }) => (
       <span className="file-icon">📄</span>
       <span className="file-name">{fileName}</span>
     </button>
-    {fileSize && (
+    {fileSize && fileSize !== '0.0 MB' && (
       <div className="file-size">{formatFileSize(fileSize)}</div>
     )}
   </div>
@@ -286,7 +324,6 @@ const ActionButtons = React.memo(({ submission, onGrade, onReturn, onViewDetails
     try {
       await action();
     } catch (error) {
-      console.error('Ошибка действия:', error);
     } finally {
       setIsLoading(false);
     }
@@ -342,6 +379,19 @@ const ActionButtons = React.memo(({ submission, onGrade, onReturn, onViewDetails
           Изменить
         </Button>
       )}
+
+      {submission.status === 'returned' && (
+        <Button 
+          variant="primary" 
+          size="small"
+          onClick={() => handleAction(onGrade)}
+          disabled={isLoading}
+          icon="✅"
+          className="action-btn"
+        >
+          Проверить
+        </Button>
+      )}
     </div>
   );
 });
@@ -369,7 +419,7 @@ const getSortFieldLabel = (field) => {
   const labels = {
     studentName: 'Студент',
     group: 'Группа',
-    submitDate: 'Дата сдачи',
+    submissionDate: 'Дата сдачи',
     status: 'Статус',
     score: 'Оценка'
   };

@@ -5,8 +5,11 @@ import UserManagement from '../../components/Admin/UserManagement/UserManagement
 import CourseManagement from '../../components/Admin/CourseManagement/CourseManagement';
 import StatisticsSection from '../../components/Admin/StatisticsSection/StatisticsSection';
 import SystemLogs from '../../components/Admin/SystemLogs/SystemLogs';
+import AssignmentManagement from '../../components/Admin/AssignmentManagement/AssignmentManagement';
+import SettingsSection from '../../components/Admin/SettingsSection/SettingsSection';
 import { useAuth } from '../../context/AuthContext';
 import { useAdmin } from '../../context/AdminContext';
+import { useNotification } from '../../context/NotificationContext';
 import './AdminDashboard.scss';
 
 const AdminDashboard = () => {
@@ -14,6 +17,7 @@ const AdminDashboard = () => {
   const {
     users = [],
     courses = [],
+    assignments = [],
     submissions = [],
     systemLogs = [],
     adminStats = {},
@@ -24,8 +28,10 @@ const AdminDashboard = () => {
     deleteUser,
     createCourse,
     updateCourse,
-    deleteCourse
+    deleteCourse,
+    deleteAssignment
   } = useAdmin();
+  const { showSuccess, showError } = useNotification();
   
   const [activeTab, setActiveTab] = useState('overview');
   const navigate = useNavigate();
@@ -44,14 +50,13 @@ const AdminDashboard = () => {
     loadAdminData();
   }, [user, navigate, loadAdminData]);
 
-  // Обеспечиваем значения по умолчанию для статистики
   const safeStats = {
     totalUsers: adminStats.totalUsers || users.length,
-    activeUsers: adminStats.activeUsers || users.filter(u => u.status === 'active').length,
+    activeUsers: adminStats.activeUsers || users.filter(u => u.isActive === true).length,
     totalCourses: adminStats.totalCourses || courses.length,
     activeCourses: adminStats.activeCourses || courses.filter(c => c.status === 'active').length,
-    totalAssignments: adminStats.totalAssignments || 0,
-    pendingSubmissions: adminStats.pendingSubmissions || 0,
+    totalAssignments: adminStats.totalAssignments || assignments.length,
+    pendingSubmissions: adminStats.pendingSubmissions || submissions.filter(s => s.status === 'submitted').length,
     systemUptime: adminStats.systemUptime || '100%'
   };
 
@@ -71,6 +76,7 @@ const AdminDashboard = () => {
         return (
           <UserManagement
             users={users}
+            assignments={assignments}
             onCreateUser={createUser}
             onUpdateUser={updateUser}
             onDeleteUser={deleteUser}
@@ -90,6 +96,27 @@ const AdminDashboard = () => {
       
       case 'logs':
         return <SystemLogs logs={systemLogs} />;
+      
+      case 'assignments':
+        return (
+          <AssignmentManagement
+            assignments={assignments}
+            submissions={submissions}
+            teachers={users.filter(u => u.role === 'teacher')}
+            onDeleteAssignment={async (assignmentId) => {
+              const result = await deleteAssignment(assignmentId);
+              if (result.success) {
+                showSuccess('Задание успешно удалено');
+                loadAdminData();
+              } else {
+                showError(result.error || 'Ошибка при удалении задания');
+              }
+            }}
+          />
+        );
+      
+      case 'settings':
+        return <SettingsSection />;
       
       default:
         return null;
