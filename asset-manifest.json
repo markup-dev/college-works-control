@@ -1,18 +1,18 @@
 {
   "files": {
     "main.css": "/college-works-control/static/css/main.619b09d4.css",
-    "main.js": "/college-works-control/static/js/main.57230b6d.js",
+    "main.js": "/college-works-control/static/js/main.fad4b6ef.js",
     "static/js/904.b7f74650.chunk.js": "/college-works-control/static/js/904.b7f74650.chunk.js",
     "static/media/logo-border-gradient.svg": "/college-works-control/static/media/logo-border-gradient.af95efd4cc9e50b99e7fb7fae2580dc7.svg",
     "static/media/logo-black.svg": "/college-works-control/static/media/logo-black.de81302bffcf3e8ce23e7fbf0aae7530.svg",
     "static/media/logo.svg": "/college-works-control/static/media/logo.f2a906f3e798092892315e1c694ed05a.svg",
     "index.html": "/college-works-control/index.html",
     "main.619b09d4.css.map": "/college-works-control/static/css/main.619b09d4.css.map",
-    "main.57230b6d.js.map": "/college-works-control/static/js/main.57230b6d.js.map",
+    "main.fad4b6ef.js.map": "/college-works-control/static/js/main.fad4b6ef.js.map",
     "904.b7f74650.chunk.js.map": "/college-works-control/static/js/904.b7f74650.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.619b09d4.css",
-    "static/js/main.57230b6d.js"
+    "static/js/main.fad4b6ef.js"
   ]
 }
