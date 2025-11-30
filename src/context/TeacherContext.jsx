@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { readFromStorage, writeToStorage, generateId, STORAGE_KEYS } from '../utils/storageUtils';
+import userService from '../services/userService';
 
 
 const SHARED_ASSIGNMENTS_KEY = STORAGE_KEYS.ASSIGNMENTS;
@@ -52,21 +53,47 @@ export const TeacherProvider = ({ children }) => {
   );
 
   const normalizeSubmissions = useCallback(
-    (submissions, assignments) =>
-      submissions.map((submission) => {
+    (submissions, assignments) => {
+      const allUsers = userService.getAllUsers();
+      
+      return submissions.map((submission) => {
         const subAssignId = typeof submission.assignmentId === 'number' ? submission.assignmentId : parseInt(submission.assignmentId, 10);
         const assignment = assignments.find(a => {
           const assignId = typeof a.id === 'number' ? a.id : parseInt(a.id, 10);
           return assignId === subAssignId;
         });
+        
+        let studentName = submission.studentName;
+        let studentGroup = submission.group;
+        if (submission.studentId) {
+          const studentId = typeof submission.studentId === 'number' 
+            ? submission.studentId 
+            : parseInt(submission.studentId, 10);
+          const student = allUsers.find(u => {
+            const userId = typeof u.id === 'number' ? u.id : parseInt(u.id, 10);
+            return userId === studentId && u.role === 'student';
+          });
+          if (student) {
+            if (student.name) {
+              studentName = student.name;
+            }
+            if (student.group) {
+              studentGroup = student.group;
+            }
+          }
+        }
+        
         return {
           ...submission,
           teacherLogin: resolveOwnerLogin(submission.teacherLogin),
           assignmentTitle: assignment ? assignment.title : 'Неизвестно',
           assignmentCourse: assignment ? assignment.course : '',
-          maxScore: assignment ? assignment.maxScore : 100
+          maxScore: assignment ? assignment.maxScore : 100,
+          studentName: studentName || submission.studentName,
+          group: studentGroup || submission.group
         };
-      }),
+      });
+    },
     [resolveOwnerLogin]
   );
 

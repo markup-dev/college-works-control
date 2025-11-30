@@ -63,6 +63,16 @@ function AppContent() {
   const { user, logout, loading } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  useEffect(() => {
+    const path = window.location.pathname.split('/').slice(1);
+    if (path[0] === 'college-works-control' && path[1] === '?' && path[2]) {
+      const newPath = '/' + path.slice(2).join('/').replace(/~and~/g, '&');
+      const search = window.location.search.replace(/\/\?\/?/g, '');
+      const hash = window.location.hash;
+      window.history.replaceState({}, '', newPath + search + hash);
+    }
+  }, []);
+
   const handleLogout = () => {
     setShowLogoutConfirm(true);
   };

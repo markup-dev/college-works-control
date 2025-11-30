@@ -62,8 +62,10 @@ const StudentDashboard = () => {
     setShowAssignmentDetails(true);
   }, []);
 
-  const handleFileSelect = useCallback((event) => {
-    setSubmissionFile(event.target.files[0]);
+  const handleFileSelect = useCallback((file) => {
+    if (file) {
+      setSubmissionFile(file);
+    }
   }, []);
 
   const handleCloseModal = useCallback(() => {

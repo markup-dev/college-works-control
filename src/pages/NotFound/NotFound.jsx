@@ -11,7 +11,6 @@ const NotFound = () => {
 
   return (
     <div className={`not-found-page ${isVisible ? 'visible' : ''}`}>
-      {/* Animated Background */}
       <div className="not-found-background">
         <div className="floating-shape shape-1"></div>
         <div className="floating-shape shape-2"></div>
@@ -20,7 +19,6 @@ const NotFound = () => {
       </div>
 
       <div className="not-found-container">
-        {/* Main Content */}
         <div className="not-found-content">
           <div className="error-code">
             <span className="digit">4</span>
@@ -36,7 +34,6 @@ const NotFound = () => {
             </p>
           </div>
 
-          {/* Animated Elements */}
           <div className="error-visual">
             <div className="lost-astronaut">
               <div className="astronaut">👨‍🚀</div>
@@ -48,7 +45,6 @@ const NotFound = () => {
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="error-actions">
             <Link to="/welcome" className="btn-primary btn-large">
               <span className="btn-icon">🏠</span>
@@ -63,7 +59,6 @@ const NotFound = () => {
             </button>
           </div>
 
-          {/* Additional Info */}
           <div className="error-help">
             <p>Если проблема повторяется, свяжитесь с поддержкой</p>
             <div className="help-links">
@@ -77,7 +72,6 @@ const NotFound = () => {
           </div>
         </div>
 
-        {/* Decorative Elements */}
         <div className="decoration-orbits">
           <div className="orbit orbit-1"></div>
           <div className="orbit orbit-2"></div>

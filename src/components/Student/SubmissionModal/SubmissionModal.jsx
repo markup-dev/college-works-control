@@ -123,25 +123,35 @@ const FileUpload = ({ assignment, submissionFile, onFileSelect }) => {
   const maxFileSize = (assignment.maxFileSize || 50) * 1024 * 1024;
   
   const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
+    if (!e || !e.target || !e.target.files) {
+      return;
+    }
+    
+    const file = e.target.files[0];
     if (!file) return;
     
     if (file.size > maxFileSize) {
       showError(`Файл слишком большой. Максимальный размер: ${assignment.maxFileSize || 50} МБ`);
-      e.target.value = '';
+      if (e.target) {
+        e.target.value = '';
+      }
       return;
     }
     
     if (file.size === 0) {
       showError('Файл не может быть пустым');
-      e.target.value = '';
+      if (e.target) {
+        e.target.value = '';
+      }
       return;
     }
     
     const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!allowedFormats.includes(fileExtension)) {
       showError(`Недопустимый формат файла. Разрешены: ${allowedFormats.join(', ')}`);
-      e.target.value = '';
+      if (e.target) {
+        e.target.value = '';
+      }
       return;
     }
     

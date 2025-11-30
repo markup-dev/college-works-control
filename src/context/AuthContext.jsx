@@ -79,7 +79,7 @@ export const AuthProvider = ({ children }) => {
       const updatedUser = userService.updateUser(user.id, updates);
       if (updatedUser) {
         setUser(updatedUser);
-        authService.getCurrentUser();
+        userService.setCurrentUser(updatedUser);
         return { success: true, user: updatedUser };
       } else {
         const errorMsg = 'Ошибка обновления профиля';
