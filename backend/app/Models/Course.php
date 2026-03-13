@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\CamelCaseSerializable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Course extends Model
 {
-    use HasFactory;
+    use HasFactory, CamelCaseSerializable;
 
     protected $fillable = [
         'name',

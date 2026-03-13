@@ -1,17 +1,9 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { StudentProvider } from './StudentContext';
 import { TeacherProvider } from './TeacherContext';
 import { AdminProvider } from './AdminContext';
 import { NotificationProvider } from './NotificationContext';
-import { initializeStorage } from '../utils/dataInitializer';
-
-const DataInitializer = ({ children }) => {
-  useEffect(() => {
-    initializeStorage();
-  }, []);
-  return <>{children}</>;
-};
 
 const RoleBasedProvider = ({ children }) => {
   const { user } = useAuth();
@@ -35,13 +27,11 @@ const RoleBasedProvider = ({ children }) => {
 export const RootProvider = ({ children }) => {
   return (
     <NotificationProvider>
-      <DataInitializer>
-        <AuthProvider>
-          <RoleBasedProvider>
-            {children}
-          </RoleBasedProvider>
-        </AuthProvider>
-      </DataInitializer>
+      <AuthProvider>
+        <RoleBasedProvider>
+          {children}
+        </RoleBasedProvider>
+      </AuthProvider>
     </NotificationProvider>
   );
 };

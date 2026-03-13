@@ -1,1 +1,2 @@
-export { default as AuthService } from './authService.js';export { default as UserService } from './userService.js';
+export { default as authService } from './authService.js';
+export { default as api } from './api.js';

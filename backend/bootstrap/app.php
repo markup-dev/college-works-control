@@ -13,6 +13,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
+        $middleware->api(prepend: [
+            \App\Http\Middleware\ConvertCamelToSnake::class,
+        ]);
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
         ]);

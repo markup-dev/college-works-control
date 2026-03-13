@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import authService from '../services/authService';
-import userService from '../services/userService';
 
 const AuthContext = createContext();
 
@@ -14,14 +13,15 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const currentUser = authService.getCurrentUser();
-    if (currentUser) {
-      setUser(currentUser);
+    const savedUser = authService.getCurrentUser();
+    if (savedUser && authService.getToken()) {
+      setUser(savedUser);
     }
+    setLoading(false);
   }, []);
 
   const login = useCallback(async (login, password, role) => {
@@ -29,13 +29,13 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const result = await authService.login(login, password, role);
-      
+
       if (result.success) {
         setUser(result.user);
       } else {
         setError(result.error);
       }
-      
+
       return result;
     } catch (err) {
       const errorMsg = 'Ошибка при входе в систему';
@@ -46,8 +46,8 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const logout = useCallback(() => {
-    authService.logout();
+  const logout = useCallback(async () => {
+    await authService.logout();
     setUser(null);
     setError(null);
   }, []);
@@ -76,15 +76,13 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const updatedUser = userService.updateUser(user.id, updates);
-      if (updatedUser) {
-        setUser(updatedUser);
-        userService.setCurrentUser(updatedUser);
-        return { success: true, user: updatedUser };
+      const result = await authService.updateProfile(updates);
+      if (result.success) {
+        setUser(result.user);
+        return { success: true, user: result.user };
       } else {
-        const errorMsg = 'Ошибка обновления профиля';
-        setError(errorMsg);
-        return { success: false, error: errorMsg };
+        setError(result.error);
+        return result;
       }
     } catch (err) {
       return { success: false, error: 'Ошибка обновления профиля' };
@@ -97,7 +95,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const result = await authService.changePassword(user.id, currentPassword, newPassword);
+      const result = await authService.changePassword(currentPassword, newPassword);
       if (!result.success) {
         setError(result.error);
       }

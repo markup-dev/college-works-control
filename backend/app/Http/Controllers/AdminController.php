@@ -20,6 +20,7 @@ class AdminController extends Controller
             'activeCourses' => Course::where('status', 'active')->count(),
             'totalAssignments' => Assignment::count(),
             'pendingSubmissions' => Submission::where('status', 'submitted')->count(),
+            'systemUptime' => '99.8%',
         ]);
     }
 

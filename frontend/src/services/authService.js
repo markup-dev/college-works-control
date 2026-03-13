@@ -1,173 +1,98 @@
-import bcrypt from 'bcryptjs';
-import userService from './userService.js';
+import api from './api';
 
 class AuthService {
-  constructor() {
-    this.currentUser = userService.getCurrentUser();
-  }
-
-  async hashPassword(password) {
-    const saltRounds = 10;
-    return await bcrypt.hash(password, saltRounds);
-  }
-
-  async comparePassword(password, hash) {
-    return await bcrypt.compare(password, hash);
-  }
-
   async register(userData) {
     try {
-      const existingUser = userService.findByLoginOrEmail(userData.login) || 
-                          userService.findByLoginOrEmail(userData.email);
-
-      if (existingUser) {
-        return {
-          success: false,
-          error: existingUser.login === userData.login 
-            ? 'Пользователь с таким логином уже существует'
-            : 'Пользователь с таким email уже существует'
-        };
-      }
-
-      const passwordHash = await this.hashPassword(userData.password);
-
-      const newUser = {
-        ...userData,
-        passwordHash,
-        id: Date.now(),
-        isActive: true,
-        registrationDate: new Date().toISOString().split('T')[0],
-        lastLogin: null,
-        notifications: userData.notifications || { email: true, push: true, sms: false },
-        theme: userData.theme || 'system'
-      };
-
-      const createdUser = userService.createUser(newUser);
-
-      return {
-        success: true,
-        user: createdUser
-      };
+      const response = await api.post('/register', userData);
+      return { success: true, user: response.data.user };
     } catch (error) {
-      return {
-        success: false,
-        error: 'Ошибка при регистрации'
-      };
+      const message = error.response?.data?.message || 'Ошибка при регистрации';
+      return { success: false, error: message };
     }
   }
 
   async login(identifier, password, expectedRole = null) {
     try {
-      const demoPassword = 'Password123';
-      
-      const user = userService.findByLoginOrEmail(identifier);
-
-      if (!user || !user.isActive) {
-        return {
-          success: false,
-          error: 'Неверный логин/email или пароль'
-        };
-      }
-
-      if (expectedRole && user.role !== expectedRole) {
-        return {
-          success: false,
-          error: `Этот аккаунт не является ${this.getRoleName(expectedRole)}`
-        };
-      }
-
-      let passwordValid = false;
-      
-      if (user.passwordHash) {
-        passwordValid = await this.comparePassword(password, user.passwordHash);
-      } else if (user.password === demoPassword || user.password === password) {
-        passwordValid = true;
-        const passwordHash = await this.hashPassword(password);
-        userService.updateUser(user.id, { passwordHash });
-      }
-
-      if (!passwordValid) {
-        return {
-          success: false,
-          error: 'Неверный логин/email или пароль'
-        };
-      }
-
-      const updatedUser = userService.updateUser(user.id, {
-        lastLogin: new Date().toISOString()
+      const response = await api.post('/login', {
+        login: identifier,
+        password,
+        role: expectedRole,
       });
 
-      this.currentUser = updatedUser;
-      userService.setCurrentUser(updatedUser);
+      const { token, user } = response.data;
 
-      return {
-        success: true,
-        user: updatedUser
-      };
+      localStorage.setItem('auth_token', token);
+      localStorage.setItem('auth_user', JSON.stringify(user));
+
+      return { success: true, user };
     } catch (error) {
-      return {
-        success: false,
-        error: 'Ошибка при входе в систему'
-      };
+      const message = error.response?.data?.message || 'Ошибка при входе в систему';
+      return { success: false, error: message };
     }
   }
 
-  logout() {
-    this.currentUser = null;
-    userService.clearCurrentUser();
+  async logout() {
+    try {
+      await api.post('/logout');
+    } catch {
+      // Даже при ошибке сети очищаем локальное состояние
+    } finally {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+    }
     return { success: true };
   }
 
-  isAuthenticated() {
-    return !!this.currentUser;
+  async getProfile() {
+    try {
+      const response = await api.get('/profile');
+      return { success: true, user: response.data };
+    } catch (error) {
+      return { success: false, error: 'Ошибка загрузки профиля' };
+    }
+  }
+
+  async updateProfile(updates) {
+    try {
+      const response = await api.put('/profile', updates);
+      const user = response.data.user;
+      localStorage.setItem('auth_user', JSON.stringify(user));
+      return { success: true, user };
+    } catch (error) {
+      const message = error.response?.data?.message || 'Ошибка обновления профиля';
+      return { success: false, error: message };
+    }
+  }
+
+  async changePassword(currentPassword, newPassword) {
+    try {
+      await api.put('/profile/password', {
+        currentPassword,
+        newPassword,
+        newPasswordConfirmation: newPassword,
+      });
+      return { success: true };
+    } catch (error) {
+      const message = error.response?.data?.message || 'Ошибка смены пароля';
+      return { success: false, error: message };
+    }
   }
 
   getCurrentUser() {
-    if (this.currentUser) {
-      return this.currentUser;
-    }
-    const stored = userService.getCurrentUser();
-    this.currentUser = stored;
-    return stored;
-  }
-
-  async changePassword(userId, currentPassword, newPassword) {
     try {
-      const user = userService.findByLoginOrEmail(userService.getUserById(userId)?.login);
-      
-      if (!user) {
-        return { success: false, error: 'Пользователь не найден' };
-      }
-
-      let passwordValid = false;
-      const demoPassword = 'Password123';
-
-      if (user.passwordHash) {
-        passwordValid = await this.comparePassword(currentPassword, user.passwordHash);
-      } else if (user.password === demoPassword || user.password === currentPassword) {
-        passwordValid = true;
-      }
-      
-      if (!passwordValid) {
-        return { success: false, error: 'Текущий пароль указан неверно' };
-      }
-
-      const passwordHash = await this.hashPassword(newPassword);
-      userService.updateUser(userId, { passwordHash });
-
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: 'Ошибка при смене пароля' };
+      const stored = localStorage.getItem('auth_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
     }
   }
 
-  getRoleName(role) {
-    const roles = {
-      student: 'студентом',
-      teacher: 'преподавателем',
-      admin: 'администратором'
-    };
-    return roles[role] || 'пользователем';
+  getToken() {
+    return localStorage.getItem('auth_token');
+  }
+
+  isAuthenticated() {
+    return !!this.getToken();
   }
 }
 

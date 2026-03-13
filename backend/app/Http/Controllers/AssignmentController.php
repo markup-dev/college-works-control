@@ -23,17 +23,25 @@ class AssignmentController extends Controller
                 ])
                 ->get();
 
-            $assignments->each(function ($assignment) use ($user) {
+            $assignments->transform(function ($assignment) use ($user) {
                 $submission = $assignment->submissions()
                     ->where('student_id', $user->id)
                     ->latest('submitted_at')
                     ->first();
 
-                $assignment->student_status = $submission ? $submission->status : 'not_submitted';
-                $assignment->student_score = $submission?->score;
-                $assignment->submitted_at = $submission?->submitted_at;
+                $data = $assignment->toArray();
+                $data['status'] = $submission ? $submission->status : 'not_submitted';
+                $data['score'] = $submission?->score;
+                $data['submittedAt'] = $submission?->submitted_at;
+                $data['teacher'] = $assignment->teacher?->name ?? 'Не указан';
+
+                return $data;
             });
-        } elseif ($user->role === 'teacher') {
+
+            return response()->json($assignments);
+        }
+
+        if ($user->role === 'teacher') {
             $assignments = Assignment::with('teacher:id,name,login')
                 ->where('teacher_id', $user->id)
                 ->withCount([
