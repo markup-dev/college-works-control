@@ -14,13 +14,13 @@ class AdminController extends Controller
     public function stats()
     {
         return response()->json([
-            'totalUsers' => User::count(),
-            'activeUsers' => User::where('is_active', true)->count(),
-            'totalCourses' => Course::count(),
-            'activeCourses' => Course::where('status', 'active')->count(),
-            'totalAssignments' => Assignment::count(),
-            'pendingSubmissions' => Submission::where('status', 'submitted')->count(),
-            'systemUptime' => '99.8%',
+            'total_users' => User::count(),
+            'active_users' => User::where('is_active', true)->count(),
+            'total_courses' => Course::count(),
+            'active_courses' => Course::where('status', 'active')->count(),
+            'total_assignments' => Assignment::count(),
+            'pending_submissions' => Submission::where('status', 'submitted')->count(),
+            'system_uptime' => '99.8%',
         ]);
     }
 
@@ -156,12 +156,19 @@ class AdminController extends Controller
 
     public function logs()
     {
-        return response()->json(
-            SystemLog::with('user:id,name,login')
-                ->latest('created_at')
-                ->limit(100)
-                ->get()
-        );
+        $logs = SystemLog::latest('created_at')
+            ->limit(100)
+            ->get()
+            ->map(fn($log) => [
+                'id' => $log->id,
+                'timestamp' => $log->created_at,
+                'user' => $log->user_login,
+                'user_role' => $log->user_role,
+                'action' => $log->action,
+                'details' => $log->details,
+            ]);
+
+        return response()->json($logs);
     }
 
     private function log(Request $request, string $action, string $details): void

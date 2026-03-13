@@ -16,7 +16,7 @@ class AssignmentController extends Controller
                 ->whereHas('teacher', function ($q) use ($user) {
                     $q->where('login', $user->teacher_login);
                 })
-                ->whereJsonContains('student_groups', $user->group)
+                ->whereRaw('JSON_CONTAINS(student_groups, ?)', [json_encode($user->group)])
                 ->withCount([
                     'submissions',
                     'submissions as pending_count' => fn($q) => $q->where('status', 'submitted'),
@@ -30,9 +30,10 @@ class AssignmentController extends Controller
                     ->first();
 
                 $data = $assignment->toArray();
+                unset($data['teacher']);
                 $data['status'] = $submission ? $submission->status : 'not_submitted';
                 $data['score'] = $submission?->score;
-                $data['submittedAt'] = $submission?->submitted_at;
+                $data['submitted_at'] = $submission?->submitted_at;
                 $data['teacher'] = $assignment->teacher?->name ?? 'Не указан';
 
                 return $data;
@@ -42,21 +43,24 @@ class AssignmentController extends Controller
         }
 
         if ($user->role === 'teacher') {
-            $assignments = Assignment::with('teacher:id,name,login')
-                ->where('teacher_id', $user->id)
-                ->withCount([
-                    'submissions',
-                    'submissions as pending_count' => fn($q) => $q->where('status', 'submitted'),
-                ])
-                ->get();
+            $query = Assignment::where('teacher_id', $user->id);
         } else {
-            $assignments = Assignment::with('teacher:id,name,login')
-                ->withCount([
-                    'submissions',
-                    'submissions as pending_count' => fn($q) => $q->where('status', 'submitted'),
-                ])
-                ->get();
+            $query = Assignment::query();
         }
+
+        $assignments = $query
+            ->with('teacher:id,name,login')
+            ->withCount([
+                'submissions',
+                'submissions as pending_count' => fn($q) => $q->where('status', 'submitted'),
+            ])
+            ->get()
+            ->map(function ($assignment) {
+                $data = $assignment->toArray();
+                unset($data['teacher']);
+                $data['teacher'] = $assignment->teacher?->name ?? 'Не указан';
+                return $data;
+            });
 
         return response()->json($assignments);
     }

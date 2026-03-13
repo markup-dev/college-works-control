@@ -13,20 +13,38 @@ class SubmissionController extends Controller
         $user = $request->user();
 
         if ($user->role === 'student') {
-            $submissions = Submission::with(['assignment:id,title,course,max_score', 'student:id,name,login,group'])
-                ->where('student_id', $user->id)
-                ->latest('submitted_at')
-                ->get();
+            $query = Submission::where('student_id', $user->id);
         } elseif ($user->role === 'teacher') {
-            $submissions = Submission::with(['assignment:id,title,course,max_score', 'student:id,name,login,group'])
-                ->whereHas('assignment', fn($q) => $q->where('teacher_id', $user->id))
-                ->latest('submitted_at')
-                ->get();
+            $query = Submission::whereHas('assignment', fn($q) => $q->where('teacher_id', $user->id));
         } else {
-            $submissions = Submission::with(['assignment:id,title,course,max_score', 'student:id,name,login,group'])
-                ->latest('submitted_at')
-                ->get();
+            $query = Submission::query();
         }
+
+        $submissions = $query
+            ->with(['assignment:id,title,course,max_score', 'student:id,name,login,group'])
+            ->latest('submitted_at')
+            ->get()
+            ->map(fn($sub) => [
+                'id' => $sub->id,
+                'assignment_id' => $sub->assignment_id,
+                'assignment_title' => $sub->assignment?->title ?? '',
+                'course' => $sub->assignment?->course ?? '',
+                'max_score' => $sub->assignment?->max_score ?? 100,
+                'student_id' => $sub->student_id,
+                'student_name' => $sub->student?->name ?? '',
+                'student_login' => $sub->student?->login ?? '',
+                'group' => $sub->student?->group ?? '',
+                'status' => $sub->status,
+                'score' => $sub->score,
+                'comment' => $sub->comment,
+                'file_name' => $sub->file_name,
+                'file_path' => $sub->file_path,
+                'file_size' => $sub->file_size,
+                'file_type' => $sub->file_type,
+                'is_resubmission' => $sub->is_resubmission,
+                'submission_date' => $sub->submitted_at,
+                'created_at' => $sub->created_at,
+            ]);
 
         return response()->json($submissions);
     }

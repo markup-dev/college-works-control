@@ -2,13 +2,11 @@
 
 namespace App\Models;
 
-use App\Traits\CamelCaseSerializable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SystemLog extends Model
 {
-    use CamelCaseSerializable;
     public $timestamps = false;
 
     protected $fillable = [

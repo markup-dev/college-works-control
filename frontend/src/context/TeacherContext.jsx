@@ -134,7 +134,7 @@ export const TeacherProvider = ({ children }) => {
   const assignmentsWithSubmissions = useMemo(() => {
     return allTeacherAssignments.map(assignment => {
       const assignmentSubmissions = allSubmissions.filter(
-        sub => sub.assignment_id === assignment.id
+        sub => sub.assignmentId === assignment.id
       );
       const pendingCount = assignmentSubmissions.filter(
         sub => sub.status === 'submitted'

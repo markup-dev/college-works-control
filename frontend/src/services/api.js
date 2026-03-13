@@ -2,6 +2,25 @@ import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
+const snakeToCamel = (str) =>
+  str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+
+const camelToSnake = (str) =>
+  str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+
+const convertKeys = (obj, converter) => {
+  if (Array.isArray(obj)) {
+    return obj.map((item) => convertKeys(item, converter));
+  }
+  if (obj !== null && typeof obj === 'object' && !(obj instanceof File) && !(obj instanceof Date)) {
+    return Object.keys(obj).reduce((acc, key) => {
+      acc[converter(key)] = convertKeys(obj[key], converter);
+      return acc;
+    }, {});
+  }
+  return obj;
+};
+
 const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -15,11 +34,19 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  if (config.data && !(config.data instanceof FormData)) {
+    config.data = convertKeys(config.data, camelToSnake);
+  }
   return config;
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.data) {
+      response.data = convertKeys(response.data, snakeToCamel);
+    }
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('auth_token');
