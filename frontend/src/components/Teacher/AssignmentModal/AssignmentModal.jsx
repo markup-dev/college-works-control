@@ -109,12 +109,17 @@ const AssignmentModal = ({
       ? [formData.group.trim()] 
       : [];
     
-    const criteriaArray = formData.criteria.map(criterion => {
-      if (typeof criterion === 'string') {
-        return criterion.trim();
-      }
-      return (criterion.text || criterion)?.trim() || '';
-    }).filter(c => c);
+    const criteriaArray = formData.criteria
+      .map(criterion => {
+        if (typeof criterion === 'string') {
+          return { text: criterion.trim(), maxPoints: 0 };
+        }
+        return {
+          text: (criterion.text || '').trim(),
+          maxPoints: parseInt(criterion.maxPoints) || 0,
+        };
+      })
+      .filter(c => c.text);
 
     const submissionData = {
       ...trimmedFormData,

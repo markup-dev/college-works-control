@@ -299,12 +299,18 @@ const CriteriaSection = React.memo(({ criteria }) => (
       <h4>Критерии оценки:</h4>
     </div>
     <ul className="criteria-list">
-      {criteria.map((criterion, index) => (
-        <li key={index} className="criterion-item">
-          <span className="criterion-marker">•</span>
-          <span className="criterion-text">{criterion}</span>
-        </li>
-      ))}
+      {criteria.map((criterion, index) => {
+        const text = typeof criterion === 'string' ? criterion : criterion.text;
+        const points = typeof criterion === 'object' ? criterion.maxPoints : 0;
+        return (
+          <li key={index} className="criterion-item">
+            <span className="criterion-marker">•</span>
+            <span className="criterion-text">
+              {text}{points > 0 && ` — ${points} баллов`}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   </div>
 ));

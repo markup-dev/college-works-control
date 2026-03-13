@@ -115,12 +115,9 @@ const AssignmentDetailsModal = ({
               {criteria.map((criterion, index) => (
                 <li key={`${criterion.text}-${index}`}>
                   <span className="criterion-marker">•</span>
-                  <div>
-                    <p>{criterion.text}</p>
-                    {criterion.maxPoints > 0 && (
-                      <small>{criterion.maxPoints} баллов</small>
-                    )}
-                  </div>
+                  <span className="criterion-text">
+                    {criterion.text}{criterion.maxPoints > 0 && ` — ${criterion.maxPoints} баллов`}
+                  </span>
                 </li>
               ))}
             </ul>
