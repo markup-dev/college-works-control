@@ -48,21 +48,26 @@ class AssignmentController extends Controller
             $query = Assignment::query();
         }
 
-        $assignments = $query
-            ->with('teacher:id,name,login')
+        $query->with('teacher:id,name,login')
             ->withCount([
                 'submissions',
                 'submissions as pending_count' => fn($q) => $q->where('status', 'submitted'),
-            ])
-            ->get()
-            ->map(function ($assignment) {
-                $data = $assignment->toArray();
-                unset($data['teacher']);
-                $data['teacher'] = $assignment->teacher?->name ?? 'Не указан';
-                return $data;
-            });
+            ]);
 
-        return response()->json($assignments);
+        $mapAssignment = function ($assignment) {
+            $data = $assignment->toArray();
+            unset($data['teacher']);
+            $data['teacher'] = $assignment->teacher?->name ?? 'Не указан';
+            return $data;
+        };
+
+        if ($perPage = $request->integer('per_page')) {
+            $paginated = $query->paginate($perPage);
+            $paginated->getCollection()->transform($mapAssignment);
+            return response()->json($paginated);
+        }
+
+        return response()->json($query->get()->map($mapAssignment));
     }
 
     public function store(Request $request)

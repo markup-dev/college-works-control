@@ -20,40 +20,45 @@ class SubmissionController extends Controller
             $query = Submission::query();
         }
 
-        $submissions = $query
-            ->with(['assignment:id,title,course,max_score', 'student:id,name,login,group'])
-            ->latest('submitted_at')
-            ->get()
-            ->map(fn($sub) => [
-                'id' => $sub->id,
-                'assignment_id' => $sub->assignment_id,
-                'assignment_title' => $sub->assignment?->title ?? '',
-                'course' => $sub->assignment?->course ?? '',
-                'max_score' => $sub->assignment?->max_score ?? 100,
-                'student_id' => $sub->student_id,
-                'student_name' => $sub->student?->name ?? '',
-                'student_login' => $sub->student?->login ?? '',
-                'group' => $sub->student?->group ?? '',
-                'status' => $sub->status,
-                'score' => $sub->score,
-                'comment' => $sub->comment,
-                'file_name' => $sub->file_name,
-                'file_path' => $sub->file_path,
-                'file_size' => $sub->file_size,
-                'file_type' => $sub->file_type,
-                'is_resubmission' => $sub->is_resubmission,
-                'submission_date' => $sub->submitted_at,
-                'created_at' => $sub->created_at,
-            ]);
+        $query->with(['assignment:id,title,course,max_score', 'student:id,name,login,group'])
+            ->latest('submitted_at');
 
-        return response()->json($submissions);
+        $mapSubmission = fn($sub) => [
+            'id' => $sub->id,
+            'assignment_id' => $sub->assignment_id,
+            'assignment_title' => $sub->assignment?->title ?? '',
+            'course' => $sub->assignment?->course ?? '',
+            'max_score' => $sub->assignment?->max_score ?? 100,
+            'student_id' => $sub->student_id,
+            'student_name' => $sub->student?->name ?? '',
+            'student_login' => $sub->student?->login ?? '',
+            'group' => $sub->student?->group ?? '',
+            'status' => $sub->status,
+            'score' => $sub->score,
+            'comment' => $sub->comment,
+            'file_name' => $sub->file_name,
+            'file_path' => $sub->file_path,
+            'file_size' => $sub->file_size,
+            'file_type' => $sub->file_type,
+            'is_resubmission' => $sub->is_resubmission,
+            'submission_date' => $sub->submitted_at,
+            'created_at' => $sub->created_at,
+        ];
+
+        if ($perPage = $request->integer('per_page')) {
+            $paginated = $query->paginate($perPage);
+            $paginated->getCollection()->transform($mapSubmission);
+            return response()->json($paginated);
+        }
+
+        return response()->json($query->get()->map($mapSubmission));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'assignment_id' => 'required|exists:assignments,id',
-            'file' => 'required|file|max:51200',
+            'file' => 'required|file|max:51200|mimes:pdf,doc,docx,zip,rar',
         ]);
 
         $assignment = Assignment::findOrFail($validated['assignment_id']);
