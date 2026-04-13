@@ -5,50 +5,40 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
-    {
-        $validated = $request->validate([
-            'login' => 'required|string|unique:users,login',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6',
-            'name' => 'required|string|max:255',
-            'role' => 'required|in:student,teacher,admin',
-            'group' => 'nullable|string',
-            'department' => 'nullable|string',
-            'teacher_login' => 'nullable|string',
-        ]);
-
-        $user = User::create([
-            'login' => $validated['login'],
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-            'name' => $validated['name'],
-            'role' => $validated['role'],
-            'group' => $validated['group'] ?? null,
-            'department' => $validated['department'] ?? null,
-            'teacher_login' => $validated['teacher_login'] ?? null,
-            'is_active' => true,
-            'notifications' => ['email' => true, 'push' => true, 'sms' => false],
-            'theme' => 'system',
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'user' => $user,
-        ], 201);
-    }
-
     public function login(Request $request)
     {
-        $validated = $request->validate([
-            'login' => 'required|string',
-            'password' => 'required|string',
-            'role' => 'nullable|in:student,teacher,admin',
-        ]);
+        $validated = $request->validate(
+            [
+                'login' => [
+                    'required',
+                    'string',
+                    'max:255',
+                    function (string $attribute, mixed $value, \Closure $fail): void {
+                        $login = trim((string) $value);
+                        if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+                            return;
+                        }
+                        if (!preg_match('/^[a-zA-Z0-9_]{6,30}$/', $login)) {
+                            $fail('Логин может содержать только латинские буквы, цифры и подчеркивание (6-30 символов) либо корректный email.');
+                        }
+                    },
+                ],
+                'password' => ['required', 'string', 'min:8', 'max:128'],
+                'role' => ['nullable', 'in:student,teacher,admin'],
+            ],
+            [
+                'login.required' => 'Введите логин или email.',
+                'password.required' => 'Введите пароль.',
+                'password.min' => 'Пароль должен содержать минимум 8 символов.',
+                'password.max' => 'Пароль не должен превышать 128 символов.',
+                'role.in' => 'Выберите корректную роль.',
+            ]
+        );
 
         $user = User::where('login', $validated['login'])
             ->orWhere('email', $validated['login'])
@@ -78,7 +68,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'user' => $user,
+            'user' => $user->load(['studentGroup.teacher', 'notificationSettings']),
             'token' => $token,
         ]);
     }
@@ -92,34 +82,94 @@ class AuthController extends Controller
 
     public function profile(Request $request)
     {
-        return response()->json($request->user());
+        return response()->json($request->user()->load(['studentGroup.teacher', 'notificationSettings']));
     }
 
     public function updateProfile(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'phone' => 'nullable|string',
-            'bio' => 'nullable|string',
-            'timezone' => 'nullable|string',
-            'theme' => 'nullable|in:light,dark,system',
-            'notifications' => 'nullable|array',
-        ]);
+        $user = $request->user();
 
-        $request->user()->update($validated);
+        if ($request->filled('patronymic') && !$request->has('middle_name')) {
+            $request->merge(['middle_name' => $request->input('patronymic')]);
+        }
+
+        $validated = $request->validate(
+            [
+                'login' => [
+                    'sometimes',
+                    'required',
+                    'string',
+                    'min:6',
+                    'max:30',
+                    'regex:/^[a-zA-Z0-9_]+$/',
+                    Rule::unique('users', 'login')->ignore($user->id),
+                ],
+                'email' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+                'last_name' => ['sometimes', 'required', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
+                'first_name' => ['sometimes', 'required', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
+                'middle_name' => ['nullable', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
+                'phone' => ['nullable', 'string', 'regex:/^(\+7\s?\(?\d{3}\)?\s?\d{3}[- ]?\d{2}[- ]?\d{2}|8\(\d{3}\)\d{3}-\d{2}-\d{2})$/'],
+                'theme' => ['nullable', 'in:light,dark,system'],
+                'notifications' => ['nullable', 'array'],
+                'notifications.email' => ['nullable', 'boolean'],
+                'notifications.push' => ['nullable', 'boolean'],
+                'notifications.sms' => ['nullable', 'boolean'],
+                'department' => ['nullable', 'string', 'max:100'],
+            ],
+            [
+                'login.required' => 'Введите логин.',
+                'login.min' => 'Логин должен содержать минимум 6 символов.',
+                'login.regex' => 'Логин может содержать только латинские буквы, цифры и подчеркивание.',
+                'login.unique' => 'Пользователь с таким логином уже существует.',
+                'email.required' => 'Введите email.',
+                'email.email' => 'Введите корректный email.',
+                'email.unique' => 'Пользователь с таким email уже существует.',
+                'last_name.required' => 'Введите фамилию.',
+                'last_name.regex' => 'Фамилия может содержать только кириллические буквы и дефис.',
+                'first_name.required' => 'Введите имя.',
+                'first_name.regex' => 'Имя может содержать только кириллические буквы и дефис.',
+                'middle_name.regex' => 'Отчество может содержать только кириллические буквы и дефис.',
+                'phone.regex' => 'Телефон должен быть в формате 8(XXX)XXX-XX-XX или +7 (XXX) XXX-XX-XX.',
+                'department.max' => 'Поле "Кафедра/отделение" не должно превышать 100 символов.',
+            ]
+        );
+        if (array_key_exists('notifications', $validated)) {
+            $this->syncNotificationSettings($user, $validated['notifications']);
+            unset($validated['notifications']);
+        }
+        if (array_key_exists('last_name', $validated)) {
+            $validated['last_name'] = trim($validated['last_name']);
+        }
+        if (array_key_exists('first_name', $validated)) {
+            $validated['first_name'] = trim($validated['first_name']);
+        }
+        if (array_key_exists('middle_name', $validated)) {
+            $validated['middle_name'] = !empty($validated['middle_name']) ? trim($validated['middle_name']) : null;
+        }
+        $user->update($validated);
 
         return response()->json([
             'success' => true,
-            'user' => $request->user()->fresh(),
+            'user' => $user->fresh()->load(['studentGroup.teacher', 'notificationSettings']),
         ]);
     }
 
     public function changePassword(Request $request)
     {
-        $validated = $request->validate([
-            'current_password' => 'required|string',
-            'new_password' => 'required|string|min:6',
-        ]);
+        $validated = $request->validate(
+            [
+                'current_password' => ['required', 'string'],
+                'new_password' => ['required', 'string', 'min:8', 'max:128', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/', 'different:current_password', 'confirmed'],
+            ],
+            [
+                'current_password.required' => 'Введите текущий пароль.',
+                'new_password.required' => 'Введите новый пароль.',
+                'new_password.min' => 'Новый пароль должен содержать минимум 8 символов.',
+                'new_password.regex' => 'Пароль должен содержать заглавную, строчную букву и цифру.',
+                'new_password.different' => 'Новый пароль не должен совпадать с текущим.',
+                'new_password.confirmed' => 'Подтверждение пароля не совпадает.',
+            ]
+        );
 
         $user = $request->user();
 
@@ -129,8 +179,25 @@ class AuthController extends Controller
             ]);
         }
 
-        $user->update(['password' => $validated['new_password']]);
+        $user->update([
+            'password' => $validated['new_password'],
+            'must_change_password' => false,
+        ]);
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true,
+            'user' => $user->fresh()->load(['studentGroup.teacher', 'notificationSettings']),
+        ]);
+    }
+
+    private function syncNotificationSettings(User $user, array $notifications): void
+    {
+        $channels = ['email', 'push', 'sms'];
+        foreach ($channels as $channel) {
+            $user->notificationSettings()->updateOrCreate(
+                ['channel' => $channel],
+                ['enabled' => (bool) ($notifications[$channel] ?? false)]
+            );
+        }
     }
 }

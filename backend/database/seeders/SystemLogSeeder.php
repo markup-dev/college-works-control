@@ -10,34 +10,43 @@ class SystemLogSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = User::where('login', 'admin_sidorov')->first();
-        $teacher = User::where('login', 'teacher_kartseva')->first();
+        $admin = User::where('login', 'Administrator')->first();
+        $teacherJs = User::where('login', 'teacher_kartseva')->first();
+        $teacherPhp = User::where('login', 'teacher_karevskiy')->first();
+        if (!$admin || !$teacherJs || !$teacherPhp) {
+            return;
+        }
 
-        SystemLog::create([
+        SystemLog::firstOrCreate([
             'user_id' => $admin->id,
-            'user_login' => $admin->login,
-            'user_role' => 'admin',
             'action' => 'Создание пользователя',
-            'details' => 'Создан пользователь teacher_kartseva с ролью teacher',
+            'details' => 'Создан пользователь teacher_karevskiy с ролью teacher',
+        ], [
             'created_at' => now()->subDays(5),
         ]);
 
-        SystemLog::create([
+        SystemLog::firstOrCreate([
             'user_id' => $admin->id,
-            'user_login' => $admin->login,
-            'user_role' => 'admin',
-            'action' => 'Создание курса',
-            'details' => 'Создан курс "Базы данных"',
+            'action' => 'Создание группы',
+            'details' => 'Создана группа "ИСП-0029" и добавлены студенты',
+        ], [
             'created_at' => now()->subDays(4),
         ]);
 
-        SystemLog::create([
-            'user_id' => $teacher->id,
-            'user_login' => $teacher->login,
-            'user_role' => 'teacher',
+        SystemLog::firstOrCreate([
+            'user_id' => $teacherJs->id,
             'action' => 'Создание задания',
-            'details' => 'Создано задание "Курсовая работа по базам данных"',
+            'details' => 'Создано задание "Курсовой проект БД колледжа"',
+        ], [
             'created_at' => now()->subDays(3),
+        ]);
+
+        SystemLog::firstOrCreate([
+            'user_id' => $teacherPhp->id,
+            'action' => 'Проверка работы',
+            'details' => 'Работа "php_crud_v1.zip" возвращена на доработку студенту abramov_to',
+        ], [
+            'created_at' => now()->subDays(2),
         ]);
     }
 }

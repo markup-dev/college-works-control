@@ -1,24 +1,45 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import DashboardHeader from '../../components/Student/DashboardHeader/DashboardHeader';
 import AssignmentCard from '../../components/Student/AssignmentCard/AssignmentCard';
 import SubmissionModal from '../../components/Student/SubmissionModal/SubmissionModal';
 import ResultsModal from '../../components/Student/ResultsModal/ResultsModal';
 import Card from '../../components/UI/Card/Card';
 import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsModal/AssignmentDetailsModal';
+import Pagination from '../../components/UI/Pagination/Pagination';
 import { useAuth } from '../../context/AuthContext';
 import { useStudent } from '../../context/StudentContext';
 import { useNotification } from '../../context/NotificationContext';
+import api from '../../services/api';
 import { 
   assignmentFilters,
   getDaysUntilDeadline 
 } from '../../utils';
+import useDebouncedValue from '../../hooks/useDebouncedValue';
 import './StudentDashboard.scss';
+
+const STUDENT_DASHBOARD_FILTERS_KEY = 'student-dashboard-filters-v1';
+
+const getStoredStudentFilters = () => {
+  try {
+    const raw = window.localStorage.getItem(STUDENT_DASHBOARD_FILTERS_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+    return parsed;
+  } catch (error) {
+    return null;
+  }
+};
 
 const StudentDashboard = () => {
   const { user } = useAuth();
   const { 
     assignments = [],
+    assignmentsMeta = {},
     loading, 
     loadStudentAssignments, 
     submitWork,
@@ -26,31 +47,34 @@ const StudentDashboard = () => {
   } = useStudent();
   const { showSuccess, showError, showWarning } = useNotification();
   
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('priority');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [courseFilter, setCourseFilter] = useState('all');
-  const [teacherFilter, setTeacherFilter] = useState('all');
+  const storedFilters = getStoredStudentFilters();
+  const [activeFilter, setActiveFilter] = useState(storedFilters?.activeFilter || 'all');
+  const [sortBy, setSortBy] = useState(storedFilters?.sortBy || 'priority');
+  const [searchTerm, setSearchTerm] = useState(storedFilters?.searchTerm || '');
+  const [subjectFilter, setSubjectFilter] = useState(storedFilters?.subjectFilter || 'all');
+  const [teacherFilter, setTeacherFilter] = useState(storedFilters?.teacherFilter || 'all');
+  const [page, setPage] = useState(1);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [showAssignmentDetails, setShowAssignmentDetails] = useState(false);
   const [submissionFile, setSubmissionFile] = useState(null);
   const [detailsAssignment, setDetailsAssignment] = useState(null);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    loadStudentAssignments();
-  }, [user, navigate, loadStudentAssignments]);
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 350);
 
   const handleSubmitWork = useCallback((assignment) => {
+    const isRetake = assignment?.status === 'returned';
+    const canSubmitRetake = assignment?.canSubmitRetake ?? isRetake;
+    const canSubmitCurrentAttempt = isRetake ? canSubmitRetake : true;
+
+    if (!canSubmitCurrentAttempt) {
+      showWarning('Сдача недоступна: лимит пересдачи исчерпан или срок первичной сдачи завершен.');
+      return;
+    }
+
     setSelectedAssignment(assignment);
     setShowSubmissionModal(true);
-  }, []);
+  }, [showWarning]);
 
   const handleViewResults = useCallback((assignment) => {
     setSelectedAssignment(assignment);
@@ -61,6 +85,18 @@ const StudentDashboard = () => {
     setDetailsAssignment(assignment);
     setShowAssignmentDetails(true);
   }, []);
+
+  const handleSubmitFromDetails = useCallback((assignment) => {
+    setShowAssignmentDetails(false);
+    setDetailsAssignment(null);
+    handleSubmitWork(assignment);
+  }, [handleSubmitWork]);
+
+  const handleViewResultsFromDetails = useCallback((assignment) => {
+    setShowAssignmentDetails(false);
+    setDetailsAssignment(null);
+    handleViewResults(assignment);
+  }, [handleViewResults]);
 
   const handleFileSelect = useCallback((file) => {
     if (file) {
@@ -80,29 +116,65 @@ const StudentDashboard = () => {
 
   const handleSortChange = useCallback((value) => {
     setSortBy(value);
+    setPage(1);
   }, []);
 
   const handleFilterChange = useCallback((value) => {
     setActiveFilter(value);
+    setPage(1);
   }, []);
 
-  const handleCourseFilterChange = useCallback((value) => {
-    setCourseFilter(value);
+  const handleSubjectFilterChange = useCallback((value) => {
+    setSubjectFilter(value);
+    setPage(1);
   }, []);
 
   const handleTeacherFilterChange = useCallback((value) => {
     setTeacherFilter(value);
+    setPage(1);
   }, []);
 
-  const availableCourses = useMemo(() => {
+  const handleResetFilters = useCallback(() => {
+    setSearchTerm('');
+    setActiveFilter('all');
+    setSortBy('priority');
+    setSubjectFilter('all');
+    setTeacherFilter('all');
+    setPage(1);
+  }, []);
+
+  useEffect(() => {
+    loadStudentAssignments({
+      page,
+      perPage: 18,
+      sort: sortBy,
+      status: activeFilter !== 'all' ? activeFilter : undefined,
+      search: debouncedSearchTerm || undefined,
+    });
+  }, [page, sortBy, activeFilter, debouncedSearchTerm, loadStudentAssignments]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      STUDENT_DASHBOARD_FILTERS_KEY,
+      JSON.stringify({
+        activeFilter,
+        sortBy,
+        searchTerm,
+        subjectFilter,
+        teacherFilter,
+      })
+    );
+  }, [activeFilter, sortBy, searchTerm, subjectFilter, teacherFilter]);
+
+  const availableSubjects = useMemo(() => {
     if (!assignments || !Array.isArray(assignments)) return [];
-    const courses = new Set();
+    const subjects = new Set();
     assignments.forEach(assignment => {
-      if (assignment?.course) {
-        courses.add(assignment.course);
+      if (assignment?.subject) {
+        subjects.add(assignment.subject);
       }
     });
-    return Array.from(courses).sort();
+    return Array.from(subjects).sort();
   }, [assignments]);
 
   const availableTeachers = useMemo(() => {
@@ -123,73 +195,25 @@ const StudentDashboard = () => {
     
     let filtered = [...assignments];
     
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(assignment => 
-        assignment?.title?.toLowerCase().includes(term) ||
-        assignment?.course?.toLowerCase().includes(term) ||
-        assignment?.teacher?.toLowerCase().includes(term)
-      );
-    }
-    
-    if (courseFilter !== 'all') {
-      filtered = filtered.filter(assignment => assignment?.course === courseFilter);
+    if (subjectFilter !== 'all') {
+      filtered = filtered.filter(assignment => assignment?.subject === subjectFilter);
     }
     
     if (teacherFilter !== 'all') {
       filtered = filtered.filter(assignment => assignment?.teacher === teacherFilter);
     }
     
-    if (activeFilter !== 'all') {
-      if (activeFilter === 'urgent') {
-        filtered = filtered.filter(assignment => {
-          const days = getDaysUntilDeadline(assignment?.deadline);
-          return days !== null && days <= 3 && days >= 0 && assignment?.status === 'not_submitted';
-        });
-      } else {
-        filtered = filtered.filter(assignment => {
-          const status = assignment?.status;
-          if (activeFilter === 'not_submitted') return status === 'not_submitted';
-          if (activeFilter === 'submitted') return status === 'submitted';
-          if (activeFilter === 'graded') return status === 'graded';
-          if (activeFilter === 'returned') return status === 'returned';
-          return false;
-        });
-      }
-    }
-    
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'priority':
-          const priorityOrder = { high: 3, medium: 2, low: 1 };
-          const priorityDiff = (priorityOrder[b?.priority] || 0) - (priorityOrder[a?.priority] || 0);
-          if (priorityDiff !== 0) return priorityDiff;
-          return new Date(a?.deadline || 0) - new Date(b?.deadline || 0);
-        case 'deadline':
-          return new Date(a?.deadline || 0) - new Date(b?.deadline || 0);
-        case 'course':
-          return (a?.course || '').localeCompare(b?.course || '');
-        case 'status':
-          return (a?.status || '').localeCompare(b?.status || '');
-        case 'title':
-          return (a?.title || '').localeCompare(b?.title || '');
-        default:
-          const defaultPriorityOrder = { high: 3, medium: 2, low: 1 };
-          const defaultPriorityDiff = (defaultPriorityOrder[b?.priority] || 0) - (defaultPriorityOrder[a?.priority] || 0);
-          if (defaultPriorityDiff !== 0) return defaultPriorityDiff;
-          return new Date(a?.deadline || 0) - new Date(b?.deadline || 0);
-      }
-    });
-    
+
     return filtered;
-  }, [assignments, activeFilter, sortBy, searchTerm, courseFilter, teacherFilter]);
+  }, [assignments, subjectFilter, teacherFilter]);
 
   const dashboardStats = useMemo(() => {
     if (!assignments || !Array.isArray(assignments)) {
-      return { total: 0, urgent: 0, pending: 0 };
+      return { total: 0, urgent: 0, overdue: 0, pending: 0 };
     }
     
     let urgentCount = 0;
+    let overdueCount = 0;
     let notSubmittedCount = 0;
 
     for (let i = 0; i < assignments.length; i++) {
@@ -200,12 +224,16 @@ const StudentDashboard = () => {
         if (days <= 3) {
           urgentCount++;
         }
+        if (days < 0) {
+          overdueCount++;
+        }
       }
     }
     
     return {
       total: assignments.length,
       urgent: urgentCount,
+      overdue: overdueCount,
       pending: notSubmittedCount,
       completed: assignments.filter(a => a?.status === 'graded').length
     };
@@ -232,6 +260,35 @@ const StudentDashboard = () => {
       urgent: dashboardStats.urgent
     };
   }, [assignments, dashboardStats.urgent]);
+
+  const attentionAssignments = useMemo(() => {
+    if (!Array.isArray(assignments)) {
+      return { retakes: [], deadlines: [] };
+    }
+
+    const retakes = assignments
+      .filter((assignment) => assignment?.status === 'returned')
+      .slice(0, 3);
+
+    const deadlines = assignments
+      .filter((assignment) => assignment?.status === 'not_submitted')
+      .map((assignment) => ({
+        ...assignment,
+        daysLeft: getDaysUntilDeadline(assignment?.deadline),
+      }))
+      .filter((assignment) => assignment.daysLeft !== null && assignment.daysLeft <= 3)
+      .sort((a, b) => {
+        const aIsOverdue = a.daysLeft < 0;
+        const bIsOverdue = b.daysLeft < 0;
+        if (aIsOverdue !== bIsOverdue) {
+          return aIsOverdue ? -1 : 1;
+        }
+        return a.daysLeft - b.daysLeft;
+      })
+      .slice(0, 3);
+
+    return { retakes, deadlines };
+  }, [assignments]);
 
   const handleSubmission = useCallback(async () => {
     if (selectedAssignment.submissionType === 'file') {
@@ -261,6 +318,33 @@ const StudentDashboard = () => {
     }
   }, [submissionFile, selectedAssignment, submitWork, showSuccess, showError, showWarning]);
 
+  const handleDownloadAssignmentMaterial = useCallback(async (assignment, material) => {
+    if (!assignment?.id || !material?.id) {
+      showError('Материал для скачивания не найден');
+      return;
+    }
+
+    try {
+      const response = await api.get(`/assignments/${assignment.id}/materials/${material.id}/download`, {
+        responseType: 'blob',
+      });
+
+      const blob = response.data;
+      const objectUrl = URL.createObjectURL(blob);
+      const fileName = material.fileName || material.file_name || 'assignment-material';
+
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      showError('Не удалось скачать материал задания. Попробуйте еще раз.');
+    }
+  }, [showError]);
+
   if (!user) {
     return <LoadingState />;
   }
@@ -281,7 +365,6 @@ const StudentDashboard = () => {
       <main className="dashboard-main">
         <div className="dashboard-container">
           <DashboardHeader
-            stats={dashboardStats}
             searchTerm={searchTerm}
             onSearchChange={handleSearchChange}
             sortBy={sortBy}
@@ -289,13 +372,21 @@ const StudentDashboard = () => {
             activeFilter={activeFilter}
             filters={assignmentFilters}
             filterCounts={filterCounts}
+            overdueCount={dashboardStats.overdue}
             onFilterChange={handleFilterChange}
-            courseFilter={courseFilter}
-            onCourseFilterChange={handleCourseFilterChange}
-            availableCourses={availableCourses}
+            subjectFilter={subjectFilter}
+            onSubjectFilterChange={handleSubjectFilterChange}
+            availableSubjects={availableSubjects}
             teacherFilter={teacherFilter}
             onTeacherFilterChange={handleTeacherFilterChange}
             availableTeachers={availableTeachers}
+            onResetFilters={handleResetFilters}
+          />
+
+          <AttentionBlock
+            retakes={attentionAssignments.retakes}
+            deadlines={attentionAssignments.deadlines}
+            onOpenAssignment={handleViewDetails}
           />
 
           <DashboardContent
@@ -305,6 +396,14 @@ const StudentDashboard = () => {
             onViewResults={handleViewResults}
             onResubmit={handleSubmitWork}
             onViewDetails={handleViewDetails}
+          />
+          <Pagination
+            currentPage={assignmentsMeta.currentPage}
+            lastPage={assignmentsMeta.lastPage}
+            total={assignmentsMeta.total}
+            fallbackCount={assignments.length}
+            onPrev={() => setPage((prev) => Math.max(1, prev - 1))}
+            onNext={() => setPage((prev) => prev + 1)}
           />
         </div>
       </main>
@@ -335,6 +434,10 @@ const StudentDashboard = () => {
           setDetailsAssignment(null);
         }}
         mode="student"
+        onSubmitWork={handleSubmitFromDetails}
+        onResubmit={handleSubmitFromDetails}
+        onViewResults={handleViewResultsFromDetails}
+        onDownloadMaterial={handleDownloadAssignmentMaterial}
       />
     </div>
   );
@@ -389,6 +492,64 @@ const DashboardContent = React.memo(({
         />
       ))}
     </div>
+  );
+});
+
+const AttentionBlock = React.memo(({ retakes = [], deadlines = [], onOpenAssignment }) => {
+  if (retakes.length === 0 && deadlines.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="attention-block">
+      <div className="attention-block__header">
+        <h3>Требует внимания</h3>
+      </div>
+      <div className="attention-block__content">
+        {retakes.length > 0 && (
+          <div className="attention-block__group">
+            <h4>Пересдачи</h4>
+            <ul>
+              {retakes.map((assignment) => (
+                <li key={`retake-${assignment.id}`}>
+                  <button
+                    type="button"
+                    className="attention-block__item"
+                    onClick={() => onOpenAssignment?.(assignment)}
+                  >
+                    {assignment.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {deadlines.length > 0 && (
+          <div className="attention-block__group">
+            <h4>Ближайшие дедлайны</h4>
+            <ul>
+              {deadlines.map((assignment) => (
+                <li key={`deadline-${assignment.id}`}>
+                  <button
+                    type="button"
+                    className="attention-block__item"
+                    onClick={() => onOpenAssignment?.(assignment)}
+                  >
+                    {assignment.title} — {
+                      assignment.daysLeft < 0
+                        ? `просрочено на ${Math.abs(assignment.daysLeft)} дн.`
+                        : assignment.daysLeft === 0
+                          ? 'сегодня'
+                          : `${assignment.daysLeft} дн.`
+                    }
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </section>
   );
 });
 

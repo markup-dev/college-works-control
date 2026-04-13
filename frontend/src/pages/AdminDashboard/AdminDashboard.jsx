@@ -1,63 +1,61 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import DashboardHeader from '../../components/Admin/DashboardHeader/DashboardHeader';
 import UserManagement from '../../components/Admin/UserManagement/UserManagement';
-import CourseManagement from '../../components/Admin/CourseManagement/CourseManagement';
+import GroupManagement from '../../components/Admin/GroupManagement/GroupManagement';
+import SubjectManagement from '../../components/Admin/SubjectManagement/SubjectManagement';
 import StatisticsSection from '../../components/Admin/StatisticsSection/StatisticsSection';
 import SystemLogs from '../../components/Admin/SystemLogs/SystemLogs';
-import AssignmentManagement from '../../components/Admin/AssignmentManagement/AssignmentManagement';
 import SettingsSection from '../../components/Admin/SettingsSection/SettingsSection';
 import { useAuth } from '../../context/AuthContext';
 import { useAdmin } from '../../context/AdminContext';
-import { useNotification } from '../../context/NotificationContext';
 import './AdminDashboard.scss';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
   const {
     users = [],
-    courses = [],
-    assignments = [],
-    submissions = [],
+    groups = [],
+    subjects = [],
     systemLogs = [],
+    usersMeta = {},
+    groupsMeta = {},
+    subjectsMeta = {},
+    logsMeta = {},
+    usersQuery = {},
+    groupsQuery = {},
+    subjectsQuery = {},
+    logsQuery = {},
     adminStats = {},
     loading,
-    loadAdminData,
+    fetchUsers,
+    fetchGroups,
+    fetchSubjects,
+    fetchLogs,
     createUser,
     updateUser,
     deleteUser,
-    createCourse,
-    updateCourse,
-    deleteCourse,
-    deleteAssignment
+    previewUsersImport,
+    importUsers,
+    updateGroup,
+    deleteGroup,
+    createSubject,
+    updateSubject,
+    deleteSubject,
+    createGroupWithStudents,
+    bulkAttachStudentsToGroup,
+    previewSubjectsImport,
+    importSubjects,
   } = useAdmin();
-  const { showSuccess, showError } = useNotification();
   
   const [activeTab, setActiveTab] = useState('overview');
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    
-    if (user.role !== 'admin') {
-      navigate(`/${user.role}`);
-      return;
-    }
-
-    loadAdminData();
-  }, [user, navigate, loadAdminData]);
 
   const safeStats = {
-    totalUsers: adminStats.totalUsers || users.length,
-    activeUsers: adminStats.activeUsers || users.filter(u => u.isActive === true).length,
-    totalCourses: adminStats.totalCourses || courses.length,
-    activeCourses: adminStats.activeCourses || courses.filter(c => c.status === 'active').length,
-    totalAssignments: adminStats.totalAssignments || assignments.length,
-    pendingSubmissions: adminStats.pendingSubmissions || submissions.filter(s => s.status === 'submitted').length,
-    systemUptime: adminStats.systemUptime || '100%'
+    totalUsers: adminStats.totalUsers || usersMeta.total || users.length,
+    totalSubjects: adminStats.totalSubjects || subjectsMeta.total || subjects.length,
+    totalGroups: adminStats.totalGroups || groupsMeta.total || groups.length,
+    activeSubjects: adminStats.activeSubjects || subjects.filter((s) => s.status === 'active').length,
+    pendingSubmissions: adminStats.pendingSubmissions || 0,
+    returnedSubmissions: adminStats.returnedSubmissions || 0,
   };
 
   const renderContent = () => {
@@ -67,8 +65,9 @@ const AdminDashboard = () => {
           <StatisticsSection
             stats={safeStats}
             users={users}
-            courses={courses}
-            submissions={submissions}
+            groups={groups}
+            subjects={subjects}
+            logs={systemLogs}
           />
         );
       
@@ -76,44 +75,50 @@ const AdminDashboard = () => {
         return (
           <UserManagement
             users={users}
-            assignments={assignments}
+            groups={groups}
+            paginationMeta={usersMeta}
+            query={usersQuery}
+            onFetchUsers={fetchUsers}
             onCreateUser={createUser}
             onUpdateUser={updateUser}
             onDeleteUser={deleteUser}
+            onPreviewUsersImport={previewUsersImport}
+            onImportUsers={importUsers}
           />
         );
       
-      case 'courses':
+      case 'subjects':
         return (
-          <CourseManagement
-            courses={courses}
+          <SubjectManagement
+            subjects={subjects}
             teachers={users.filter(u => u.role === 'teacher')}
-            onCreateCourse={createCourse}
-            onUpdateCourse={updateCourse}
-            onDeleteCourse={deleteCourse}
+            paginationMeta={subjectsMeta}
+            query={subjectsQuery}
+            onFetchSubjects={fetchSubjects}
+            onCreateSubject={createSubject}
+            onUpdateSubject={updateSubject}
+            onDeleteSubject={deleteSubject}
+            onPreviewSubjectsImport={previewSubjectsImport}
+            onImportSubjects={importSubjects}
+          />
+        );
+
+      case 'groups':
+        return (
+          <GroupManagement
+            groups={groups}
+            paginationMeta={groupsMeta}
+            query={groupsQuery}
+            onFetchGroups={fetchGroups}
+            onUpdateGroup={updateGroup}
+            onDeleteGroup={deleteGroup}
+            onCreateGroupWithStudents={createGroupWithStudents}
+            onBulkAttachStudents={bulkAttachStudentsToGroup}
           />
         );
       
       case 'logs':
-        return <SystemLogs logs={systemLogs} />;
-      
-      case 'assignments':
-        return (
-          <AssignmentManagement
-            assignments={assignments}
-            submissions={submissions}
-            teachers={users.filter(u => u.role === 'teacher')}
-            onDeleteAssignment={async (assignmentId) => {
-              const result = await deleteAssignment(assignmentId);
-              if (result.success) {
-                showSuccess('Задание успешно удалено');
-                loadAdminData();
-              } else {
-                showError(result.error || 'Ошибка при удалении задания');
-              }
-            }}
-          />
-        );
+        return <SystemLogs logs={systemLogs} paginationMeta={logsMeta} query={logsQuery} onFetchLogs={fetchLogs} />;
       
       case 'settings':
         return <SettingsSection />;

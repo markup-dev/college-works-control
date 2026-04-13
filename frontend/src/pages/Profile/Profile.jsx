@@ -12,13 +12,8 @@ const roleConfig = {
     icon: '🎒',
     accent: '#2c5aa0',
     badge: '👨‍🎓 Студент',
-    field: {
-      key: 'group',
-      label: 'Учебная группа',
-      placeholder: 'Например, ИСП-401'
-    },
     tips: [
-      'Следите за актуальностью группы — она используется в фильтрах заданий',
+      'Учебная группа назначается администратором',
       'Заполните контактный номер, чтобы преподаватели могли связаться с вами'
     ]
   },
@@ -27,14 +22,8 @@ const roleConfig = {
     icon: '📚',
     accent: '#5c2cbf',
     badge: '👩‍🏫 Преподаватель',
-    field: {
-      key: 'department',
-      label: 'Кафедра / отделение',
-      placeholder: 'Например, Информатика'
-    },
     tips: [
-      'Актуализируйте кафедру и контакты — студенты видят их в карточках заданий',
-      'Добавьте краткое описание опыта в блоке «О себе»'
+      'Актуализируйте контакты — студенты видят их в карточках заданий'
     ]
   },
   admin: {
@@ -42,27 +31,19 @@ const roleConfig = {
     icon: '⚙️',
     accent: '#0f7b6c',
     badge: '🛡 Администратор',
-    field: {
-      key: 'department',
-      label: 'Отдел / направление',
-      placeholder: 'Например, Учебно-методический отдел'
-    },
     tips: [
-      'Рекомендуем включить все уведомления для критичных событий системы',
-      'Добавляйте заметки в поле «О себе», чтобы команда знала вашу зону ответственности'
+      'Рекомендуем включить все уведомления для критичных событий системы'
     ]
   }
 };
 
 const getInitialProfileState = (user) => ({
-  name: user?.name || '',
+  lastName: user?.lastName || '',
+  firstName: user?.firstName || '',
+  middleName: user?.middleName || '',
   login: user?.login || '',
   email: user?.email || '',
-  group: user?.group || '',
-  department: user?.department || '',
   phone: user?.phone || '',
-  timezone: user?.timezone || 'UTC+3',
-  bio: user?.bio || '',
   notifications: {
     email: user?.notifications?.email ?? true,
     push: user?.notifications?.push ?? true,
@@ -128,12 +109,11 @@ const Profile = () => {
     const { validateProfileForm } = require('../../utils/validation');
     const trimmedProfileData = {
       ...profileData,
-      name: profileData.name?.trim() || '',
+      lastName: profileData.lastName?.trim() || '',
+      firstName: profileData.firstName?.trim() || '',
+      middleName: profileData.middleName?.trim() || '',
       email: profileData.email?.trim() || '',
-      phone: profileData.phone?.trim() || '',
-      group: profileData.group?.trim() || '',
-      department: profileData.department?.trim() || '',
-      bio: profileData.bio?.trim() || ''
+      phone: profileData.phone?.trim() || ''
     };
     
     const validation = validateProfileForm(trimmedProfileData);
@@ -142,14 +122,6 @@ const Profile = () => {
     
     if (!trimmedProfileData.login.trim()) {
       errors.login = 'Логин обязателен';
-    }
-
-    const extraFieldKey = currentRoleConfig.field.key;
-    const extraValue = trimmedProfileData[extraFieldKey];
-    if (extraFieldKey === 'group' && extraValue && !/^[А-ЯЁA-Z\-\d]+$/i.test(extraValue)) {
-      errors[extraFieldKey] = 'Группа должна содержать только буквы, цифры и дефис (например, ИСП-401)';
-    } else if (extraValue && extraValue.length > 100) {
-      errors[extraFieldKey] = `Поле «${currentRoleConfig.field.label}» не должно превышать 100 символов`;
     }
 
     return {
@@ -188,20 +160,14 @@ const Profile = () => {
 
   const buildProfilePayload = () => {
     const payload = {
-      name: (profileData.name || '').trim(),
+      lastName: (profileData.lastName || '').trim(),
+      firstName: (profileData.firstName || '').trim(),
+      middleName: (profileData.middleName || '').trim(),
       login: (profileData.login || '').trim(),
       email: (profileData.email || '').trim(),
       phone: (profileData.phone || '').trim(),
-      timezone: profileData.timezone,
-      bio: (profileData.bio || '').trim(),
       notifications: profileData.notifications
     };
-
-    if (user?.role === 'student') {
-      payload.group = (profileData.group || '').trim();
-    } else {
-      payload.department = (profileData.department || '').trim();
-    }
 
     return payload;
   };
@@ -267,16 +233,19 @@ const Profile = () => {
   };
 
   const initials = useMemo(() => {
-    if (!profileData.name) {
+    const fullName = [profileData.lastName, profileData.firstName]
+      .filter(Boolean)
+      .join(' ');
+    if (!fullName) {
       return '👤';
     }
-    return profileData.name
+    return fullName
       .split(' ')
       .filter(Boolean)
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase())
       .join('');
-  }, [profileData.name]);
+  }, [profileData.lastName, profileData.firstName]);
 
   if (!user) {
     return null;
@@ -298,7 +267,7 @@ const Profile = () => {
               </p>
               <div className="profile-hero__meta">
                 <span>Логин: {profileData.login}</span>
-                <span>На портале с {formatDate(user.registrationDate)}</span>
+                <span>На портале с {formatDate(user.registrationDate || user.createdAt)}</span>
               </div>
             </div>
           </div>
@@ -318,14 +287,36 @@ const Profile = () => {
 
             <form className="profile-form" onSubmit={handleProfileSubmit}>
               <div className="profile-form__group">
-                <label>ФИО *</label>
+                <label>Фамилия *</label>
                 <input
                   type="text"
-                  value={profileData.name}
-                  onChange={(e) => handleProfileChange('name', e.target.value)}
-                  placeholder="Полностью, как в официальных документах"
+                  value={profileData.lastName}
+                  onChange={(e) => handleProfileChange('lastName', e.target.value)}
+                  placeholder="Иванов"
                 />
-                {profileErrors.name && <span className="field-error">{profileErrors.name}</span>}
+                {profileErrors.lastName && <span className="field-error">{profileErrors.lastName}</span>}
+              </div>
+
+              <div className="profile-form__group">
+                <label>Имя *</label>
+                <input
+                  type="text"
+                  value={profileData.firstName}
+                  onChange={(e) => handleProfileChange('firstName', e.target.value)}
+                  placeholder="Иван"
+                />
+                {profileErrors.firstName && <span className="field-error">{profileErrors.firstName}</span>}
+              </div>
+
+              <div className="profile-form__group">
+                <label>Отчество</label>
+                <input
+                  type="text"
+                  value={profileData.middleName}
+                  onChange={(e) => handleProfileChange('middleName', e.target.value)}
+                  placeholder="Иванович"
+                />
+                {profileErrors.middleName && <span className="field-error">{profileErrors.middleName}</span>}
               </div>
 
               <div className="profile-form__group">
@@ -361,43 +352,6 @@ const Profile = () => {
                 {profileErrors.phone && <span className="field-error">{profileErrors.phone}</span>}
               </div>
 
-              <div className="profile-form__group">
-                <label>{currentRoleConfig.field.label} *</label>
-                <input
-                  type="text"
-                  value={profileData[currentRoleConfig.field.key]}
-                  onChange={(e) => handleProfileChange(currentRoleConfig.field.key, e.target.value)}
-                  placeholder={currentRoleConfig.field.placeholder}
-                />
-                {profileErrors[currentRoleConfig.field.key] && (
-                  <span className="field-error">{profileErrors[currentRoleConfig.field.key]}</span>
-                )}
-              </div>
-
-              <div className="profile-form__group">
-                <label>Часовой пояс</label>
-                <select
-                  value={profileData.timezone}
-                  onChange={(e) => handleProfileChange('timezone', e.target.value)}
-                >
-                  <option value="UTC+2">UTC+2 (Калининград)</option>
-                  <option value="UTC+3">UTC+3 (Москва)</option>
-                  <option value="UTC+4">UTC+4 (Самара)</option>
-                  <option value="UTC+5">UTC+5 (Екатеринбург)</option>
-                  <option value="UTC+7">UTC+7 (Красноярск)</option>
-                </select>
-              </div>
-
-              <div className="profile-form__group profile-form__group--full">
-                <label>О себе</label>
-                <textarea
-                  rows="4"
-                  value={profileData.bio}
-                  onChange={(e) => handleProfileChange('bio', e.target.value)}
-                  placeholder="Коротко расскажите о себе, опыте и задачах"
-                />
-              </div>
-
               <div className="profile-form__actions">
                 <Button
                   type="submit"
@@ -418,6 +372,12 @@ const Profile = () => {
                 <h2>Смена пароля</h2>
               </div>
             </div>
+
+            {user?.mustChangePassword && (
+              <div className="profile-card__hint" style={{ marginBottom: '0.75rem', color: '#b45309' }}>
+                Для вашего аккаунта установлен временный пароль. Смените его перед продолжением работы.
+              </div>
+            )}
 
             <form className="profile-form" onSubmit={handlePasswordSubmit}>
               <div className="profile-form__group">

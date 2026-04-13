@@ -1,4 +1,5 @@
-.modal-overlay {
+.student-results-modal {
+&.modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -67,6 +68,57 @@
 
   .modal-body {
     padding: 24px;
+    background: #fcfdff;
+  }
+
+  .result-overview {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 10px;
+    margin-bottom: 18px;
+    border: 1px solid #dbe3ef;
+    background: #f8fafc;
+  }
+
+  .result-overview__label {
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .result-overview__meta {
+    font-size: 0.82rem;
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .result-overview--success {
+    background: #ecfdf5;
+    border-color: #86efac;
+
+    .result-overview__label {
+      color: #166534;
+    }
+  }
+
+  .result-overview--warning {
+    background: #fffbeb;
+    border-color: #fcd34d;
+
+    .result-overview__label {
+      color: #92400e;
+    }
+  }
+
+  .result-overview--default {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+
+    .result-overview__label {
+      color: #1e40af;
+    }
   }
 
   .results-section {
@@ -75,6 +127,18 @@
     &:last-child {
       margin-bottom: 0;
     }
+  }
+
+  .results-section--compact {
+    margin-bottom: 24px;
+  }
+
+  .results-section--panel {
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
   }
 
   .section-title {
@@ -91,6 +155,10 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  .info-grid--two-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .info-item {
@@ -120,93 +188,101 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
-    padding: 32px;
-    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    gap: 10px;
+    padding: 18px 20px;
+    background: #f3f4f6;
     border-radius: 16px;
     margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
 
     &--excellent {
-      background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+      background: #ecfdf5;
     }
 
     &--good {
-      background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+      background: #eff6ff;
     }
 
     &--satisfactory {
-      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      background: #fffbeb;
     }
 
     &--poor {
-      background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+      background: #fef2f2;
     }
 
     .score-main {
       display: flex;
       align-items: baseline;
       gap: 8px;
+      padding: 6px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.68);
+      backdrop-filter: blur(1px);
     }
 
     .score-value {
-      font-size: 56px;
+      font-size: 42px;
       font-weight: 800;
       color: #1f2937;
       line-height: 1;
     }
 
     .score-separator {
-      font-size: 40px;
+      font-size: 30px;
       font-weight: 600;
       color: #6b7280;
       opacity: 0.5;
     }
 
     .score-max {
-      font-size: 32px;
+      font-size: 24px;
       font-weight: 600;
       color: #6b7280;
     }
 
     .score-percentage {
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 700;
       color: #4b5563;
-      padding: 8px 16px;
+      padding: 6px 12px;
       background: rgba(255, 255, 255, 0.7);
       border-radius: 20px;
     }
-  }
 
-  .score-indicator {
-    width: 100%;
-    height: 8px;
-    background: #e5e7eb;
-    border-radius: 4px;
-    overflow: hidden;
-
-    .score-bar {
-      height: 100%;
-      background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
-      border-radius: 4px;
-      transition: width 0.3s ease;
+    .score-main,
+    .score-percentage {
+      position: relative;
+      z-index: 1;
     }
   }
 
-  .score-display--excellent .score-indicator .score-bar {
-    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  .score-display__fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    border-radius: 16px;
+    transition: width 0.3s ease;
+    z-index: 0;
   }
 
-  .score-display--good .score-indicator .score-bar {
-    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+  .score-display--excellent .score-display__fill {
+    background: linear-gradient(90deg, #34d399 0%, #10b981 100%);
   }
 
-  .score-display--satisfactory .score-indicator .score-bar {
-    background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+  .score-display--good .score-display__fill {
+    background: linear-gradient(90deg, #60a5fa 0%, #3b82f6 100%);
   }
 
-  .score-display--poor .score-indicator .score-bar {
-    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+  .score-display--satisfactory .score-display__fill {
+    background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
+  }
+
+  .score-display--poor .score-display__fill {
+    background: linear-gradient(90deg, #f87171 0%, #ef4444 100%);
   }
 
   .feedback-text {
@@ -227,35 +303,68 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    align-items: stretch;
   }
 
   .criterion-item {
     display: flex;
-    align-items: flex-start;
+    justify-content: space-between;
+    align-items: center;
     gap: 12px;
     padding: 12px;
     background: #f9fafb;
     border-radius: 8px;
     transition: background 0.2s ease;
+    width: 100%;
 
     &:hover {
       background: #f3f4f6;
     }
   }
 
-  .criterion-marker {
-    font-size: 20px;
-    color: #3b82f6;
-    font-weight: 700;
-    flex-shrink: 0;
-    line-height: 1.5;
-  }
-
   .criterion-text {
     font-size: 15px;
     color: #374151;
-    line-height: 1.6;
+    line-height: 1.4;
     flex: 1;
+  }
+
+  .criterion-points {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  .criterion-max,
+  .criterion-got {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 999px;
+  }
+
+  .criterion-max {
+    color: #374151;
+    background: #e5e7eb;
+  }
+
+  .criterion-got {
+    color: #1f2937;
+    background: #dbeafe;
+  }
+
+  .criteria-note {
+    margin: 12px 0 0;
+    font-size: 13px;
+    color: #6b7280;
+  }
+
+  .submitted-at-note {
+    margin: 12px 0 0;
+    font-size: 14px;
+    color: #4b5563;
   }
 
   .description-text {
@@ -276,5 +385,14 @@
     border-top: 1px solid #e5e7eb;
     background: #f9fafb;
   }
+}
+
+@media (max-width: 768px) {
+  .results-modal {
+    .info-grid--two-columns {
+      grid-template-columns: 1fr;
+    }
+  }
+}
 }
 

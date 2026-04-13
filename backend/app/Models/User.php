@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -16,18 +17,22 @@ class User extends Authenticatable
         'login',
         'email',
         'password',
-        'name',
+        'last_name',
+        'first_name',
+        'middle_name',
         'role',
-        'group',
+        'group_id',
         'department',
         'phone',
-        'timezone',
-        'notifications',
         'theme',
-        'bio',
         'is_active',
-        'teacher_login',
+        'must_change_password',
         'last_login',
+    ];
+
+    protected $appends = [
+        'full_name',
+        'notifications',
     ];
 
     protected $hidden = [
@@ -39,10 +44,15 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
-            'notifications' => 'array',
             'is_active' => 'boolean',
+            'must_change_password' => 'boolean',
             'last_login' => 'datetime',
         ];
+    }
+
+    public function studentGroup(): BelongsTo
+    {
+        return $this->belongsTo(Group::class, 'group_id');
     }
 
     public function assignments(): HasMany
@@ -55,13 +65,52 @@ class User extends Authenticatable
         return $this->hasMany(Submission::class, 'student_id');
     }
 
-    public function courses(): HasMany
+    public function subjects(): HasMany
     {
-        return $this->hasMany(Course::class, 'teacher_id');
+        return $this->hasMany(Subject::class, 'teacher_id');
+    }
+
+    public function teachingGroups(): HasMany
+    {
+        return $this->hasMany(Group::class, 'teacher_id');
     }
 
     public function systemLogs(): HasMany
     {
         return $this->hasMany(SystemLog::class);
     }
+
+    public function notificationSettings(): HasMany
+    {
+        return $this->hasMany(UserNotificationSetting::class);
+    }
+
+    public function getFullNameAttribute(): string
+    {
+        return trim(implode(' ', array_filter([
+            $this->last_name,
+            $this->first_name,
+            $this->middle_name,
+        ])));
+    }
+
+    public function getNotificationsAttribute(): array
+    {
+        $settings = $this->relationLoaded('notificationSettings')
+            ? $this->notificationSettings
+            : $this->notificationSettings()->get();
+
+        $notifications = [
+            'email' => true,
+            'push' => true,
+            'sms' => false,
+        ];
+
+        foreach ($settings as $setting) {
+            $notifications[$setting->channel] = (bool) $setting->enabled;
+        }
+
+        return $notifications;
+    }
+
 }

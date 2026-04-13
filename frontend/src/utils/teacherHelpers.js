@@ -107,13 +107,41 @@ export const generateDownloadFileName = (submission) => {
   return `${studentName}_${assignmentTitle}.${extension}`;
 };
 
-export const calculateSubmissionStats = (submissions = []) => {
-  const total = submissions.length;
-  const submitted = submissions.filter(s => s.status === 'submitted').length;
-  const graded = submissions.filter(s => s.status === 'graded').length;
-  const returned = submissions.filter(s => s.status === 'returned').length;
-  const pending = submissions.filter(s => s.status === 'submitted').length;
+export const calculateSubmissionStats = (submissions = [], assignment = null) => {
+  const totalFromAssignment = Number(assignment?.totalStudents);
+  const hasAssignmentTotals = Number.isFinite(totalFromAssignment) && totalFromAssignment >= 0;
 
+  if (hasAssignmentTotals) {
+    const total = totalFromAssignment;
+    const submitted = Number(assignment?.submittedStudents || 0);
+    const graded = Number(assignment?.gradedStudents || 0);
+    const returned = Number(assignment?.returnedStudents || 0);
+    const pending = Number(assignment?.pendingStudents || 0);
+    const completionRate = total > 0 ? Math.round((submitted / total) * 100) : 0;
+
+    return {
+      total,
+      submitted,
+      graded,
+      returned,
+      pending,
+      completionRate
+    };
+  }
+
+  const latestByStudent = [...submissions]
+    .sort((a, b) => new Date(b?.submissionDate || b?.createdAt || 0) - new Date(a?.submissionDate || a?.createdAt || 0))
+    .filter((submission, index, array) => {
+      const studentId = submission?.studentId;
+      if (!studentId) return true;
+      return index === array.findIndex((item) => item?.studentId === studentId);
+    });
+
+  const total = latestByStudent.length;
+  const submitted = latestByStudent.filter((s) => ['submitted', 'graded', 'returned'].includes(s.status)).length;
+  const graded = latestByStudent.filter((s) => s.status === 'graded').length;
+  const returned = latestByStudent.filter((s) => s.status === 'returned').length;
+  const pending = latestByStudent.filter((s) => s.status === 'submitted').length;
   const completionRate = total > 0 ? Math.round((submitted / total) * 100) : 0;
 
   return {

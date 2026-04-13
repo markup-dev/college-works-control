@@ -8,18 +8,26 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('courses', function (Blueprint $table) {
+        Schema::create('subjects', function (Blueprint $table) {
             $table->id();
             $table->string('name');
             $table->foreignId('teacher_id')->nullable()->constrained('users')->onDelete('set null');
-            $table->integer('students_count')->default(0);
             $table->enum('status', ['active', 'inactive'])->default('active');
             $table->timestamps();
+            $table->unique(['name', 'teacher_id']);
+        });
+
+        Schema::table('assignments', function (Blueprint $table) {
+            $table->foreign('subject_id')->references('id')->on('subjects')->nullOnDelete();
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('courses');
+        Schema::table('assignments', function (Blueprint $table) {
+            $table->dropForeign(['subject_id']);
+        });
+
+        Schema::dropIfExists('subjects');
     }
 };

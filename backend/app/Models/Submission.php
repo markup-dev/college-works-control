@@ -16,6 +16,8 @@ class Submission extends Model
         'status',
         'score',
         'comment',
+        'teacher_comment',
+        'criterion_scores',
         'file_name',
         'file_path',
         'file_size',
@@ -31,6 +33,7 @@ class Submission extends Model
             'is_resubmission' => 'boolean',
             'submitted_at' => 'datetime',
             'score' => 'integer',
+            'criterion_scores' => 'array',
         ];
     }
 

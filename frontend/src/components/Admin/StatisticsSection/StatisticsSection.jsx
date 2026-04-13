@@ -1,294 +1,205 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import Card from '../../UI/Card/Card';
 import './StatisticsSection.scss';
 
-const StatisticsSection = ({ stats, users, courses, submissions = [] }) => {
-  const userStats = {
-    students: users.filter(u => u.role === 'student').length,
-    teachers: users.filter(u => u.role === 'teacher').length,
-    admins: users.filter(u => u.role === 'admin').length,
-    activeUsers: users.filter(u => u.status === 'active').length,
-    inactiveUsers: users.filter(u => u.status === 'inactive').length,
-    totalUsers: users.length
-  };
+const formatDateTime = (value) => {
+  if (!value) return '—';
+  try {
+    return new Date(value).toLocaleString('ru-RU');
+  } catch {
+    return '—';
+  }
+};
 
-  const courseStats = {
-    activeCourses: courses.filter(c => c.status === 'active').length,
-    inactiveCourses: courses.filter(c => c.status === 'inactive').length,
-    totalCourses: courses.length,
-    totalStudents: courses.reduce((sum, course) => sum + (course.studentsCount || 0), 0),
-    avgStudents: Math.round(courses.reduce((sum, course) => sum + (course.studentsCount || 0), 0) / courses.length) || 0,
-    totalAssignments: new Set(submissions.map(s => s.assignmentId)).size
-  };
+const IconUsers = () => <span className="overview-icon" aria-hidden="true">👥</span>;
+const IconUserOff = () => <span className="overview-icon" aria-hidden="true">🚫</span>;
+const IconFolder = () => <span className="overview-icon" aria-hidden="true">📁</span>;
+const IconBook = () => <span className="overview-icon" aria-hidden="true">📚</span>;
+const IconChart = () => <span className="overview-icon overview-icon--panel" aria-hidden="true">📊</span>;
+const IconAlert = () => <span className="overview-icon overview-icon--panel" aria-hidden="true">⚠️</span>;
+const IconHistory = () => <span className="overview-icon overview-icon--panel" aria-hidden="true">🕒</span>;
 
-  const submissionStats = {
-    total: submissions.length,
-    pending: submissions.filter(s => s.status === 'submitted').length,
-    graded: submissions.filter(s => s.status === 'graded').length,
-    returned: submissions.filter(s => s.status === 'returned').length
-  };
+const StatisticsSection = ({ stats, users = [], groups = [], subjects = [], logs = [] }) => {
+  const studentCount = users.filter((user) => user.role === 'student').length;
+  const teacherCount = users.filter((user) => user.role === 'teacher').length;
+  const inactiveUsers = users.filter((user) => user.status === 'inactive' || user.isActive === false).length;
+  const groupsWithoutStudents = groups.filter((group) => Number(group.studentsCount || 0) === 0).length;
+  const inactiveSubjects = subjects.filter((subject) => subject.status === 'inactive').length;
 
-  const progressPercentage = submissionStats.total > 0 
-    ? ((submissionStats.graded + submissionStats.returned) / submissionStats.total) * 100 
-    : 0;
+  const topLoadedGroups = useMemo(() => {
+    return [...groups]
+      .sort((a, b) => Number(b.studentsCount || 0) - Number(a.studentsCount || 0))
+      .slice(0, 5);
+  }, [groups]);
+
+  const maxStudents = useMemo(() => {
+    if (!topLoadedGroups.length) return 1;
+    return Math.max(...topLoadedGroups.map((g) => Number(g.studentsCount || 0)), 1);
+  }, [topLoadedGroups]);
+
+  const recentEvents = useMemo(() => logs.slice(0, 6), [logs]);
 
   return (
     <div className="statistics-section">
-      <div className="statistics-header">
-        <h2>📊 Статистика системы</h2>
-        <p>Обзор активности и производительности учебного портала</p>
+      <header className="statistics-hero">
+        <div className="statistics-hero__text">
+          <p className="statistics-hero__eyebrow">Панель администратора</p>
+          <h2 className="statistics-hero__title">Обзор системы</h2>
+          <p className="statistics-hero__subtitle">
+            Ключевые показатели и то, на что стоит обратить внимание в первую очередь.
+          </p>
+        </div>
+      </header>
+
+      <div className="overview-kpi-grid">
+        <KpiCard
+          title="Всего пользователей"
+          value={stats.totalUsers ?? users.length}
+          note={`Студентов: ${studentCount} · Преподавателей: ${teacherCount}`}
+          tone="primary"
+          icon={<IconUsers />}
+        />
+        <KpiCard
+          title="Неактивные пользователи"
+          value={inactiveUsers}
+          note="Требуют проверки или повторной активации"
+          tone={inactiveUsers > 0 ? 'warning' : 'neutral'}
+          icon={<IconUserOff />}
+        />
+        <KpiCard
+          title="Пустые группы"
+          value={groupsWithoutStudents}
+          note="Группы без студентов"
+          tone={groupsWithoutStudents > 0 ? 'warning' : 'neutral'}
+          icon={<IconFolder />}
+        />
+        <KpiCard
+          title="Неактивные предметы"
+          value={inactiveSubjects}
+          note="Проверьте статус предметов"
+          tone={inactiveSubjects > 0 ? 'warning' : 'neutral'}
+          icon={<IconBook />}
+        />
       </div>
-      
-      <div className="stats-grid">
-        <Card className="stat-card overview-card" hoverable>
-          <div className="card-header">
-            <div className="card-icon">📈</div>
-            <h3>Ключевые показатели</h3>
+
+      <div className="overview-content-grid">
+        <Card className="overview-panel" padding="large" shadow="medium">
+          <div className="overview-panel__head">
+            <span className="overview-panel__icon-wrap overview-panel__icon-wrap--chart">
+              <IconChart />
+            </span>
+            <div>
+              <h3 className="overview-panel__title">Нагрузка по группам</h3>
+              <p className="overview-panel__desc">Топ групп по числу студентов</p>
+            </div>
           </div>
-          <div className="metrics-grid">
-            <MetricCard 
-              icon="👥"
-              value={userStats.totalUsers}
-              label="Всего пользователей"
-              trend="+12%"
-              color="primary"
-            />
-            <MetricCard
-              icon="📚"
-              value={courseStats.activeCourses}
-              label="Активных курсов"
-              trend="+5%"
-              color="success"
-            />
-            <MetricCard 
-              icon="📝"
-              value={stats.totalAssignments || courseStats.totalAssignments}
-              label="Всего заданий"
-              trend="+8%"
-              color="info"
-            />
-            <MetricCard
-              icon="⏳"
-              value={submissionStats.pending}
+          {topLoadedGroups.length === 0 ? (
+            <p className="overview-empty">Нет данных по группам.</p>
+          ) : (
+            <ul className="load-list">
+              {topLoadedGroups.map((group) => {
+                const n = Number(group.studentsCount || 0);
+                const pct = Math.round((n / maxStudents) * 100);
+                return (
+                  <li className="load-list__item" key={group.id}>
+                    <div className="load-list__row">
+                      <span className="load-list__label">{group.name}</span>
+                      <span className="load-list__value">
+                        {n} <span className="load-list__unit">студ.</span>
+                      </span>
+                    </div>
+                    <div className="load-list__track" role="presentation">
+                      <div className="load-list__fill" style={{ width: `${pct}%` }} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="overview-panel" padding="large" shadow="medium">
+          <div className="overview-panel__head">
+            <span className="overview-panel__icon-wrap overview-panel__icon-wrap--alert">
+              <IconAlert />
+            </span>
+            <div>
+              <h3 className="overview-panel__title">Требует внимания</h3>
+              <p className="overview-panel__desc">Сводка по работам и справочникам</p>
+            </div>
+          </div>
+          <div className="attention-list">
+            <AttentionItem
               label="Работ на проверке"
-              trend="−3%"
-              color="warning"
+              value={stats.pendingSubmissions || 0}
+              alert={(stats.pendingSubmissions || 0) > 0}
             />
+            <AttentionItem
+              label="Возвращено на доработку"
+              value={stats.returnedSubmissions || 0}
+              alert={(stats.returnedSubmissions || 0) > 0}
+            />
+            <AttentionItem label="Активные предметы" value={stats.activeSubjects || 0} variant="positive" />
+            <AttentionItem label="Группы в системе" value={stats.totalGroups ?? groups.length} variant="muted" />
           </div>
         </Card>
 
-        <Card className="stat-card users-card" hoverable>
-          <div className="card-header">
-            <div className="card-icon">👥</div>
-            <h3>Пользователи</h3>
-          </div>
-          <div className="users-chart">
-            <div className="chart-bars">
-              <ChartBar
-                label="Студенты"
-                value={userStats.students}
-                total={userStats.totalUsers}
-                color="#3b82f6"
-                icon="🎓"
-              />
-              <ChartBar
-                label="Преподаватели"
-                value={userStats.teachers}
-                total={userStats.totalUsers}
-                color="#10b981"
-                icon="👨‍🏫"
-              />
-              <ChartBar
-                label="Администраторы"
-                value={userStats.admins}
-                total={userStats.totalUsers}
-                color="#f59e0b"
-                icon="⚙️"
-              />
-            </div>
-            <div className="users-summary">
-              <SummaryItem 
-                label="Активных пользователей"
-                value={userStats.activeUsers}
-                total={userStats.totalUsers}
-                type="success"
-              />
-              <SummaryItem 
-                label="Неактивных пользователей"
-                value={userStats.inactiveUsers}
-                total={userStats.totalUsers}
-                type="danger"
-              />
+        <Card className="overview-panel overview-panel--full" padding="large" shadow="medium">
+          <div className="overview-panel__head">
+            <span className="overview-panel__icon-wrap overview-panel__icon-wrap--history">
+              <IconHistory />
+            </span>
+            <div>
+              <h3 className="overview-panel__title">Последние события</h3>
+              <p className="overview-panel__desc">Записи из журнала системы</p>
             </div>
           </div>
-        </Card>
-
-        <Card className="stat-card courses-card" hoverable>
-          <div className="card-header">
-            <div className="card-icon">📚</div>
-            <h3>Курсы и задания</h3>
-          </div>
-          <div className="courses-stats">
-            <div className="stats-row">
-              <StatItem 
-                value={courseStats.activeCourses}
-                label="Активных курсов"
-                icon="✅"
-                color="success"
-              />
-              <StatItem 
-                value={courseStats.inactiveCourses}
-                label="Неактивных курсов"
-                icon="⏸️"
-                color="secondary"
-              />
-            </div>
-            <div className="stats-row">
-              <StatItem 
-                value={courseStats.totalStudents}
-                label="Всего студентов"
-                icon="👨‍🎓"
-                color="primary"
-              />
-              <StatItem 
-                value={courseStats.avgStudents}
-                label="Среднее на курс"
-                icon="📊"
-                color="info"
-              />
-            </div>
-            <div className="total-assignments">
-              <div className="assignments-icon">📋</div>
-              <div className="assignments-info">
-                <div className="assignments-count">{courseStats.totalAssignments}</div>
-                <div className="assignments-label">Всего заданий в системе</div>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="stat-card submissions-card" hoverable style={{ gridColumn: '1 / -1' }}>
-          <div className="card-header">
-            <div className="card-icon">📝</div>
-            <h3>Работы студентов</h3>
-          </div>
-          <div className="submissions-overview">
-            <div className="submission-stats-grid">
-              <SubmissionStat 
-                count={submissionStats.pending}
-                label="На проверке"
-                icon="⏳"
-                type="warning"
-              />
-              <SubmissionStat 
-                count={submissionStats.graded}
-                label="Оценено"
-                icon="✅"
-                type="success"
-              />
-              <SubmissionStat
-                count={submissionStats.returned}
-                label="Возвращено"
-                icon="↩️"
-                type="danger"
-              />
-              <SubmissionStat
-                count={submissionStats.total}
-                label="Всего работ"
-                icon="📄"
-                type="secondary"
-              />
-            </div>
-            <div className="progress-section">
-              <div className="progress-header">
-                <span>Прогресс проверки</span>
-                <span className="progress-percent">{progressPercentage.toFixed(1)}%</span>
-              </div>
-              <div className="progress-bar">
-                <div 
-                  className="progress-fill" 
-                  style={{ width: `${progressPercentage}%` }}
-                ></div>
-              </div>
-              <div className="progress-stats">
-                <span>Проверено: {submissionStats.graded + submissionStats.returned} из {submissionStats.total}</span>
-                {submissionStats.pending > 0 && (
-                  <span className="pending-count"> • На проверке: {submissionStats.pending}</span>
-                )}
-              </div>
-            </div>
-          </div>
+          {recentEvents.length === 0 ? (
+            <p className="overview-empty">События отсутствуют.</p>
+          ) : (
+            <ul className="events-timeline">
+              {recentEvents.map((event) => (
+                <li className="events-timeline__item" key={event.id}>
+                  <span className="events-timeline__dot" aria-hidden="true" />
+                  <div className="events-timeline__body">
+                    <div className="events-timeline__meta">
+                      <strong className="events-timeline__user">{event.user || 'Система'}</strong>
+                      <time className="events-timeline__time">{formatDateTime(event.timestamp)}</time>
+                    </div>
+                    <div className="events-timeline__action">{event.action}</div>
+                    <div className="events-timeline__details">{event.details || 'Без деталей'}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
     </div>
   );
 };
 
-const MetricCard = ({ icon, value, label, trend, color }) => (
-  <div className={`metric-card metric-card--${color}`}>
-    <div className="metric-icon">{icon}</div>
-    <div className="metric-content">
-      <div className="metric-value">{value}</div>
-      <div className="metric-label">{label}</div>
-    </div>
-    <div className={`metric-trend metric-trend--${trend.includes('+') ? 'up' : 'down'}`}>
-      {trend}
-    </div>
-  </div>
-);
-
-const ChartBar = ({ label, value, total, color, icon }) => {
-  const percentage = total > 0 ? (value / total) * 100 : 0;
-  
-  return (
-    <div className="chart-bar">
-      <div className="bar-info">
-        <span className="bar-icon">{icon}</span>
-        <span className="bar-label">{label}</span>
+const KpiCard = ({ title, value, note, tone = 'primary', icon }) => (
+  <Card className={`overview-kpi overview-kpi--${tone}`} padding="medium" shadow="small" bordered>
+    <div className="overview-kpi__inner">
+      <div className="overview-kpi__icon" aria-hidden="true">
+        {icon}
       </div>
-      <div className="bar-container">
-        <div 
-          className="bar-fill" 
-          style={{ 
-            width: `${percentage}%`,
-            backgroundColor: color
-          }}
-        ></div>
-      </div>
-      <div className="bar-value">
-        {value} <span className="bar-percent">({percentage.toFixed(0)}%)</span>
+      <div className="overview-kpi__main">
+        <div className="overview-kpi__title">{title}</div>
+        <div className="overview-kpi__value">{value}</div>
+        <div className="overview-kpi__note">{note}</div>
       </div>
     </div>
-  );
-};
-
-const SummaryItem = ({ label, value, total, type }) => (
-  <div className="summary-item">
-    <span className="summary-label">{label}</span>
-    <div className="summary-value">
-      <span className={`value-number value-number--${type}`}>{value}</span>
-      <span className="value-total">/ {total}</span>
-    </div>
-  </div>
+  </Card>
 );
 
-const StatItem = ({ value, label, icon, color }) => (
-  <div className="stat-item">
-    <div className="stat-icon">{icon}</div>
-    <div className="stat-content">
-      <div className={`stat-value stat-value--${color}`}>{value}</div>
-      <div className="stat-label">{label}</div>
-    </div>
-  </div>
-);
-
-const SubmissionStat = ({ count, label, icon, type }) => (
-  <div className={`submission-stat submission-stat--${type}`}>
-    <div className="stat-icon">{icon}</div>
-    <div className="stat-content">
-      <div className="stat-count">{count}</div>
-      <div className="stat-label">{label}</div>
-    </div>
+const AttentionItem = ({ label, value, alert = false, variant = 'default' }) => (
+  <div
+    className={`attention-row attention-row--${variant} ${alert ? 'attention-row--alert' : ''}`}
+  >
+    <span className="attention-row__label">{label}</span>
+    <span className="attention-row__value">{value}</span>
   </div>
 );
 

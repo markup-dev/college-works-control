@@ -15,6 +15,8 @@ return new class extends Migration
             $table->enum('status', ['submitted', 'graded', 'returned'])->default('submitted');
             $table->integer('score')->nullable();
             $table->text('comment')->nullable();
+            $table->text('teacher_comment')->nullable();
+            $table->json('criterion_scores')->nullable();
             $table->string('file_name')->nullable();
             $table->string('file_path')->nullable();
             $table->string('file_size')->nullable();

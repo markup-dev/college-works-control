@@ -5,12 +5,6 @@ import './DashboardHeader.scss';
 const DashboardHeader = ({
   title = "Мои задания",
   subtitle = "Управление учебными работами",
-  stats = {
-    total: 0,
-    urgent: 0,
-    pending: 0,
-    completed: 0
-  },
   searchTerm = "",
   onSearchChange,
   sortBy = "priority",
@@ -18,13 +12,15 @@ const DashboardHeader = ({
   activeFilter = "all",
   filters = [],
   filterCounts = {},
+  overdueCount = 0,
   onFilterChange,
-  courseFilter = "all",
-  onCourseFilterChange,
-  availableCourses = [],
+  subjectFilter = "all",
+  onSubjectFilterChange,
+  availableSubjects = [],
   teacherFilter = "all",
   onTeacherFilterChange,
   availableTeachers = [],
+  onResetFilters,
   className = "",
   loading = false
 }) => {
@@ -35,78 +31,29 @@ const DashboardHeader = ({
           <h1 className="header-title">{title}</h1>
           <p className="header-subtitle">{subtitle}</p>
         </div>
-        
-        <div className="stats-container">
-          {loading ? (
-            <div className="stats-loading">
-              <div className="loading-pulse"></div>
-              <div className="loading-pulse"></div>
-              <div className="loading-pulse"></div>
-            </div>
-          ) : (
-            <div className="stats">
-              <StatCard 
-                number={stats.total} 
-                label="Всего заданий" 
-                icon="📋"
-              />
-              <StatCard 
-                number={stats.urgent} 
-                label="Срочные" 
-                urgent 
-                icon="⏰"
-              />
-              <StatCard 
-                number={stats.pending} 
-                label="Ожидают сдачи" 
-                icon="⏳"
-              />
-              <StatCard 
-                number={stats.completed} 
-                label="Выполнено" 
-                icon="✅"
-                completed
-              />
-            </div>
-          )}
-        </div>
       </div>
 
       <FiltersSection
         activeFilter={activeFilter}
         filters={filters}
         filterCounts={filterCounts}
+        overdueCount={overdueCount}
         onFilterChange={onFilterChange}
         searchTerm={searchTerm}
         onSearchChange={onSearchChange}
         sortBy={sortBy}
         onSortChange={onSortChange}
-        courseFilter={courseFilter}
-        onCourseFilterChange={onCourseFilterChange}
-        availableCourses={availableCourses}
+        subjectFilter={subjectFilter}
+        onSubjectFilterChange={onSubjectFilterChange}
+        availableSubjects={availableSubjects}
         teacherFilter={teacherFilter}
         onTeacherFilterChange={onTeacherFilterChange}
         availableTeachers={availableTeachers}
+        onResetFilters={onResetFilters}
         loading={loading}
       />
     </div>
   );
 };
-
-const StatCard = ({ 
-  number, 
-  label, 
-  urgent = false, 
-  completed = false,
-  icon = "📊"
-}) => (
-  <div className={`stat-card ${urgent ? 'stat-card--urgent' : ''} ${completed ? 'stat-card--completed' : ''}`}>
-    <div className="stat-card__icon">{icon}</div>
-    <div className="stat-card__content">
-      <span className="stat-card__number">{number}</span>
-      <span className="stat-card__label">{label}</span>
-    </div>
-  </div>
-);
 
 export default DashboardHeader;

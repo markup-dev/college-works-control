@@ -5,29 +5,36 @@ const FiltersSection = ({
   activeFilter, 
   filters, 
   filterCounts, 
+  overdueCount = 0,
   onFilterChange,
   searchTerm,
   onSearchChange,
   sortBy,
   onSortChange,
-  courseFilter,
-  onCourseFilterChange,
-  availableCourses,
+  subjectFilter,
+  onSubjectFilterChange,
+  availableSubjects,
   teacherFilter,
   onTeacherFilterChange,
-  availableTeachers
+  availableTeachers,
+  onResetFilters
 }) => {
   return (
     <div className="filters-section">
-      <div className="controls-row">
+      <div className="search-row">
         <SearchBox 
           searchTerm={searchTerm}
           onSearchChange={onSearchChange}
         />
-        <CourseFilter
-          courseFilter={courseFilter}
-          onCourseFilterChange={onCourseFilterChange}
-          availableCourses={availableCourses}
+        <button type="button" className="reset-filters-btn" onClick={onResetFilters}>
+          Сбросить фильтры
+        </button>
+      </div>
+      <div className="controls-row">
+        <SubjectFilter
+          subjectFilter={subjectFilter}
+          onSubjectFilterChange={onSubjectFilterChange}
+          availableSubjects={availableSubjects}
         />
         <TeacherFilter
           teacherFilter={teacherFilter}
@@ -47,6 +54,7 @@ const FiltersSection = ({
               key={filter.key}
               filter={filter}
               count={filterCounts[filter.key]}
+              overdueCount={overdueCount}
               isActive={activeFilter === filter.key}
               onClick={() => onFilterChange(filter.key)}
             />
@@ -61,7 +69,7 @@ const SearchBox = ({ searchTerm, onSearchChange }) => (
   <div className="search-box">
     <input
       type="text"
-      placeholder="🔍 Поиск по названию, дисциплине, преподавателю..."
+      placeholder="Поиск по названию, предмету, преподавателю..."
       value={searchTerm}
       onChange={(e) => onSearchChange(e.target.value)}
       className="search-input"
@@ -69,29 +77,29 @@ const SearchBox = ({ searchTerm, onSearchChange }) => (
   </div>
 );
 
-const CourseFilter = ({ courseFilter, onCourseFilterChange, availableCourses }) => (
-  <div className="filter-select">
+const SubjectFilter = ({ subjectFilter, onSubjectFilterChange, availableSubjects }) => (
+  <div className="filter-select subject-filter">
     <select 
-      value={courseFilter} 
-      onChange={(e) => onCourseFilterChange(e.target.value)}
+      value={subjectFilter} 
+      onChange={(e) => onSubjectFilterChange(e.target.value)}
       className="filter-select-input"
     >
-      <option value="all">📚 Все дисциплины</option>
-      {availableCourses.map(course => (
-        <option key={course} value={course}>{course}</option>
+      <option value="all">Все предметы</option>
+      {availableSubjects.map(subject => (
+        <option key={subject} value={subject}>{subject}</option>
       ))}
     </select>
   </div>
 );
 
 const TeacherFilter = ({ teacherFilter, onTeacherFilterChange, availableTeachers }) => (
-  <div className="filter-select">
+  <div className="filter-select teacher-filter">
     <select 
       value={teacherFilter} 
       onChange={(e) => onTeacherFilterChange(e.target.value)}
       className="filter-select-input"
     >
-      <option value="all">👩‍🏫 Все преподаватели</option>
+      <option value="all">Все преподаватели</option>
       {availableTeachers.map(teacher => (
         <option key={teacher} value={teacher}>{teacher}</option>
       ))}
@@ -106,27 +114,33 @@ const SortSelect = ({ sortBy, onSortChange }) => (
       onChange={(e) => onSortChange(e.target.value)}
       className="sort-select"
     >
-      <option value="priority">🎯 По приоритету</option>
-      <option value="deadline">📅 По сроку сдачи</option>
-      <option value="course">📚 По дисциплине</option>
-      <option value="status">🔄 По статусу</option>
-      <option value="title">📝 По названию</option>
+      <option value="priority">По приоритету</option>
+      <option value="deadline">По ближайшему сроку</option>
+      <option value="deadline_desc">По дальнему сроку</option>
+      <option value="newest">Сначала новые</option>
+      <option value="oldest">Сначала старые</option>
+      <option value="subject">По предмету</option>
+      <option value="status">По статусу</option>
+      <option value="title">По названию</option>
     </select>
   </div>
 );
 
-const FilterButton = ({ filter, count, isActive, onClick }) => (
-  <button
-    type="button"
-    className={`filter-btn ${isActive ? 'active' : ''}`}
-    onClick={onClick}
-  >
-    <span className="filter-icon">{filter.icon}</span>
-    <span className="filter-label">{filter.label}</span>
-    {count > 0 && (
-      <span className="filter-count">{count}</span>
-    )}
-  </button>
-);
+const FilterButton = ({ filter, count, overdueCount, isActive, onClick }) => {
+  const hasOverdueAlert = filter.key === 'urgent' && overdueCount > 0;
+
+  return (
+    <button
+      type="button"
+      className={`filter-btn ${isActive ? 'active' : ''} ${hasOverdueAlert ? 'filter-btn--overdue-alert' : ''}`}
+      onClick={onClick}
+    >
+      <span className="filter-label">{filter.label}</span>
+      {count > 0 && (
+        <span className="filter-count">{count}</span>
+      )}
+    </button>
+  );
+};
 
 export default FiltersSection;

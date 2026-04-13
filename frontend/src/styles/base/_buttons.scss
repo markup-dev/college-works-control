@@ -1,9 +1,9 @@
 .btn {
-  @include flex(center);
+  @include flex(row, center, center);
   @include transition;
   gap: $spacing-sm;
   border: none;
-  padding: $spacing-md $spacing-xl;
+  padding: $spacing-md;
   border-radius: $border-radius;
   font-size: $font-size-base;
   font-weight: 600;

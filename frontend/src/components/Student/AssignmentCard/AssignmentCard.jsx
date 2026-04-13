@@ -15,19 +15,21 @@ const AssignmentCard = ({
   const statusInfo = getAssignmentStatusInfo(assignment);
   const priorityInfo = getPriorityInfo(assignment.priority);
   const daysUntilDeadline = getDaysUntilDeadline(assignment.deadline);
-  const isUrgent = daysUntilDeadline <= 3 && assignment.status === 'not_submitted';
+  const isUrgent = daysUntilDeadline >= 0 && daysUntilDeadline <= 3 && assignment.status === 'not_submitted';
   const isOverdue = daysUntilDeadline < 0 && assignment.status === 'not_submitted';
-  const isHighPriority = assignment.priority === 'high';
+  const canSubmitRetake = assignment.canSubmitRetake ?? (assignment.status === 'returned');
+  const retakeUsed = Boolean(assignment.retakeUsed);
+  const isRetakeAssignment = assignment.status === 'returned' || canSubmitRetake || retakeUsed;
 
   const renderActions = () => {
     switch (assignment.status) {
       case 'not_submitted':
         return (
           <Button
-            variant={isOverdue ? "danger" : isUrgent ? "warning" : "primary"}
+            variant={isOverdue ? "danger" : "primary"}
             size="medium"
+            className={isUrgent && !isOverdue ? 'assignment-submit-btn--urgent' : ''}
             onClick={(e) => { e.stopPropagation(); onSubmitWork(assignment); }}
-            icon={assignment.submissionType === 'demo' ? "🎤" : "📤"}
             fullWidth
           >
             {isOverdue ?
@@ -43,7 +45,6 @@ const AssignmentCard = ({
             variant="secondary" 
             size="medium"
             disabled 
-            icon="⏳"
             fullWidth
           >
             Ожидает проверки
@@ -56,7 +57,6 @@ const AssignmentCard = ({
             variant="success"
             size="medium"
             onClick={(e) => { e.stopPropagation(); onViewResults(assignment); }}
-            icon="👁"
             fullWidth
           >
             Результаты
@@ -64,21 +64,42 @@ const AssignmentCard = ({
         );
       
       case 'returned':
+        if (!canSubmitRetake) {
+          return (
+            <div className="assignment-actions__group">
+              <Button
+                variant="secondary"
+                size="medium"
+                disabled
+              >
+                {retakeUsed ? 'Пересдача использована' : 'Пересдача недоступна'}
+              </Button>
+              <Button
+                variant="outline"
+                size="small"
+                onClick={(e) => { e.stopPropagation(); onViewResults(assignment); }}
+              >
+                Комментарий
+              </Button>
+            </div>
+          );
+        }
+
         return (
           <div className="assignment-actions__group">
             <Button
               variant="warning"
               size="medium"
               onClick={(e) => { e.stopPropagation(); onResubmit(assignment); }}
-              icon="↩️"
+              fullWidth
             >
               Пересдать
             </Button>
             <Button
-              variant="outline"
-              size="small"
+              variant="secondary"
+              size="medium"
               onClick={(e) => { e.stopPropagation(); onViewResults(assignment); }}
-              icon="👁"
+              fullWidth
             >
               Комментарий
             </Button>
@@ -91,49 +112,39 @@ const AssignmentCard = ({
   };
 
   return (
-    <Card
-      key={assignment.id}
-      hoverable
-      className={`assignment-card ${className} ${isUrgent ? 'assignment-card--urgent' : ''} ${isOverdue ? 'assignment-card--overdue' : ''}`}
-      onClick={() => onViewDetails(assignment)}
-      style={{ cursor: 'pointer' }}
-    >
-      {isHighPriority && (
-        <div className="assignment-priority-badge">
-          <span className="priority-dot"></span>
-          Высокий приоритет
+    <div className="student-assignment-card">
+      <Card
+        key={assignment.id}
+        hoverable
+        className={`assignment-card ${className} ${isUrgent ? 'assignment-card--urgent' : ''} ${isOverdue ? 'assignment-card--overdue' : ''}`}
+        onClick={() => onViewDetails(assignment)}
+        style={{ cursor: 'pointer' }}
+      >
+      {isOverdue && (
+        <div className="overdue-alert-banner">
+          <span className="overdue-alert-banner__icon" aria-hidden="true">!</span>
+          <span>Дедлайн просрочен на {Math.abs(daysUntilDeadline)} дн.</span>
         </div>
       )}
-
       <div className="assignment-header">
         <div className="assignment-title-section">
           <h3 className="assignment-title">{assignment.title}</h3>
           <div className="assignment-meta">
-            <span className="course-badge">
-              <span className="meta-icon">📚</span>
-              {assignment.course}
+            <span className="subject-badge">
+              {assignment.subject}
             </span>
             <span className="teacher-info">
-              <span className="meta-icon">👨‍🏫</span>
               {assignment.teacher}
             </span>
           </div>
         </div>
         <div className="assignment-status">
           <span className={`status-badge status-badge--${statusInfo.variant}`}>
-            <span className="status-icon">{statusInfo.icon}</span>
             {statusInfo.label}
           </span>
-          {isUrgent && (
-            <span className="urgency-badge urgency-badge--warning">
-              <span className="urgency-icon">🔥</span>
-              Срочно!
-            </span>
-          )}
-          {isOverdue && (
-            <span className="urgency-badge urgency-badge--danger">
-              <span className="urgency-icon">⚠️</span>
-              Просрочено
+          {isRetakeAssignment && (
+            <span className={`retake-badge ${retakeUsed ? 'retake-badge--used' : ''}`}>
+              {retakeUsed ? 'Пересдача использована' : 'Пересдача'}
             </span>
           )}
         </div>
@@ -161,8 +172,7 @@ const AssignmentCard = ({
           icon="🎯"
           label="Приоритет:" 
           value={
-            <span className="priority-info">
-              <span className="priority-icon">{priorityInfo.icon}</span>
+            <span className={`priority-info priority-info--${assignment.priority || 'medium'}`}>
               {priorityInfo.label}
             </span>
           } 
@@ -210,14 +220,11 @@ const AssignmentCard = ({
         )}
       </div>
 
-      {assignment.criteria && assignment.criteria.length > 0 && (
-        <CriteriaSection criteria={assignment.criteria} />
-      )}
-      
-      <div className="assignment-actions">
-        {renderActions()}
-      </div>
-    </Card>
+        <div className="assignment-actions">
+          {renderActions()}
+        </div>
+      </Card>
+    </div>
   );
 };
 
@@ -230,29 +237,6 @@ const DetailRow = ({ icon, label, value }) => (
     <div className="detail-value">
       {value}
     </div>
-  </div>
-);
-
-const CriteriaSection = ({ criteria }) => (
-  <div className="criteria-section">
-    <div className="criteria-header">
-      <span className="criteria-icon">📋</span>
-      <h4>Критерии оценки:</h4>
-    </div>
-    <ul className="criteria-list">
-      {criteria.map((criterion, index) => {
-        const text = typeof criterion === 'string' ? criterion : criterion.text;
-        const points = typeof criterion === 'object' ? criterion.maxPoints : 0;
-        return (
-          <li key={index} className="criterion-item">
-            <span className="criterion-marker">•</span>
-            <span className="criterion-text">
-              {text}{points > 0 && ` — ${points} баллов`}
-            </span>
-          </li>
-        );
-      })}
-    </ul>
   </div>
 );
 

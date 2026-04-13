@@ -4,6 +4,34 @@ import { useAuth } from '../../context/AuthContext';
 import { validateLoginForm } from '../../utils';
 import './Login.scss';
 import logo from '../../assets/logo-black.svg';
+import fallbackLogo from '../../assets/logo.svg';
+
+const DEMO_ACCOUNTS = [
+  {
+    role: 'student',
+    roleLabel: 'Студент',
+    login: 'zabiriucenko_ka',
+    password: 'Password123',
+  },
+  {
+    role: 'teacher',
+    roleLabel: 'Преподаватель (JS)',
+    login: 'teacher_kartseva',
+    password: 'Password123',
+  },
+  {
+    role: 'teacher',
+    roleLabel: 'Преподаватель (PHP)',
+    login: 'teacher_karevskiy',
+    password: 'Password123',
+  },
+  {
+    role: 'admin',
+    roleLabel: 'Администратор',
+    login: 'Administrator',
+    password: 'Password123',
+  },
+];
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -11,8 +39,8 @@ const Login = () => {
     password: '',
     role: 'student',
   });
+  const [logoSrc, setLogoSrc] = useState(logo);
   const [errors, setErrors] = useState({});
-  const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login, user, error: authError } = useAuth();
   const navigate = useNavigate();
@@ -32,13 +60,6 @@ const Login = () => {
       }));
     }
   }, [location.state]);
-
-  useEffect(() => {
-    if (location.state?.registered) {
-      setSuccessMessage('Регистрация прошла успешно! Введите данные для входа.');
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location, navigate]);
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
@@ -90,140 +111,130 @@ const Login = () => {
     navigate('/welcome');
   };
 
-  const handleGoToRegister = () => {
-    navigate('/register');
+  const handleDemoFill = (account) => {
+    setFormData({
+      role: account.role,
+      login: account.login,
+      password: account.password,
+    });
+    setErrors({});
   };
 
   return (
     <div className='login-page'>
-      <div className='login-container'>
-        <button className='back-button' onClick={handleBackToWelcome}>
-          ← Назад к обзору
-        </button>
-
-        <div className='login-header'>
-           <Link to='/welcome' className='login-logo'>
-            <img src={logo} alt='Логотип' />
-          </Link>
-           <h1 className='login-title'>Вход в систему</h1>
-           <p className='login-subtitle'>
-             Выберите роль и введите данные для входа
-           </p>
-         </div>
-
-        {successMessage && (
-          <div className='form-success'>
-            <span className='success-message'>{successMessage}</span>
-          </div>
-        )}
-
-        <form className='login-form' onSubmit={handleLogin} noValidate>
-          <div className='form-group'>
-            <label htmlFor='role' className='form-label'>
-              Роль в системе:
-            </label>
-            <select
-              id='role'
-              className={`form-select ${errors.role ? 'error' : ''}`}
-              value={formData.role}
-              onChange={(e) => handleInputChange('role', e.target.value)}
-              disabled={isLoading}
-            >
-              <option value='student'>👨‍🎓 Студент</option>
-              <option value='teacher'>👩‍🏫 Преподаватель</option>
-              <option value='admin'>⚙️ Администратор</option>
-            </select>
-            {errors.role && (
-              <span className='error-message'>{errors.role}</span>
-            )}
-          </div>
-
-          <div className='form-group'>
-            <label htmlFor='login' className='form-label'>
-              Логин:
-            </label>
-            <input
-              id='login'
-              type='text'
-              className={`form-input ${errors.login ? 'error' : ''}`}
-              value={formData.login}
-              onChange={(e) => handleInputChange('login', e.target.value)}
-              placeholder='Введите ваш логин'
-              disabled={isLoading}
-            />
-            {errors.login && (
-              <span className='error-message'>{errors.login}</span>
-            )}
-          </div>
-
-          <div className='form-group'>
-            <label htmlFor='password' className='form-label'>
-              Пароль:
-            </label>
-            <input
-              id='password'
-              type='password'
-              className={`form-input ${errors.password ? 'error' : ''}`}
-              value={formData.password}
-              onChange={(e) => handleInputChange('password', e.target.value)}
-              placeholder='Введите ваш пароль'
-              disabled={isLoading}
-            />
-            {errors.password && (
-              <span className='error-message'>{errors.password}</span>
-            )}
-          </div>
-
-          {(errors.submit || authError) && (
-            <div className='form-error'>
-              <span className='error-message'>{errors.submit || authError}</span>
-            </div>
-          )}
-
-          <button
-            type='submit'
-            className={`login-button ${isLoading ? 'loading' : ''}`}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <div className='spinner'></div>
-                Вход в систему...
-              </>
-            ) : (
-              'Войти в систему'
-            )}
+      <div className='login-layout'>
+        <div className='login-container'>
+          <button className='back-button' onClick={handleBackToWelcome}>
+            ← Назад к обзору
           </button>
-        </form>
 
-        <div className='login-links'>
-          <p>
-            Нет аккаунта?{' '}
-            <button 
-              className='link-button' 
-              onClick={handleGoToRegister}
+          <div className='login-header'>
+             <Link to='/welcome' className='login-logo'>
+              <img src={logoSrc} alt='Логотип' onError={() => setLogoSrc(fallbackLogo)} />
+            </Link>
+             <h1 className='login-title'>Вход в систему</h1>
+             <p className='login-subtitle'>
+               Выберите роль и введите данные для входа
+             </p>
+           </div>
+
+          <form className='login-form' onSubmit={handleLogin} noValidate>
+            <div className='form-group'>
+              <label htmlFor='role' className='form-label'>
+                Роль в системе:
+              </label>
+              <select
+                id='role'
+                className={`form-select ${errors.role ? 'error' : ''}`}
+                value={formData.role}
+                onChange={(e) => handleInputChange('role', e.target.value)}
+                disabled={isLoading}
+              >
+                <option value='student'>Студент</option>
+                <option value='teacher'>Преподаватель</option>
+                <option value='admin'>Администратор</option>
+              </select>
+              {errors.role && (
+                <span className='login-error-message'>{errors.role}</span>
+              )}
+            </div>
+
+            <div className='form-group'>
+              <label htmlFor='login' className='form-label'>
+                Логин:
+              </label>
+              <input
+                id='login'
+                type='text'
+                className={`form-input ${errors.login ? 'error' : ''}`}
+                value={formData.login}
+                onChange={(e) => handleInputChange('login', e.target.value)}
+                placeholder='Введите ваш логин'
+                disabled={isLoading}
+              />
+              {errors.login && (
+                <span className='login-error-message'>{errors.login}</span>
+              )}
+            </div>
+
+            <div className='form-group'>
+              <label htmlFor='password' className='form-label'>
+                Пароль:
+              </label>
+              <input
+                id='password'
+                type='password'
+                className={`form-input ${errors.password ? 'error' : ''}`}
+                value={formData.password}
+                onChange={(e) => handleInputChange('password', e.target.value)}
+                placeholder='Введите ваш пароль'
+                disabled={isLoading}
+              />
+              {errors.password && (
+                <span className='login-error-message'>{errors.password}</span>
+              )}
+            </div>
+
+            {(errors.submit || authError) && (
+              <div className='form-error'>
+                <span className='login-error-message'>{errors.submit || authError}</span>
+              </div>
+            )}
+
+            <button
+              type='submit'
+              className={`login-button ${isLoading ? 'loading' : ''}`}
               disabled={isLoading}
             >
-              Зарегистрироваться
+              {isLoading ? (
+                <>
+                  <div className='spinner'></div>
+                  Вход в систему...
+                </>
+              ) : (
+                'Войти в систему'
+              )}
             </button>
-          </p>
+          </form>
         </div>
 
         <div className='login-demo'>
           <h3>Демо-доступ:</h3>
           <div className='demo-accounts'>
-            <div className='demo-account'>
-              <strong>Студент:</strong> student_zabiryuchenko / Password123
-            </div>
-            <div className='demo-account'>
-              <strong>Преподаватель:</strong> teacher_kartseva / Password123
-            </div>
-            <div className='demo-account'>
-              <strong>Администратор:</strong> admin_sidorov / Password123
-            </div>
+            {DEMO_ACCOUNTS.map((account) => (
+              <button
+                key={`${account.role}-${account.login}`}
+                type='button'
+                className='demo-account'
+                onClick={() => handleDemoFill(account)}
+                disabled={isLoading}
+              >
+                <strong>{account.roleLabel}:</strong> {account.login} / {account.password}
+              </button>
+            ))}
           </div>
           <p className='demo-note'>
-            * Роль выбирается в выпадающем списке выше
+            * Нажмите на аккаунт, чтобы автоматически заполнить поля
           </p>
         </div>
       </div>

@@ -1,13 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { RootProvider } from './context/RootProvider';
 import { useAuth } from './context/AuthContext';
-import { useStudent } from './context/StudentContext';
-import { useTeacher } from './context/TeacherContext';
-import { useAdmin } from './context/AdminContext';
 import Welcome from './pages/Welcome/Welcome';
 import Login from './pages/Login/Login';
-import Register from './pages/Register/Register';
 import StudentDashboard from './pages/StudentDashboard/StudentDashboard';
 import TeacherDashboard from './pages/TeacherDashboard/TeacherDashboard';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
@@ -18,50 +14,10 @@ import Footer from './components/Layout/Footer/Footer';
 import ConfirmModal from './components/UI/Modal/ConfirmModal';
 import './styles/main.scss';
 
-function StudentDataLoader() {
-  const { loadStudentAssignments } = useStudent();
-  useEffect(() => {
-    loadStudentAssignments();
-  }, [loadStudentAssignments]);
-  return null;
-}
-
-function TeacherDataLoader() {
-  const { loadTeacherAssignments, loadTeacherSubmissions } = useTeacher();
-  useEffect(() => {
-    loadTeacherAssignments();
-    loadTeacherSubmissions();
-  }, [loadTeacherAssignments, loadTeacherSubmissions]);
-  return null;
-}
-
-function AdminDataLoader() {
-  const { loadAdminData } = useAdmin();
-  useEffect(() => {
-    loadAdminData();
-  }, [loadAdminData]);
-  return null;
-}
-
-function DataLoader() {
-  const { user } = useAuth();
-  
-  if (!user) return null;
-  
-  if (user.role === 'student') {
-    return <StudentDataLoader />;
-  } else if (user.role === 'teacher') {
-    return <TeacherDataLoader />;
-  } else if (user.role === 'admin') {
-    return <AdminDataLoader />;
-  }
-  
-  return null;
-}
-
 function AppContent() {
   const { user, logout, loading } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const mustChangePassword = !!user?.mustChangePassword;
 
 
   const handleLogout = () => {
@@ -91,7 +47,6 @@ function AppContent() {
   return (
     <Router>
       <div className="App">
-        {user && <DataLoader />}
         {user && <Header user={user} onLogout={handleLogout} />}
         <main className="main-content">
           <Routes>
@@ -99,7 +54,7 @@ function AppContent() {
               path="/welcome" 
               element={
                 user ? (
-                  <Navigate to={`/${user.role}`} replace />
+                  <Navigate to={mustChangePassword ? '/profile' : `/${user.role}`} replace />
                 ) : (
                   <Welcome />
                 )
@@ -109,27 +64,18 @@ function AppContent() {
               path="/login" 
               element={
                 user ? (
-                  <Navigate to={`/${user.role}`} replace />
+                  <Navigate to={mustChangePassword ? '/profile' : `/${user.role}`} replace />
                 ) : (
                   <Login />
                 )
               } 
             />
-            <Route 
-              path="/register" 
-              element={
-                user ? (
-                  <Navigate to={`/${user.role}`} replace />
-                ) : (
-                  <Register />
-                )
-              } 
-            />
+            <Route path="/register" element={<Navigate to="/login" replace />} />
             <Route 
               path="/student" 
               element={
                 user && user.role === 'student' ? (
-                  <StudentDashboard />
+                  mustChangePassword ? <Navigate to="/profile" replace /> : <StudentDashboard />
                 ) : (
                   <Navigate to="/welcome" replace />
                 )
@@ -139,7 +85,7 @@ function AppContent() {
               path="/teacher" 
               element={
                 user && user.role === 'teacher' ? (
-                  <TeacherDashboard />
+                  mustChangePassword ? <Navigate to="/profile" replace /> : <TeacherDashboard />
                 ) : (
                   <Navigate to="/welcome" replace />
                 )
@@ -149,7 +95,7 @@ function AppContent() {
               path="/admin" 
               element={
                 user && user.role === 'admin' ? (
-                  <AdminDashboard />
+                  mustChangePassword ? <Navigate to="/profile" replace /> : <AdminDashboard />
                 ) : (
                   <Navigate to="/welcome" replace />
                 )
@@ -168,7 +114,7 @@ function AppContent() {
             <Route 
               path="/" 
               element={
-                <Navigate to={user ? `/${user.role}` : '/welcome'} replace />
+                <Navigate to={user ? (mustChangePassword ? '/profile' : `/${user.role}`) : '/welcome'} replace />
               } 
             />
             <Route path="*" element={<NotFound />} />

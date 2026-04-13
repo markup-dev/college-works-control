@@ -1,25 +1,67 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Button from '../../UI/Button/Button';
+import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import { useNotification } from '../../../context/NotificationContext';
+import { DEFAULT_ALLOWED_FORMATS, normalizeAllowedFormats } from '../../../utils';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './AssignmentModal.scss';
+
+const MAX_MATERIAL_FILES = 10;
+
+const normalizeMaterialFiles = (materials = []) => {
+  if (!Array.isArray(materials)) {
+    return [];
+  }
+
+  return materials
+    .map((material) => ({
+      id: material?.id,
+      fileName: material?.fileName || material?.file_name || '',
+      fileSize: material?.fileSize || material?.file_size || '',
+    }))
+    .filter((material) => material.id && material.fileName);
+};
+
+const normalizeSubjectOptions = (subjects = []) => {
+  if (!Array.isArray(subjects)) {
+    return [];
+  }
+
+  return subjects
+    .map((subject) => ({
+      id: Number(subject?.id),
+      name: String(subject?.name || '').trim(),
+    }))
+    .filter((subject) => Number.isFinite(subject.id) && subject.id > 0 && subject.name)
+    .filter((subject, index, array) => array.findIndex((item) => item.id === subject.id) === index);
+};
 
 const AssignmentModal = ({ 
   assignment, 
   isOpen, 
   onClose,
+  onBack,
   onSubmit,
-  availableGroups = []
+  availableGroups = [],
+  availableSubjects = [],
+  initialFormData = null
 }) => {
   const { showError } = useNotification();
+  const [acceptAllFormats, setAcceptAllFormats] = useState(true);
   const [formData, setFormData] = useState(() => ({
     title: '',
-    course: 'Базы данных',
-    group: availableGroups[0] || 'ИСП-029',
+    subjectId: null,
+    subject: '',
+    group: availableGroups[0] || '',
     deadline: '',
     description: '',
     maxScore: 100,
     submissionType: 'file',
-    criteria: []
+    criteria: [],
+    allowedFormats: [...DEFAULT_ALLOWED_FORMATS],
+    materialFiles: [],
+    existingMaterials: [],
+    removedMaterialIds: []
   }));
 
   const getDefaultGroup = useCallback(() => {
@@ -29,18 +71,41 @@ const AssignmentModal = ({
     if (assignment?.group) {
       return assignment.group;
     }
-    return availableGroups[0] || 'ИСП-029';
+    return availableGroups[0] || '';
   }, [assignment, availableGroups]);
+
+  const subjectOptions = useMemo(() => {
+    const normalized = normalizeSubjectOptions(availableSubjects);
+    if (formData.subjectId && formData.subject) {
+      const alreadyExists = normalized.some((subject) => subject.id === Number(formData.subjectId));
+      if (!alreadyExists) {
+        normalized.push({ id: Number(formData.subjectId), name: formData.subject });
+      }
+    }
+    return normalized.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  }, [availableSubjects, formData.subjectId, formData.subject]);
 
   const groupOptions = useMemo(() => {
     const uniqueGroups = new Set(availableGroups.filter(Boolean));
-    if (formData.group && formData.group !== 'Все группы') {
+    if (formData.group) {
       uniqueGroups.add(formData.group);
     }
     return Array.from(uniqueGroups);
   }, [availableGroups, formData.group]);
 
   useEffect(() => {
+    if (assignment && initialFormData) {
+      setFormData({
+        ...initialFormData,
+        subjectId: initialFormData.subjectId ?? null,
+        subject: initialFormData.subject ?? '',
+        materialFiles: Array.isArray(initialFormData.materialFiles) ? initialFormData.materialFiles : [],
+        existingMaterials: Array.isArray(initialFormData.existingMaterials) ? initialFormData.existingMaterials : [],
+        removedMaterialIds: Array.isArray(initialFormData.removedMaterialIds) ? initialFormData.removedMaterialIds : [],
+      });
+      return;
+    }
+
     if (assignment) {
       const criteria = (assignment.criteria || []).map(criterion => {
         if (typeof criterion === 'string') {
@@ -53,48 +118,81 @@ const AssignmentModal = ({
 
       setFormData({
         title: assignment.title || '',
-        course: assignment.course || 'Базы данных',
+        subjectId: assignment.subjectId || assignment.subjectRelation?.id || null,
+        subject: assignment.subject || assignment.subjectRelation?.name || '',
         group: group,
         deadline: assignment.deadline ? assignment.deadline.split('T')[0] : '',
         description: assignment.description || '',
         maxScore: assignment.maxScore || 100,
         submissionType: assignment.submissionType || 'file',
         criteria: criteria,
-        priority: assignment.priority || 'medium'
+        priority: assignment.priority || 'medium',
+        allowedFormats: normalizeAllowedFormats(assignment.allowedFormats || assignment.allowedFormatItems?.map((item) => item?.format) || []),
+        materialFiles: [],
+        existingMaterials: normalizeMaterialFiles(assignment.materialFiles || assignment.materialItems || []),
+        removedMaterialIds: []
       });
     } else {
       setFormData({
         title: '',
-        course: 'Базы данных',
-        group: availableGroups[0] || 'ИСП-029',
+        subjectId: subjectOptions[0]?.id || null,
+        subject: subjectOptions[0]?.name || '',
+        group: availableGroups[0] || '',
         deadline: '',
         description: '',
         maxScore: 100,
         submissionType: 'file',
         criteria: [],
-        priority: 'medium'
+        priority: 'medium',
+        allowedFormats: [...DEFAULT_ALLOWED_FORMATS],
+        materialFiles: [],
+        existingMaterials: [],
+        removedMaterialIds: []
       });
     }
-  }, [assignment, isOpen, availableGroups, getDefaultGroup]);
+  }, [assignment, initialFormData, isOpen, availableGroups, subjectOptions, getDefaultGroup]);
+
+  useEffect(() => {
+    const selectedFormats = normalizeAllowedFormats(formData.allowedFormats);
+    const hasAllFormats = DEFAULT_ALLOWED_FORMATS.every((format) => selectedFormats.includes(format));
+    setAcceptAllFormats(hasAllFormats);
+  }, [formData.allowedFormats]);
+
+  useBodyScrollLock(isOpen);
 
   if (!isOpen) return null;
 
   const isEdit = !!assignment;
+  const criteriaCount = Array.isArray(formData.criteria) ? formData.criteria.length : 0;
+  const totalMaterialsCount = (formData.existingMaterials?.length || 0) + (formData.materialFiles?.length || 0);
+  const materialSlotsLeft = Math.max(0, MAX_MATERIAL_FILES - totalMaterialsCount);
+  const hasNoAssignableGroups = !isEdit && groupOptions.length === 0;
+  const hasNoAssignableSubjects = !isEdit && subjectOptions.length === 0;
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    if (!isEdit && groupOptions.length === 0) {
+      showError('Невозможно создать задание без назначенной учебной группы');
+      return;
+    }
+
+    if (!formData.subjectId) {
+      showError('Выберите предмет из назначенных');
+      return;
+    }
     
     const trimmedFormData = {
       ...formData,
       title: formData.title?.trim() || '',
-      course: formData.course?.trim() || '',
+      subject: formData.subject?.trim() || '',
       description: formData.description?.trim() || ''
     };
 
     const { validateAssignmentForm } = require('../../../utils/validation');
     const validation = validateAssignmentForm({
       ...trimmedFormData,
-      studentGroups: formData.group && formData.group !== 'Все группы' 
+      studentGroups: formData.group
         ? [formData.group.trim()] 
         : []
     });
@@ -105,7 +203,7 @@ const AssignmentModal = ({
       return;
     }
 
-    const studentGroups = formData.group && formData.group !== 'Все группы' 
+    const studentGroups = formData.group
       ? [formData.group.trim()] 
       : [];
     
@@ -121,13 +219,21 @@ const AssignmentModal = ({
       })
       .filter(c => c.text);
 
+    const allowedFormats = formData.submissionType === 'file'
+      ? normalizeAllowedFormats(formData.allowedFormats)
+      : [];
+
     const submissionData = {
       ...trimmedFormData,
+      subjectId: Number(formData.subjectId),
       deadline: `${trimmedFormData.deadline}T23:59:00`,
       maxScore: parseInt(trimmedFormData.maxScore),
       studentGroups: studentGroups,
       criteria: criteriaArray,
-      priority: trimmedFormData.priority || 'medium'
+      priority: trimmedFormData.priority || 'medium',
+      allowedFormats,
+      materialFiles: formData.materialFiles || [],
+      removedMaterialIds: formData.removedMaterialIds || []
     };
 
     if (onSubmit) {
@@ -167,16 +273,121 @@ const AssignmentModal = ({
     }));
   };
 
+  const toggleAllowedFormat = (format) => {
+    setFormData((prev) => {
+      const current = normalizeAllowedFormats(prev.allowedFormats);
+      const isSelected = current.includes(format);
+      const next = isSelected
+        ? current.filter((item) => item !== format)
+        : [...current, format];
+
+      return {
+        ...prev,
+        allowedFormats: next.length > 0 ? next : [...DEFAULT_ALLOWED_FORMATS]
+      };
+    });
+  };
+
+  const handleAcceptAllFormatsToggle = (enabled) => {
+    setAcceptAllFormats(enabled);
+    setFormData((prev) => ({
+      ...prev,
+      allowedFormats: enabled ? [...DEFAULT_ALLOWED_FORMATS] : prev.allowedFormats
+    }));
+  };
+
+  const handleMaterialFileSelect = (selected = []) => {
+    if (selected.length === 0) {
+      return;
+    }
+
+    setFormData((prev) => {
+      const alreadySelected = Array.isArray(prev.materialFiles) ? prev.materialFiles : [];
+      const existingSignatures = new Set(
+        alreadySelected.map((file) => `${file.name}::${file.size}::${file.lastModified || 0}`)
+      );
+
+      const deduplicatedSelected = selected.filter((file) => {
+        const signature = `${file.name}::${file.size}::${file.lastModified || 0}`;
+        if (existingSignatures.has(signature)) {
+          return false;
+        }
+        existingSignatures.add(signature);
+        return true;
+      });
+
+      const remainingSlots = Math.max(0, MAX_MATERIAL_FILES - prev.existingMaterials.length - alreadySelected.length);
+      const filesToAdd = deduplicatedSelected.slice(0, remainingSlots);
+
+      if (filesToAdd.length < deduplicatedSelected.length) {
+        showError(`Можно прикрепить максимум ${MAX_MATERIAL_FILES} материалов к заданию.`);
+      }
+
+      return {
+        ...prev,
+        materialFiles: [...alreadySelected, ...filesToAdd]
+      };
+    });
+
+  };
+
+  const removeNewMaterial = (fileIndex) => {
+    setFormData((prev) => ({
+      ...prev,
+      materialFiles: prev.materialFiles.filter((_, index) => index !== fileIndex)
+    }));
+  };
+
+  const removeExistingMaterial = (materialId) => {
+    setFormData((prev) => ({
+      ...prev,
+      existingMaterials: prev.existingMaterials.filter((material) => material.id !== materialId),
+      removedMaterialIds: prev.removedMaterialIds.includes(materialId)
+        ? prev.removedMaterialIds
+        : [...prev.removedMaterialIds, materialId]
+    }));
+  };
+
   return (
-    <div className="modal-overlay">
-      <div className="modal-content large">
+    <div className="modal-overlay teacher-assignment-modal" onClick={onClose}>
+      <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{isEdit ? 'Редактирование задания' : 'Создание нового задания'}</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <div className="modal-header__titles">
+            <h3>{isEdit ? 'Редактирование задания' : 'Создание нового задания'}</h3>
+            <p className="modal-header__subtitle">
+              {isEdit ? 'Обновите параметры, материалы и критерии оценки' : 'Заполните основные поля и настройте формат сдачи'}
+            </p>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose}>×</button>
         </div>
         
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            <div className="assignment-quick-stats">
+              <span className="assignment-quick-stats__item">
+                Критериев: <strong>{criteriaCount}</strong>
+              </span>
+              <span className="assignment-quick-stats__item">
+                Материалов: <strong>{totalMaterialsCount}/{MAX_MATERIAL_FILES}</strong>
+              </span>
+              <span className="assignment-quick-stats__item">
+                Формат сдачи: <strong>{formData.submissionType === 'demo' ? 'Демонстрация' : 'Файл'}</strong>
+              </span>
+            </div>
+
+            {hasNoAssignableGroups && (
+              <div className="assignment-modal-warning">
+                Для вашего аккаунта пока не назначены учебные группы. Обратитесь к администратору, чтобы он
+                назначил группу во вкладке "Группы".
+              </div>
+            )}
+            {hasNoAssignableSubjects && (
+              <div className="assignment-modal-warning">
+                Для вашего аккаунта пока не назначены предметы. Обратитесь к администратору, чтобы он назначил
+                вам предмет в управлении предметами.
+              </div>
+            )}
+
             <div className="create-assignment-form">
               <div className="form-section">
                 <h4>Основная информация</h4>
@@ -195,17 +406,27 @@ const AssignmentModal = ({
                     />
                   </FormGroup>
                   
-                  <FormGroup label="Дисциплина:" required>
+                  <FormGroup label="Предмет:" required>
                     <select
-                      value={formData.course}
-                      onChange={(e) => handleInputChange('course', e.target.value)}
+                      value={formData.subjectId || ''}
+                      onChange={(e) => {
+                        const selectedId = Number(e.target.value) || null;
+                        const selectedSubject = subjectOptions.find((subject) => subject.id === selectedId);
+                        setFormData((prev) => ({
+                          ...prev,
+                          subjectId: selectedId,
+                          subject: selectedSubject?.name || '',
+                        }));
+                      }}
                       className="form-select"
+                      required
                     >
-                      <option value="Базы данных">Базы данных</option>
-                      <option value="Веб-программирование">Веб-программирование</option>
-                      <option value="Проектирование ИС">Проектирование ИС</option>
-                      <option value="UI/UX дизайн">UI/UX дизайн</option>
-                      <option value="Мобильная разработка">Мобильная разработка</option>
+                      <option value="">Выберите предмет</option>
+                      {subjectOptions.map((subject) => (
+                        <option key={subject.id} value={subject.id}>
+                          {subject.name}
+                        </option>
+                      ))}
                     </select>
                   </FormGroup>
                 </div>
@@ -217,12 +438,15 @@ const AssignmentModal = ({
                       onChange={(e) => handleInputChange('group', e.target.value)}
                       className="form-select"
                     >
-                      {groupOptions.map((group) => (
-                        <option key={group} value={group}>
-                          {group}
-                        </option>
-                      ))}
-                      <option value="Все группы">Все группы</option>
+                      {groupOptions.length > 0 ? (
+                        groupOptions.map((group) => (
+                          <option key={group} value={group}>
+                            {group}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">Нет назначенных групп</option>
+                      )}
                     </select>
                   </FormGroup>
                   
@@ -254,6 +478,71 @@ const AssignmentModal = ({
               </div>
 
               <div className="form-section">
+                <h4>Материалы к заданию</h4>
+                <FormGroup label="Дополнительные материалы (методички, шаблоны, примеры):">
+                  <div className="assignment-materials">
+                    <p className="assignment-materials__hint">
+                      Прикрепите файлы, чтобы студентам было проще понять требования и формат выполнения.
+                      Можно добавить еще {materialSlotsLeft}.
+                    </p>
+                    <FileDropzone
+                      multiple
+                      buttonText="Добавить файлы"
+                      hint="Можно выбрать несколько файлов или перетащить их в область загрузки."
+                      selectedFiles={formData.materialFiles}
+                      onFilesSelected={handleMaterialFileSelect}
+                    />
+
+                    {formData.existingMaterials.length > 0 && (
+                      <div className="assignment-materials__list">
+                        {formData.existingMaterials.map((material) => (
+                          <div className="assignment-materials__item" key={`existing-${material.id}`}>
+                            <div className="assignment-materials__info">
+                              <span className="assignment-materials__name">{material.fileName}</span>
+                              {material.fileSize && (
+                                <span className="assignment-materials__size">{material.fileSize}</span>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="small"
+                              onClick={() => removeExistingMaterial(material.id)}
+                            >
+                              Убрать
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {formData.materialFiles.length > 0 && (
+                      <div className="assignment-materials__list">
+                        {formData.materialFiles.map((file, index) => (
+                          <div className="assignment-materials__item" key={`new-${file.name}-${index}`}>
+                            <div className="assignment-materials__info">
+                              <span className="assignment-materials__name">{file.name}</span>
+                              <span className="assignment-materials__size">
+                                {Math.round((file.size / 1024) * 10) / 10} KB
+                              </span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="small"
+                              onClick={() => removeNewMaterial(index)}
+                            >
+                              Убрать
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </FormGroup>
+              </div>
+
+              <div className="form-section">
                 <h4>Параметры оценки</h4>
                 <div className="form-row">
                   <FormGroup label="Максимальный балл:" required>
@@ -267,23 +556,71 @@ const AssignmentModal = ({
                       required
                     />
                   </FormGroup>
-                  
+
+                  <FormGroup label="Приоритет задания:" required>
+                    <select
+                      value={formData.priority || 'medium'}
+                      onChange={(e) => handleInputChange('priority', e.target.value)}
+                      className="form-select"
+                    >
+                      <option value="low">Низкий</option>
+                      <option value="medium">Средний</option>
+                      <option value="high">Высокий</option>
+                    </select>
+                  </FormGroup>
+                </div>
+
+                <div className="form-row">
                   <FormGroup label="Формат сдачи:" required>
                     <select
                       value={formData.submissionType}
                       onChange={(e) => handleInputChange('submissionType', e.target.value)}
                       className="form-select"
                     >
-                      <option value="file">📎 Файл</option>
-                      <option value="demo">🎤 Демонстрация</option>
+                      <option value="file">Файл</option>
+                      <option value="demo">Демонстрация</option>
                     </select>
                   </FormGroup>
                 </div>
+
+                {formData.submissionType === 'file' && (
+                  <FormGroup label="Допустимые форматы файлов:">
+                    <label className="allowed-formats__toggle">
+                      <input
+                        type="checkbox"
+                        checked={acceptAllFormats}
+                        onChange={(e) => handleAcceptAllFormatsToggle(e.target.checked)}
+                      />
+                      <span className="allowed-formats__toggle-text">
+                        Принимать любые форматы
+                      </span>
+                    </label>
+                    <div className="allowed-formats">
+                      {DEFAULT_ALLOWED_FORMATS.map((format) => (
+                        <label key={format} className="allowed-formats__item">
+                          <input
+                            type="checkbox"
+                            checked={normalizeAllowedFormats(formData.allowedFormats).includes(format)}
+                            onChange={() => toggleAllowedFormat(format)}
+                            disabled={acceptAllFormats}
+                          />
+                          <span>{format}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <small className="allowed-formats__hint">
+                      По умолчанию выбраны все форматы. Оставьте как есть, если требуется принимать все.
+                    </small>
+                  </FormGroup>
+                )}
               </div>
 
               <div className="form-section">
                 <div className="section-header">
-                  <h4>Критерии оценки</h4>
+                  <h4>
+                    Критерии оценки
+                    <span className="section-counter">{criteriaCount}</span>
+                  </h4>
                   <Button 
                     type="button" 
                     variant="outline" 
@@ -317,11 +654,23 @@ const AssignmentModal = ({
           </div>
           
           <div className="modal-actions">
+            {isEdit && typeof onBack === 'function' && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onBack(formData)}
+              >
+                <span className="back-btn-label">
+                  <span className="back-btn-arrow" aria-hidden="true">←</span>
+                  Назад
+                </span>
+              </Button>
+            )}
             <Button type="button" variant="secondary" onClick={onClose}>
               Отмена
             </Button>
-            <Button type="submit" variant="primary">
-              💾 {isEdit ? 'Сохранить изменения' : 'Создать задание'}
+            <Button type="submit" variant="primary" disabled={hasNoAssignableGroups || hasNoAssignableSubjects}>
+              {isEdit ? 'Сохранить изменения' : 'Создать задание'}
             </Button>
           </div>
         </form>
@@ -363,11 +712,11 @@ const CriterionItem = ({ criterion, index, onUpdate, onRemove }) => (
     </div>
     <Button
       type="button"
-      variant="danger"
+      variant="outline"
       size="small"
       onClick={() => onRemove(index)}
     >
-      🗑️
+      Удалить
     </Button>
   </div>
 );

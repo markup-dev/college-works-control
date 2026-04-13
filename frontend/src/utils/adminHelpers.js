@@ -1,3 +1,12 @@
+import {
+  GROUP_REGEX,
+  validateEmailValue,
+  validateLoginValue,
+  validateNameField,
+  validatePasswordValue,
+  validatePhoneValue,
+} from './validation';
+
 export const formatDate = (dateString) => {
   if (!dateString) return 'Дата не указана';
   
@@ -114,34 +123,20 @@ export const formatLogDateTime = (dateString) => {
 export const validateUserData = (userData, isEdit = false) => {
   const errors = {};
 
-  const trimmedName = userData.name?.trim() || '';
-  if (!trimmedName) {
-    errors.name = 'ФИО обязательно';
-  } else if (trimmedName.length < 2) {
-    errors.name = 'ФИО должно содержать минимум 2 символа';
-  } else if (trimmedName.length > 100) {
-    errors.name = 'ФИО не должно превышать 100 символов';
-  }
+  const lastNameError = validateNameField(userData.lastName, 'Фамилия', true);
+  if (lastNameError) errors.lastName = lastNameError;
 
-  const trimmedLogin = userData.login?.trim() || '';
-  if (!trimmedLogin) {
-    errors.login = 'Логин обязателен';
-  } else if (trimmedLogin.length < 3) {
-    errors.login = 'Логин должен содержать минимум 3 символа';
-  } else if (trimmedLogin.length > 30) {
-    errors.login = 'Логин не должен превышать 30 символов';
-  } else if (!/^[a-zA-Z0-9_]+$/.test(trimmedLogin)) {
-    errors.login = 'Логин может содержать только латинские буквы, цифры и подчеркивание';
-  }
+  const firstNameError = validateNameField(userData.firstName, 'Имя', true);
+  if (firstNameError) errors.firstName = firstNameError;
 
-  const trimmedEmail = userData.email?.trim() || '';
-  if (!trimmedEmail) {
-    errors.email = 'Email обязателен';
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-    errors.email = 'Введите корректный email адрес';
-  } else if (trimmedEmail.length > 255) {
-    errors.email = 'Email не должен превышать 255 символов';
-  }
+  const middleNameError = validateNameField(userData.middleName, 'Отчество');
+  if (middleNameError) errors.middleName = middleNameError;
+
+  const loginError = validateLoginValue(userData.login);
+  if (loginError) errors.login = loginError;
+
+  const emailError = validateEmailValue(userData.email, true);
+  if (emailError) errors.email = emailError;
 
   if (!userData.role) {
     errors.role = 'Роль обязательна';
@@ -151,36 +146,28 @@ export const validateUserData = (userData, isEdit = false) => {
   if (userData.role === 'student') {
     if (!trimmedGroup) {
       errors.group = 'Группа обязательна для студента';
-    } else if (!/^[А-ЯЁA-Z\-\d]+$/i.test(trimmedGroup)) {
-      errors.group = 'Группа должна содержать только буквы, цифры и дефис (например, ИСП-401)';
+    } else if (!GROUP_REGEX.test(trimmedGroup)) {
+      errors.group = 'Группа должна содержать только буквы, цифры и дефис';
     } else if (trimmedGroup.length > 20) {
       errors.group = 'Группа не должна превышать 20 символов';
     }
   }
 
-  if (userData.role === 'student' && !userData.teacherLogin?.trim()) {
-    errors.teacherLogin = 'Выберите преподавателя для студента';
-  }
-
-  if (!isEdit && !userData.password) {
-    errors.password = 'Пароль обязателен';
-  } else if (!isEdit && userData.password) {
-    if (userData.password.length < 8) {
-      errors.password = 'Пароль должен содержать минимум 8 символов';
-    } else if (userData.password.length > 128) {
-      errors.password = 'Пароль не должен превышать 128 символов';
-    } else if (!/(?=.*[a-z])/.test(userData.password)) {
-      errors.password = 'Пароль должен содержать хотя бы одну строчную букву';
-    } else if (!/(?=.*[A-Z])/.test(userData.password)) {
-      errors.password = 'Пароль должен содержать хотя бы одну заглавную букву';
-    } else if (!/(?=.*\d)/.test(userData.password)) {
-      errors.password = 'Пароль должен содержать хотя бы одну цифру';
+  if (isEdit && userData.password) {
+    const passwordError = validatePasswordValue(userData.password, !isEdit);
+    if (passwordError) {
+      errors.password = passwordError;
     }
   }
 
   const trimmedDepartment = userData.department?.trim() || '';
   if (trimmedDepartment && trimmedDepartment.length > 100) {
     errors.department = 'Кафедра не должна превышать 100 символов';
+  }
+
+  const phoneError = validatePhoneValue(userData.phone, false);
+  if (phoneError) {
+    errors.phone = phoneError;
   }
 
   return {
@@ -205,7 +192,7 @@ export const filterUsers = (users, filters) => {
     
     if (filters.search) {
       const searchTerm = filters.search.toLowerCase();
-      const searchFields = [user.name, user.login, user.email, user.group].filter(Boolean);
+      const searchFields = [user.fullName, user.login, user.email, user.group].filter(Boolean);
       const matches = searchFields.some(field => 
         field.toLowerCase().includes(searchTerm)
       );

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Button from '../../UI/Button/Button';
 import { formatDate, validateScore, validateGradingComment } from '../../../utils';
 import { useNotification } from '../../../context/NotificationContext';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './GradingModal.scss';
 
 const GradingModal = ({ 
@@ -9,16 +10,26 @@ const GradingModal = ({
   assignment,
   isOpen, 
   onClose, 
+  onBackToDetails,
   gradeData, 
   onGradeDataChange, 
   onSubmit 
 }) => {
   const { showError } = useNotification();
   const [errors, setErrors] = useState({});
+
+  useBodyScrollLock(isOpen);
   
   if (!isOpen || !submission) return null;
 
   const maxScore = submission.maxScore || assignment?.maxScore || 100;
+  const hasCriteria = Array.isArray(gradeData.criterionScores) && gradeData.criterionScores.length > 0;
+  const useCriteriaScoring = !!gradeData.useCriteriaScoring && hasCriteria;
+  const currentScore = Math.max(0, Math.min(Number(gradeData.score || 0), Number(maxScore || 0)));
+  const scorePercent = maxScore > 0 ? Math.round((currentScore / maxScore) * 100) : 0;
+  const criteriaTotal = useCriteriaScoring
+    ? gradeData.criterionScores.reduce((sum, criterion) => sum + (Number(criterion.receivedPoints) || 0), 0)
+    : null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -29,6 +40,13 @@ const GradingModal = ({
     if (!scoreValidation.isValid) {
       setErrors({ score: scoreValidation.error });
       showError(scoreValidation.error);
+      return;
+    }
+
+    if (useCriteriaScoring && criteriaTotal !== Number(gradeData.score || 0)) {
+      const mismatchError = 'Сумма баллов по критериям должна совпадать с итоговой оценкой.';
+      setErrors({ score: mismatchError });
+      showError(mismatchError);
       return;
     }
     
@@ -42,42 +60,147 @@ const GradingModal = ({
     onSubmit();
   };
 
+  const handleCriterionScoreChange = (index, value, criterionMaxPoints) => {
+    const digitsOnly = String(value ?? '').replace(/[^\d]/g, '');
+    const normalizedDigits = digitsOnly.replace(/^0+(?=\d)/, '');
+    const nextValue = Number(normalizedDigits === '' ? '0' : normalizedDigits);
+    const safeValue = Number.isFinite(nextValue) ? nextValue : 0;
+    const normalizedValue = Math.max(0, Math.min(safeValue, Number(criterionMaxPoints || 0)));
+
+    const nextCriterionScores = gradeData.criterionScores.map((criterion, criterionIndex) => (
+      criterionIndex === index
+        ? { ...criterion, receivedPoints: normalizedValue }
+        : criterion
+    ));
+
+    const nextTotal = nextCriterionScores.reduce((sum, criterion) => sum + (Number(criterion.receivedPoints) || 0), 0);
+    onGradeDataChange({
+      ...gradeData,
+      criterionScores: nextCriterionScores,
+      score: String(nextTotal),
+      useCriteriaScoring: true,
+    });
+    if (errors.score) setErrors({ ...errors, score: null });
+  };
+
+  const handleCriteriaModeToggle = (enabled) => {
+    if (!enabled) {
+      onGradeDataChange({
+        ...gradeData,
+        useCriteriaScoring: false,
+      });
+      return;
+    }
+
+    const nextTotal = gradeData.criterionScores.reduce((sum, criterion) => sum + (Number(criterion.receivedPoints) || 0), 0);
+    onGradeDataChange({
+      ...gradeData,
+      useCriteriaScoring: true,
+      score: String(nextTotal),
+    });
+  };
+
+  const getScoreFillStyle = (percent) => {
+    const clampedPercent = Math.max(0, Math.min(percent, 100));
+    const hue = Math.round((clampedPercent / 100) * 120); // 0=red, 120=green
+    const endHue = Math.min(120, hue + 12);
+
+    return {
+      width: `${clampedPercent}%`,
+      background: `linear-gradient(90deg, hsl(${hue} 78% 45%) 0%, hsl(${endHue} 72% 55%) 100%)`,
+    };
+  };
+
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
+    <div className="modal-overlay teacher-grading-modal" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Оценка работы</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <div className="modal-header__titles">
+            <h3>Оценка работы</h3>
+            <p>{submission.studentName}{submission.group ? ` • ${submission.group}` : ''}</p>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose}>×</button>
         </div>
         
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            <SubmissionInfo submission={submission} maxScore={maxScore} />
+            <SubmissionInfo submission={submission} assignment={assignment} maxScore={maxScore} />
             
             <div className="grading-form">
               <div className="form-group">
                 <label htmlFor="score">
                   Оценка (0-{maxScore} баллов): *
                 </label>
-                <input
-                  id="score"
-                  type="number"
-                  min="0"
-                  max={maxScore}
-                  step="1"
-                  value={gradeData.score}
-                  onChange={(e) => {
-                    onGradeDataChange({...gradeData, score: e.target.value});
-                    if (errors.score) setErrors({...errors, score: null});
-                  }}
-                  className={`score-input ${errors.score ? 'error' : ''}`}
-                  required
-                />
+                <div className="score-row">
+                  <input
+                    id="score"
+                    type="number"
+                    min="0"
+                    max={maxScore}
+                    step="1"
+                    value={gradeData.score}
+                    onChange={(e) => {
+                      onGradeDataChange({...gradeData, score: e.target.value});
+                      if (errors.score) setErrors({...errors, score: null});
+                    }}
+                    className={`score-input ${errors.score ? 'error' : ''}`}
+                    readOnly={useCriteriaScoring}
+                    required
+                  />
+                  <div className="score-preview">
+                    <div className="score-preview__value">
+                      {currentScore}/{maxScore}
+                    </div>
+                    <div className="score-preview__bar">
+                      <div className="score-preview__fill" style={getScoreFillStyle(scorePercent)}></div>
+                    </div>
+                  </div>
+                </div>
                 {errors.score && <div className="error-message">{errors.score}</div>}
                 <div className="score-hint">
-                  Введите целое число от 0 до {maxScore}
+                  {useCriteriaScoring
+                    ? `Итог считается автоматически по критериям: ${criteriaTotal}/${maxScore}`
+                    : `Введите целое число от 0 до ${maxScore}`}
                 </div>
               </div>
+
+              {hasCriteria && (
+                <div className="form-group">
+                  <label className="criteria-mode-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useCriteriaScoring}
+                      onChange={(e) => handleCriteriaModeToggle(e.target.checked)}
+                    />
+                    <span>Оценивать по критериям</span>
+                  </label>
+                </div>
+              )}
+
+              {useCriteriaScoring && (
+                <div className="form-group">
+                  <label>Баллы по критериям:</label>
+                  <div className="criteria-score-list">
+                    {gradeData.criterionScores.map((criterion, index) => (
+                      <div key={`${criterion.text}-${index}`} className="criteria-score-item">
+                        <div className="criteria-score-item__meta">
+                          <span className="criteria-score-item__title">{criterion.text}</span>
+                          <span className="criteria-score-item__max">Макс: {criterion.maxPoints}</span>
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          max={criterion.maxPoints}
+                          step="1"
+                          value={Number(criterion.receivedPoints || 0)}
+                          onChange={(e) => handleCriterionScoreChange(index, e.target.value, criterion.maxPoints)}
+                          className="criteria-score-item__input"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               <div className="form-group">
                 <label htmlFor="comment">Комментарий и рекомендации:</label>
@@ -95,29 +218,36 @@ const GradingModal = ({
                 />
                 {errors.comment && <div className="error-message">{errors.comment}</div>}
                 <div className="comment-hint">
-                  Этот комментарий увидят студенты (максимум 2000 символов)
+                  Этот комментарий увидят студенты ({(gradeData.comment || '').length}/2000)
                 </div>
               </div>
 
               <div className="grading-tips">
                 <h4>Критерии оценки:</h4>
                 <ul>
-                  <li>✅ Соответствие требованиям задания</li>
-                  <li>✅ Качество выполнения работы</li>
-                  <li>✅ Оригинальность и креативность</li>
-                  <li>✅ Техническая реализация</li>
-                  <li>✅ Документация и оформление</li>
+                  <li>Соответствие требованиям задания</li>
+                  <li>Качество выполнения работы</li>
+                  <li>Оригинальность и креативность</li>
+                  <li>Техническая реализация</li>
+                  <li>Документация и оформление</li>
                 </ul>
               </div>
             </div>
           </div>
           
           <div className="modal-actions">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onBackToDetails}
+            >
+              ← Назад к деталям
+            </Button>
             <Button type="button" variant="secondary" onClick={onClose}>
               Отмена
             </Button>
             <Button type="submit" variant="primary">
-              💾 Сохранить оценку
+              Сохранить оценку
             </Button>
           </div>
         </form>
@@ -126,29 +256,29 @@ const GradingModal = ({
   );
 };
 
-const SubmissionInfo = ({ submission, maxScore }) => (
+const SubmissionInfo = ({ submission, assignment, maxScore }) => (
   <div className="submission-info">
     <h4>{submission.assignmentTitle}</h4>
     <div className="info-grid">
       <div className="info-item">
         <strong>Студент:</strong>
-        <span>{submission.studentName} ({submission.studentId})</span>
+        <span>{submission.studentName}</span>
       </div>
       <div className="info-item">
         <strong>Группа:</strong>
         <span>{submission.group}</span>
       </div>
       <div className="info-item">
-        <strong>Дата сдачи:</strong>
-        <span>{formatDate(submission.submissionDate)}</span>
-      </div>
-      <div className="info-item">
-        <strong>Файл:</strong>
-        <span>{submission.fileName} ({submission.fileSize})</span>
-      </div>
-      <div className="info-item">
-        <strong>Макс. балл:</strong>
+        <strong>Максимальный балл:</strong>
         <span>{maxScore}</span>
+      </div>
+      <div className="info-item">
+        <strong>Дата создания задания:</strong>
+        <span>{assignment?.createdAt ? formatDate(assignment.createdAt) : 'Дата не указана'}</span>
+      </div>
+      <div className="info-item">
+        <strong>Дата сдачи:</strong>
+        <span>{submission.submissionDate ? formatDate(submission.submissionDate) : 'Дата не указана'}</span>
       </div>
     </div>
   </div>

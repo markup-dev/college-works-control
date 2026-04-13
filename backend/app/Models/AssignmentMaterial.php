@@ -6,19 +6,20 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Course extends Model
+class AssignmentMaterial extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'name',
-        'teacher_id',
-        'students_count',
-        'status',
+        'assignment_id',
+        'file_name',
+        'file_path',
+        'file_size',
+        'file_type',
     ];
 
-    public function teacher(): BelongsTo
+    public function assignment(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'teacher_id');
+        return $this->belongsTo(Assignment::class);
     }
 }

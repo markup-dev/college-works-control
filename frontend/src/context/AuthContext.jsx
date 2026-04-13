@@ -52,24 +52,6 @@ export const AuthProvider = ({ children }) => {
     setError(null);
   }, []);
 
-  const register = useCallback(async (userData) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await authService.register(userData);
-      if (!result.success) {
-        setError(result.error);
-      }
-      return result;
-    } catch (err) {
-      const errorMsg = 'Ошибка при регистрации';
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   const updateProfile = useCallback(async (updates) => {
     if (!user) {
       return { success: false, error: 'Пользователь не авторизован' };
@@ -96,7 +78,9 @@ export const AuthProvider = ({ children }) => {
 
     try {
       const result = await authService.changePassword(currentPassword, newPassword);
-      if (!result.success) {
+      if (result.success && result.user) {
+        setUser(result.user);
+      } else if (!result.success) {
         setError(result.error);
       }
       return result;
@@ -111,7 +95,6 @@ export const AuthProvider = ({ children }) => {
     error,
     login,
     logout,
-    register,
     updateProfile,
     changePassword,
     isAuthenticated: !!user,

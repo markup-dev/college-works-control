@@ -1,0 +1,480 @@
+.group-management {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.group-management__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+
+  h2 {
+    margin: 0 0 0.25rem 0;
+    color: #111827;
+  }
+
+  p {
+    margin: 0;
+    color: #6b7280;
+  }
+}
+
+.group-management__header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.group-management__create-card,
+.group-management__bulk-card {
+  padding: 1rem;
+}
+
+.group-management__create-card--modal {
+  padding: 0;
+}
+
+.group-wizard {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.group-wizard__modes {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.group-wizard__checkbox label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.group-wizard__checkbox input[type='checkbox'] {
+  margin-top: 0.1rem;
+  accent-color: #2c5aa0;
+}
+
+.group-wizard__section {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.group-wizard__or {
+  margin: 0.4rem 0;
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.group-wizard__actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.group-wizard__preview {
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 0.7rem 0.8rem;
+
+  p {
+    margin: 0 0 0.35rem;
+    color: #334155;
+    font-weight: 600;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 1rem;
+    color: #b91c1c;
+    font-size: 0.84rem;
+  }
+}
+
+.admin-modal-help {
+  margin-bottom: 0.4rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #dce6f6;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.admin-modal-help__title {
+  margin: 0 0 0.35rem;
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+.admin-modal-help__sample {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.group-management__create-form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.group-management__create-field {
+  flex: 1;
+
+  label {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: #374151;
+    font-weight: 500;
+    font-size: 0.875rem;
+  }
+
+  input,
+  select,
+  textarea {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+
+    &:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+  }
+}
+
+.group-management__metric {
+  width: fit-content;
+  min-width: 170px;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #dce6f6;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.group-management__metric-label {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.group-management__metric-value {
+  color: #1e3a8a;
+  font-size: 1.1rem;
+  line-height: 1.15;
+}
+
+.group-management__bulk-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.group-management__search,
+.group-management__sort,
+.group-management__bulk-select {
+  min-width: 280px;
+  flex: 1;
+
+  label {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: #374151;
+    font-weight: 500;
+    font-size: 0.875rem;
+  }
+
+  select {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  input {
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+
+    &:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+  }
+}
+
+.group-management__filter-action {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  justify-content: flex-end;
+
+  label {
+    margin-bottom: 0;
+    color: #64748b;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .btn {
+    min-height: 42px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+}
+
+.group-management__filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.group-management__table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.group-management__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.group-card {
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.group-card__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  h3 {
+    margin: 0;
+    color: #0f172a;
+    font-size: 1.03rem;
+    line-height: 1.2;
+  }
+}
+
+.group-card__meta {
+  margin: 0;
+  color: #475569;
+  font-size: 0.84rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.group-card__actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  flex: 0 0 auto;
+
+  .btn {
+    min-height: 32px;
+    padding: 6px 10px;
+    font-size: 13px;
+    min-width: 104px;
+    width: auto;
+  }
+}
+
+.group-management__manage {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.group-management__manage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.group-management__manage-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: nowrap;
+  align-items: center;
+
+  .btn {
+    flex: 1 1 0;
+  }
+}
+
+.group-management__pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.group-name {
+  font-weight: 600;
+  color: #111827;
+}
+
+.students-count {
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.group-management__teacher-select {
+  width: 100%;
+  min-width: 220px;
+  padding: 0.5rem 0.625rem;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+}
+
+.group-management__row-actions {
+  display: flex;
+  gap: 0.45rem;
+
+  .btn {
+    min-width: 82px;
+  }
+}
+
+@media (max-width: 900px) {
+  .group-management__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .group-management__create-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .group-management__manage-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .group-card {
+    flex-wrap: wrap;
+  }
+
+  .group-card__actions {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 0.35rem;
+  }
+
+  .group-management__teacher-select {
+    min-width: 170px;
+  }
+
+  .group-management__row-actions {
+    flex-direction: column;
+  }
+}
+
+.admin-form-modal {
+  .modal__header {
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+    border-bottom-color: #e3ebf7;
+  }
+
+  .modal__title {
+    color: #1e3a8a;
+    font-weight: 700;
+  }
+
+  .modal__content {
+    background: #fbfdff;
+  }
+}
+
+.group-management__bulk-card {
+  border: 1px solid #e4ebf5;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.group-management__bulk-controls {
+  gap: 0.75rem;
+}
+
+.group-management__search,
+.group-management__sort,
+.group-management__bulk-select {
+  label {
+    margin-bottom: 0.4rem;
+    color: #64748b;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  input,
+  select {
+    min-height: 42px;
+    padding: 0.68rem 0.9rem;
+    border: 1px solid #dbe3ee;
+    border-radius: 10px;
+    font-size: 0.92rem;
+    color: #334155;
+    background: #ffffff;
+    transition: all 0.25s ease;
+
+    &:focus {
+      outline: none;
+      border-color: #93b0da;
+      box-shadow: 0 0 0 2px rgba(44, 90, 160, 0.09);
+    }
+  }
+}
+
+.admin-modal-help__actions {
+  margin-top: 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+
+  .btn {
+    flex: 1;
+    min-width: 0;
+  }
+}
+

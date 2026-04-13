@@ -42,6 +42,15 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => {
+    const responseType = response.config?.responseType;
+    if (responseType === 'blob' || responseType === 'arraybuffer') {
+      return response;
+    }
+
+    if (typeof Blob !== 'undefined' && response.data instanceof Blob) {
+      return response;
+    }
+
     if (response.data) {
       response.data = convertKeys(response.data, snakeToCamel);
     }

@@ -4,12 +4,14 @@ export const getAssignmentStatusInfo = (assignmentOrStatus) => {
     : assignmentOrStatus?.status;
   
   const statusMap = {
-    'not_submitted': { label: 'Не сдано', variant: 'danger', icon: '⏳' },
-    'submitted': { label: 'На проверке', variant: 'warning', icon: '📋' },
-    'graded': { label: 'Оценено', variant: 'success', icon: '✅' },
-    'returned': { label: 'Возвращено', variant: 'danger', icon: '↩️' },
-    'active': { label: 'Активно', variant: 'success', icon: '🟢' },
-    'inactive': { label: 'Неактивно', variant: 'danger', icon: '🔴' }
+    'not_submitted': { label: 'Не сдано', variant: 'danger', icon: '' },
+    'submitted': { label: 'На проверке', variant: 'warning', icon: '' },
+    'graded': { label: 'Оценено', variant: 'success', icon: '' },
+    'returned': { label: 'Возвращено', variant: 'danger', icon: '' },
+    'active': { label: 'Активно', variant: 'success', icon: '' },
+    'inactive': { label: 'Неактивно', variant: 'danger', icon: '' },
+    'archived': { label: 'Завершено', variant: 'completed', icon: '' },
+    'draft': { label: 'Черновик', variant: 'default', icon: '' }
   };
   
   return statusMap[status] || statusMap['not_submitted'];
@@ -17,9 +19,9 @@ export const getAssignmentStatusInfo = (assignmentOrStatus) => {
 
 export const getPriorityInfo = (priority) => {
   const priorityMap = {
-    'high': { label: 'Высокий', color: '#dc3545', icon: '🔴' },
-    'medium': { label: 'Средний', color: '#ffc107', icon: '🟡' },
-    'low': { label: 'Низкий', color: '#28a745', icon: '🟢' }
+    'high': { label: 'Высокий', color: '#dc3545', icon: '' },
+    'medium': { label: 'Средний', color: '#ffc107', icon: '' },
+    'low': { label: 'Низкий', color: '#28a745', icon: '' }
   };
   
   return priorityMap[priority] || priorityMap['medium'];

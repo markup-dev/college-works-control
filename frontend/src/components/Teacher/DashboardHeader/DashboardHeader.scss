@@ -1,16 +1,16 @@
 .dashboard-header {
   background: white;
-  padding: 2rem 2rem 0;
+  padding: 1.5rem 2rem 0;
   border-bottom: 1px solid #f1f5f9;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
 .dashboard-header__top {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: flex-start;
-  margin-bottom: 2rem;
-  gap: 2rem;
+  margin-bottom: 1.25rem;
+  gap: 1rem;
 }
 
 .dashboard-header__info {
@@ -22,7 +22,7 @@
 }
 
 .dashboard-header__title {
-  font-size: 2.25rem;
+  font-size: 2rem;
   font-weight: 800;
   color: #1e293b;
   margin: 0 0 0.5rem 0;
@@ -36,158 +36,27 @@
 .dashboard-header__subtitle {
   color: #64748b;
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 500;
   line-height: 1.4;
 }
 
 .dashboard-header__teacher {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
   background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  
-  .teacher-icon {
-    font-size: 1.25rem;
-  }
+  border-radius: 8px;
+  border: 1px solid #e5eaf2;
+  width: fit-content;
+  max-width: 100%;
   
   .teacher-info {
     color: #475569;
-    font-size: 0.875rem;
+    font-size: 0.85rem;
     font-weight: 500;
   }
-}
-
-.stats-overview {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.25rem;
-  min-width: 0;
-}
-
-.stat-card {
-  background: white;
-  padding: 1.5rem;
-  border-radius: 16px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  border: 1px solid #f1f5f9;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  }
-  
-  &--urgent {
-    border-color: #fecaca;
-    
-    .stat-card__icon {
-      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    }
-    
-    .stat-card__number {
-      color: #dc2626;
-    }
-  }
-  
-  &--skeleton {
-    pointer-events: none;
-    
-    .skeleton {
-      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-      background-size: 200% 100%;
-      animation: loading 1.5s infinite;
-      border-radius: 6px;
-    }
-    
-    .stat-card__icon {
-      background: #f1f5f9;
-    }
-    
-    .stat-card__number {
-      width: 60px;
-      height: 32px;
-    }
-    
-    .stat-card__label {
-      width: 100px;
-      height: 16px;
-    }
-  }
-}
-
-@keyframes loading {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-.stat-card__icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  background: linear-gradient(135deg, #2c5aa0 0%, #4a76a8 100%);
-  color: white;
-  flex-shrink: 0;
-}
-
-.stat-card__content {
-  flex: 1;
-  min-width: 0;
-}
-
-.stat-card__main {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
-}
-
-.stat-card__number {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #2c5aa0;
-  line-height: 1;
-}
-
-.stat-card__trend {
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 8px;
-  
-  &--up {
-    background: #dcfce7;
-    color: #16a34a;
-  }
-  
-  &--down {
-    background: #fecaca;
-    color: #dc2626;
-  }
-}
-
-.stat-card__label {
-  font-size: 0.875rem;
-  color: #64748b;
-  font-weight: 600;
-  line-height: 1.3;
-  display: block;
 }
 
 .dashboard-tabs {
@@ -201,20 +70,20 @@
 
 .tab-btn {
   flex: 1;
-  padding: 1.25rem 1.5rem;
+  padding: 0.9rem 1.15rem;
   background: none;
   border: none;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #64748b;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   position: relative;
-  border-bottom: 3px solid transparent;
+  border-bottom: 2px solid transparent;
   
   &:hover:not(.tab-btn--active):not(:disabled) {
     background: #f8fafc;
@@ -224,10 +93,6 @@
   &--active {
     color: #2c5aa0;
     background: #f8fafc;
-    
-    .tab-btn__icon {
-      transform: scale(1.1);
-    }
   }
   
   &--loading {
@@ -239,11 +104,6 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
-}
-
-.tab-btn__icon {
-  font-size: 1.25rem;
-  transition: transform 0.3s ease;
 }
 
 .tab-btn__label {
@@ -267,25 +127,14 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 2px;
   background: linear-gradient(135deg, #2c5aa0 0%, #4a76a8 100%);
-  border-radius: 3px 3px 0 0;
-}
-
-@media (max-width: 1200px) {
-  .stats-overview {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  border-radius: 2px 2px 0 0;
 }
 
 @media (max-width: 1024px) {
   .dashboard-header__top {
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-  
-  .stats-overview {
-    width: 100%;
+    gap: 1rem;
   }
 }
 
@@ -300,25 +149,6 @@
   
   .dashboard-header__subtitle {
     font-size: 1rem;
-  }
-  
-  .stats-overview {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-  
-  .stat-card {
-    padding: 1.25rem;
-  }
-  
-  .stat-card__icon {
-    width: 48px;
-    height: 48px;
-    font-size: 1.25rem;
-  }
-  
-  .stat-card__number {
-    font-size: 1.75rem;
   }
   
   .dashboard-tabs {
@@ -354,13 +184,7 @@
     font-size: 1.5rem;
   }
   
-  .stat-card {
-    flex-direction: column;
-    text-align: center;
-    gap: 0.75rem;
-  }
-  
-  .stat-card__main {
-    justify-content: center;
+  .dashboard-header__teacher {
+    width: fit-content;
   }
 }

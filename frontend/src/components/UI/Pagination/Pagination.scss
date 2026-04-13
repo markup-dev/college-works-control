@@ -1,0 +1,20 @@
+.ui-pagination {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.ui-pagination__meta {
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .ui-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

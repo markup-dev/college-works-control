@@ -17,10 +17,14 @@ const Header = ({ user, onLogout }) => {
     return roles[role] || role;
   };
 
-  const getFirstName = (fullName) => {
-    if (!fullName) return '';
-    const parts = fullName.trim().split(' ');
-    return parts.length > 1 ? parts[1] : parts[0] || fullName;
+  const getFirstName = (userData) => {
+    if (!userData) return '';
+    if (userData.firstName) return userData.firstName;
+    if (userData.fullName) {
+      const parts = userData.fullName.trim().split(' ');
+      return parts.length > 1 ? parts[1] : parts[0] || userData.fullName;
+    }
+    return userData.login || '';
   };
 
   return (
@@ -53,7 +57,7 @@ const Header = ({ user, onLogout }) => {
         </nav>
         
         <div className="header__right">
-          <span className="header__user">Привет, {getFirstName(user?.name || user?.login)}!</span>
+          <span className="header__user">Привет, {getFirstName(user)}!</span>
           <button className="header__logout" onClick={handleLogout}>
             Выйти
           </button>

@@ -7,6 +7,7 @@ import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import AssignmentDetailsModal from '../../Shared/AssignmentDetailsModal/AssignmentDetailsModal';
 import { useNotification } from '../../../context/NotificationContext';
 import { getAssignmentStatusInfo, getPriorityInfo, formatDate, getDaysUntilDeadline } from '../../../utils';
+import api from '../../../services/api';
 import './AssignmentManagement.scss';
 
 const AssignmentManagement = ({ assignments = [], submissions = [], teachers = [], onDeleteAssignment }) => {
@@ -18,6 +19,12 @@ const AssignmentManagement = ({ assignments = [], submissions = [], teachers = [
   const [assignmentToDelete, setAssignmentToDelete] = useState(null);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
+
+  const handleResetFilters = () => {
+    setFilter('all');
+    setSearchTerm('');
+    setSortBy('deadline');
+  };
 
   const filteredAssignments = useMemo(() => {
     let filtered = [...assignments];
@@ -39,8 +46,8 @@ const AssignmentManagement = ({ assignments = [], submissions = [], teachers = [
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(a =>
         a.title?.toLowerCase().includes(term) ||
-        a.course?.toLowerCase().includes(term) ||
-        a.teacherLogin?.toLowerCase().includes(term)
+        a.subject?.toLowerCase().includes(term) ||
+        a.teacher?.toLowerCase().includes(term)
       );
     }
 
@@ -48,13 +55,19 @@ const AssignmentManagement = ({ assignments = [], submissions = [], teachers = [
       switch (sortBy) {
         case 'deadline':
           return new Date(a.deadline || 0) - new Date(b.deadline || 0);
+        case 'deadline_desc':
+          return new Date(b.deadline || 0) - new Date(a.deadline || 0);
+        case 'newest':
+          return new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0);
+        case 'oldest':
+          return new Date(a.createdAt || a.created_at || 0) - new Date(b.createdAt || b.created_at || 0);
         case 'priority':
           const priorityOrder = { high: 3, medium: 2, low: 1 };
           return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
         case 'title':
           return (a.title || '').localeCompare(b.title || '');
-        case 'course':
-          return (a.course || '').localeCompare(b.course || '');
+        case 'subject':
+          return (a.subject || '').localeCompare(b.subject || '');
         case 'submissions':
           const aCount = submissions.filter(s => s.assignmentId === a.id).length;
           const bCount = submissions.filter(s => s.assignmentId === b.id).length;
@@ -95,9 +108,31 @@ const AssignmentManagement = ({ assignments = [], submissions = [], teachers = [
     setShowDetails(true);
   };
 
-  const getTeacherName = (teacherLogin) => {
-    const teacher = teachers.find(t => t.login === teacherLogin);
-    return teacher?.name || teacherLogin || 'Не указан';
+  const handleDownloadAssignmentMaterial = async (assignment, material) => {
+    if (!assignment?.id || !material?.id) {
+      showError('Материал для скачивания не найден');
+      return;
+    }
+
+    try {
+      const response = await api.get(`/assignments/${assignment.id}/materials/${material.id}/download`, {
+        responseType: 'blob',
+      });
+
+      const blob = response.data;
+      const objectUrl = URL.createObjectURL(blob);
+      const fileName = material.fileName || material.file_name || 'assignment-material';
+
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      showError('Не удалось скачать материал задания. Попробуйте еще раз.');
+    }
   };
 
   const columns = [
@@ -110,18 +145,18 @@ const AssignmentManagement = ({ assignments = [], submissions = [], teachers = [
           <div className="assignment-title-link" onClick={() => handleViewDetails(assignment)}>
             {value}
           </div>
-          {assignment.course && (
-            <div className="assignment-course">{assignment.course}</div>
+          {assignment.subject && (
+            <div className="assignment-subject">{assignment.subject}</div>
           )}
         </div>
       )
     },
     {
-      key: 'teacherLogin',
+      key: 'teacher',
       title: 'Преподаватель',
       width: '15%',
       render: (value) => (
-        <div className="teacher-cell">{getTeacherName(value)}</div>
+        <div className="teacher-cell">{value || 'Не указан'}</div>
       )
     },
     {
@@ -228,7 +263,7 @@ const AssignmentManagement = ({ assignments = [], submissions = [], teachers = [
           <div className="search-box">
             <input
               type="text"
-              placeholder="🔍 Поиск по названию, курсу, преподавателю..."
+              placeholder="Поиск по названию, предмету, преподавателю..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="search-input"
@@ -251,12 +286,18 @@ const AssignmentManagement = ({ assignments = [], submissions = [], teachers = [
             onChange={(e) => setSortBy(e.target.value)}
             className="sort-select"
           >
-            <option value="deadline">По сроку сдачи</option>
+            <option value="deadline">По ближайшему сроку</option>
+            <option value="deadline_desc">По дальнему сроку</option>
+            <option value="newest">Сначала новые</option>
+            <option value="oldest">Сначала старые</option>
             <option value="priority">По приоритету</option>
             <option value="title">По названию</option>
-            <option value="course">По курсу</option>
+            <option value="subject">По предмету</option>
             <option value="submissions">По количеству работ</option>
           </select>
+          <Button variant="outline" onClick={handleResetFilters}>
+            Сбросить фильтры
+          </Button>
         </div>
       </Card>
 
@@ -277,10 +318,7 @@ const AssignmentManagement = ({ assignments = [], submissions = [], teachers = [
             <div className="empty-icon">📋</div>
             <p>Заданий не найдено</p>
             {searchTerm || filter !== 'all' ? (
-              <Button variant="outline" onClick={() => {
-                setSearchTerm('');
-                setFilter('all');
-              }}>
+              <Button variant="outline" onClick={handleResetFilters}>
                 Сбросить фильтры
               </Button>
             ) : null}
@@ -314,6 +352,7 @@ const AssignmentManagement = ({ assignments = [], submissions = [], teachers = [
             setSelectedAssignment(null);
           }}
           mode="admin"
+          onDownloadMaterial={handleDownloadAssignmentMaterial}
         />
       )}
     </div>

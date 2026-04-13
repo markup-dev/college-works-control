@@ -1,99 +1,67 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import Button from '../../UI/Button/Button';
-import { formatDate, getSubmissionStatusInfo, formatFileSize } from '../../../utils';
+import { formatDate, getSubmissionStatusInfo } from '../../../utils';
 import './SubmissionsTable.scss';
 
-const SubmissionsTable = ({ 
-  submissions = [], 
-  assignments = [], 
-  onGradeSubmission, 
-  onReturnSubmission,
+const SubmissionsTable = ({
+  submissions = [],
+  assignments = [],
+  onGradeSubmission,
   onDownloadFile,
   onViewDetails,
   className = "",
   loading = false,
   showLatestOnly = true
 }) => {
-  const [sortField, setSortField] = useState('submissionDate');
-  const [sortDirection, setSortDirection] = useState('desc');
+  const [sortBy, setSortBy] = useState('submissionDate_desc');
 
-  const filteredSubmissions = useMemo(() => {
+  const latestSubmissions = useMemo(() => {
     if (!showLatestOnly || submissions.length === 0) {
       return submissions;
     }
 
-    const latestSubmissions = [];
-    const seen = new Map();
-    
-    const sortedSubmissions = [...submissions].sort((a, b) => 
-      new Date(b.submissionDate) - new Date(a.submissionDate)
-    );
+    const unique = new Map();
+    [...submissions]
+      .sort((a, b) => new Date(b?.submissionDate || 0) - new Date(a?.submissionDate || 0))
+      .forEach((submission) => {
+        const key = `${submission.assignmentId}_${submission.studentLogin}`;
+        if (!unique.has(key)) {
+          unique.set(key, submission);
+        }
+      });
 
-    for (const submission of sortedSubmissions) {
-      const key = `${submission.assignmentId}_${submission.studentLogin}`;
-      if (!seen.has(key)) {
-        seen.set(key, true);
-        latestSubmissions.push(submission);
-      }
-    }
-
-    return latestSubmissions;
+    return Array.from(unique.values());
   }, [submissions, showLatestOnly]);
 
   const sortedSubmissions = useMemo(() => {
-    return [...filteredSubmissions].sort((a, b) => {
-      let aValue = a[sortField];
-      let bValue = b[sortField];
-      
-      if (sortField === 'submissionDate') {
-        aValue = new Date(aValue || 0);
-        bValue = new Date(bValue || 0);
+    const sorted = [...latestSubmissions];
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case 'submissionDate_asc':
+          return new Date(a?.submissionDate || 0) - new Date(b?.submissionDate || 0);
+        case 'student_asc':
+          return (a?.studentName || '').localeCompare(b?.studentName || '');
+        case 'student_desc':
+          return (b?.studentName || '').localeCompare(a?.studentName || '');
+        case 'score_desc':
+          return (b?.score ?? -1) - (a?.score ?? -1);
+        case 'score_asc':
+          return (a?.score ?? -1) - (b?.score ?? -1);
+        case 'submissionDate_desc':
+        default:
+          return new Date(b?.submissionDate || 0) - new Date(a?.submissionDate || 0);
       }
-      
-      if (sortField === 'score') {
-        aValue = aValue ?? -1;
-        bValue = bValue ?? -1;
-      }
-      
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
     });
-  }, [filteredSubmissions, sortField, sortDirection]);
-
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('desc');
-    }
-  };
-
-  const handleGrade = (submission) => {
-    onGradeSubmission?.(submission);
-  };
-
-  const handleReturn = (submission) => {
-    onReturnSubmission?.(submission);
-  };
-
-  const handleDownload = (submission) => {
-    onDownloadFile?.(submission);
-  };
-
-  const handleViewDetails = (submission) => {
-    onViewDetails?.(submission);
-  };
+    return sorted;
+  }, [latestSubmissions, sortBy]);
 
   if (loading) {
-    return <TableSkeleton />;
+    return <CardsSkeleton />;
   }
 
-  if (filteredSubmissions.length === 0) {
+  if (latestSubmissions.length === 0) {
     return (
-      <div className="empty-state">
-        <div className="empty-icon">📋</div>
+      <div className="submissions-cards-empty">
         <h3>Работы не найдены</h3>
         <p>Попробуйте изменить параметры фильтрации</p>
       </div>
@@ -101,329 +69,173 @@ const SubmissionsTable = ({
   }
 
   return (
-    <div className={`submissions-table-container ${className}`}>
-      <div className="table-header">
-        <div className="table-info">
-          <span className="table-count">
-            Найдено работ: <strong>{filteredSubmissions.length}</strong>
-            {showLatestOnly && submissions.length > filteredSubmissions.length && (
-              <span className="duplicates-info">
-                (показаны только последние отправки)
-              </span>
-            )}
-          </span>
-          <span className="table-sort">
-            Сортировка: {getSortFieldLabel(sortField)} ({sortDirection === 'asc' ? '↑' : '↓'})
-          </span>
-        </div>
+    <div className={`submissions-cards ${className}`}>
+      <div className="submissions-cards__header">
+        <p className="submissions-cards__count">
+          Найдено работ: <strong>{latestSubmissions.length}</strong>
+          {showLatestOnly && submissions.length > latestSubmissions.length && (
+            <span className="submissions-cards__hint">(показаны только последние отправки)</span>
+          )}
+        </p>
+
+        <select
+          className="submissions-cards__sort-select"
+          value={sortBy}
+          onChange={(event) => setSortBy(event.target.value)}
+        >
+          <option value="submissionDate_desc">Сначала новые сдачи</option>
+          <option value="submissionDate_asc">Сначала старые сдачи</option>
+          <option value="student_asc">Студент А-Я</option>
+          <option value="student_desc">Студент Я-А</option>
+          <option value="score_desc">Оценка по убыванию</option>
+          <option value="score_asc">Оценка по возрастанию</option>
+        </select>
       </div>
 
-      <div className="table-scroll-container">
-        <table className="submissions-table">
-          <thead>
-            <tr>
-              <SortableHeader
-                field="studentName"
-                label="Студент"
-                sortField={sortField}
-                sortDirection={sortDirection}
-                onSort={handleSort}
-              />
-              <th className="assignment-column">Задание</th>
-              <th className="group-column">Группа</th>
-              <SortableHeader
-                field="submissionDate"
-                label="Дата сдачи"
-                sortField={sortField}
-                sortDirection={sortDirection}
-                onSort={handleSort}
-                className="date-column"
-              />
-              <th className="file-column">Файл</th>
-              <SortableHeader
-                field="status"
-                label="Статус"
-                sortField={sortField}
-                sortDirection={sortDirection}
-                onSort={handleSort}
-                className="status-column"
-              />
-              <SortableHeader
-                field="score"
-                label="Оценка"
-                sortField={sortField}
-                sortDirection={sortDirection}
-                onSort={handleSort}
-                className="score-column"
-              />
-              <th className="actions-column">Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedSubmissions.map(submission => (
-              <SubmissionRow
-                key={submission.id}
-                submission={submission}
-                assignment={assignments.find(a => a.id === submission.assignmentId)}
-                onGrade={handleGrade}
-                onReturn={handleReturn}
-                onDownload={handleDownload}
-                onViewDetails={handleViewDetails}
-              />
-            ))}
-          </tbody>
-        </table>
+      <div className="submissions-cards__list">
+        {sortedSubmissions.map((submission) => (
+          <SubmissionCard
+            key={submission.id}
+            submission={submission}
+            assignment={assignments.find((item) => item.id === submission.assignmentId)}
+            onGradeSubmission={onGradeSubmission}
+            onDownloadFile={onDownloadFile}
+            onViewDetails={onViewDetails}
+          />
+        ))}
       </div>
     </div>
   );
 };
 
-const SortableHeader = ({ field, label, sortField, sortDirection, onSort, className = '' }) => (
-  <th 
-    className={`sortable-header ${sortField === field ? 'active' : ''} ${className}`}
-    onClick={() => onSort(field)}
-  >
-    <span className="header-content">
-      {label}
-      <span className="sort-indicator">
-        {sortField === field && (sortDirection === 'asc' ? ' ↑' : ' ↓')}
-      </span>
-    </span>
-  </th>
-);
-
-const SubmissionRow = React.memo(({ submission, assignment, onGrade, onReturn, onDownload, onViewDetails }) => {
+const SubmissionCard = ({
+  submission,
+  assignment,
+  onGradeSubmission,
+  onDownloadFile,
+  onViewDetails
+}) => {
   const statusInfo = getSubmissionStatusInfo(submission.status);
   const maxScore = assignment?.maxScore || submission.maxScore || 100;
-  const submissionDate = submission.submissionDate;
+  const effectiveSubmissionType = assignment?.submissionType || submission.submissionType || 'file';
+  const isDemoSubmission = effectiveSubmissionType === 'demo';
 
   return (
-    <tr className="submission-row">
-      <td className="student-column">
-        <StudentInfo 
-          student={submission.studentName}
-          studentId={submission.studentId}
-        />
-      </td>
-      <td className="assignment-column">
-        <AssignmentInfo 
-          title={submission.assignmentTitle}
-          isResubmission={submission.isResubmission}
-        />
-      </td>
-      <td className="group-column">
-        <GroupTag group={submission.group} />
-      </td>
-      <td className="date-column">
-        <SubmitDate date={submissionDate} />
-      </td>
-      <td className="file-column">
-        <FileInfo 
-          fileName={submission.fileName}
-          fileSize={submission.fileSize}
-          onDownload={() => onDownload(submission)}
-        />
-      </td>
-      <td className="status-column">
-        <StatusBadge statusInfo={statusInfo} />
-      </td>
-      <td className="score-column">
-        <ScoreDisplay 
-          score={submission.score} 
-          maxScore={maxScore}
-        />
-      </td>
-      <td className="actions-column">
-        <ActionButtons 
-          submission={submission}
-          onGrade={() => onGrade(submission)}
-          onReturn={() => onReturn(submission)}
-          onViewDetails={() => onViewDetails(submission)}
-        />
-      </td>
-    </tr>
-  );
-});
+    <article className="submission-card" onClick={() => onViewDetails?.(submission)}>
+      <div className="submission-card__top">
+        <div>
+          <h4 className="submission-card__student">{submission.studentName || 'Студент не указан'}</h4>
+          <p className="submission-card__group">{submission.group || 'Группа не указана'}</p>
+        </div>
+        <div className="submission-card__status-stack">
+          <span className={`submission-card__status submission-card__status--${statusInfo.variant}`}>
+            {statusInfo.label}
+          </span>
+          {submission.isResubmission && <span className="submission-card__resubmission">Пересдача</span>}
+        </div>
+      </div>
 
-const StudentInfo = ({ student, studentId }) => (
-  <div className="student-info">
-    <div className="student-name">{student}</div>
-    {studentId && (
-      <div className="student-id">ID: {studentId}</div>
-    )}
-  </div>
-);
+      <div className="submission-card__middle">
+        <div className="submission-card__assignment">
+          <p className="submission-card__assignment-title">{submission.assignmentTitle || 'Без названия'}</p>
+        </div>
+        {isDemoSubmission && (
+          <p className="submission-card__meta-line">Демонстрация без файла</p>
+        )}
 
-const AssignmentInfo = ({ title, isResubmission }) => (
-  <div className="assignment-info">
-    <div className="assignment-title">{title}</div>
-    {isResubmission && (
-      <div className="resubmission-badge">Пересдача</div>
-    )}
-  </div>
-);
+        <div className="submission-card__footer">
+          <p className="submission-card__meta-line">{formatSubmissionDate(submission.submissionDate)}</p>
+          <p className="submission-card__score"><span>Оценка:</span> {formatScore(submission.score, maxScore)}</p>
+        </div>
+      </div>
 
-const GroupTag = ({ group }) => (
-  <span className="group-tag">{group}</span>
-);
-
-const SubmitDate = ({ date }) => {
-  if (!date || date === 'Дата не указана') {
-    return <div className="submit-date no-date">—</div>;
-  }
-  
-  try {
-    const formattedDate = formatDate(date);
-    return <div className="submit-date">{formattedDate}</div>;
-  } catch (error) {
-    return <div className="submit-date invalid-date">—</div>;
-  }
-};
-
-const FileInfo = ({ fileName, fileSize, onDownload }) => (
-  <div className="file-info">
-    <button 
-      className="file-download-btn"
-      onClick={onDownload}
-      title={`Скачать: ${fileName}`}
-    >
-      <span className="file-icon">📄</span>
-      <span className="file-name">{fileName}</span>
-    </button>
-    {fileSize && fileSize !== '0.0 MB' && (
-      <div className="file-size">{formatFileSize(fileSize)}</div>
-    )}
-  </div>
-);
-
-const StatusBadge = ({ statusInfo }) => (
-  <span className={`status-badge status-badge--${statusInfo.variant}`}>
-    {statusInfo.icon} {statusInfo.label}
-  </span>
-);
-
-const ScoreDisplay = ({ score, maxScore }) => {
-  if (score === null || score === undefined) {
-    return <span className="no-score">—</span>;
-  }
-  
-  return (
-    <span className="score-display">
-      {score}<span className="score-separator">/</span>{maxScore}
-    </span>
-  );
-};
-
-const ActionButtons = React.memo(({ submission, onGrade, onReturn, onViewDetails }) => {
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleAction = async (action) => {
-    if (isLoading) return;
-    
-    setIsLoading(true);
-    try {
-      await action();
-    } catch (error) {
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="action-buttons">
-      <Button 
-        variant="outline" 
-        size="small"
-        onClick={() => handleAction(onViewDetails)}
-        disabled={isLoading}
-        icon="👁"
-        className="action-btn"
-      >
-        Детали
-      </Button>
-      
-      {submission.status === 'submitted' && (
-        <>
-          <Button 
-            variant="primary" 
+      <div className="submission-card__actions">
+        {submission.fileName && (
+          <Button
+            variant="secondary"
             size="small"
-            onClick={() => handleAction(onGrade)}
-            disabled={isLoading}
-            icon="✅"
-            className="action-btn"
+            className="submission-card__action-btn submission-card__action-btn--download"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDownloadFile?.(submission);
+            }}
+          >
+            Скачать файл
+          </Button>
+        )}
+
+        {submission.status === 'submitted' && (
+          <Button
+            variant="primary"
+            size="small"
+            className="submission-card__action-btn"
+            onClick={(event) => {
+              event.stopPropagation();
+              onGradeSubmission?.(submission);
+            }}
           >
             Оценить
           </Button>
-          <Button 
-            variant="warning" 
+        )}
+
+        {submission.status === 'graded' && (
+          <Button
+            variant="primary"
             size="small"
-            onClick={() => handleAction(onReturn)}
-            disabled={isLoading}
-            icon="↩️"
-            className="action-btn"
+            className="submission-card__action-btn submission-card__action-btn--edit"
+            onClick={(event) => {
+              event.stopPropagation();
+              onGradeSubmission?.(submission);
+            }}
           >
-            Вернуть
+            Изменить оценку
           </Button>
-        </>
-      )}
-      
-      {submission.status === 'graded' && (
-        <Button 
-          variant="outline" 
-          size="small"
-          onClick={() => handleAction(onGrade)}
-          disabled={isLoading}
-          icon="✏️"
-          className="action-btn"
-        >
-          Изменить
-        </Button>
-      )}
+        )}
 
-      {submission.status === 'returned' && (
-        <Button 
-          variant="primary" 
-          size="small"
-          onClick={() => handleAction(onGrade)}
-          disabled={isLoading}
-          icon="✅"
-          className="action-btn"
-        >
-          Проверить
-        </Button>
-      )}
-    </div>
+        {submission.status === 'returned' && (
+          <Button
+            variant="primary"
+            size="small"
+            className="submission-card__action-btn"
+            onClick={(event) => {
+              event.stopPropagation();
+              onGradeSubmission?.(submission);
+            }}
+          >
+            Проверить
+          </Button>
+        )}
+      </div>
+    </article>
   );
-});
+};
 
-const TableSkeleton = () => (
-  <div className="submissions-table-container">
-    <div className="table-skeleton">
-      {[...Array(5)].map((_, index) => (
-        <div key={index} className="skeleton-row">
-          <div className="skeleton-cell student"></div>
-          <div className="skeleton-cell assignment"></div>
-          <div className="skeleton-cell group"></div>
-          <div className="skeleton-cell date"></div>
-          <div className="skeleton-cell file"></div>
-          <div className="skeleton-cell status"></div>
-          <div className="skeleton-cell score"></div>
-          <div className="skeleton-cell actions"></div>
-        </div>
+const formatSubmissionDate = (date) => {
+  if (!date || date === 'Дата не указана') {
+    return '—';
+  }
+  try {
+    return formatDate(date);
+  } catch {
+    return '—';
+  }
+};
+
+const formatScore = (score, maxScore) => {
+  if (score === null || score === undefined) {
+    return '—';
+  }
+  return `${score}/${maxScore}`;
+};
+
+const CardsSkeleton = () => (
+  <div className="submissions-cards">
+    <div className="submissions-cards__list">
+      {[...Array(4)].map((_, index) => (
+        <div className="submission-card submission-card--skeleton" key={`skeleton-${index}`} />
       ))}
     </div>
   </div>
 );
-
-const getSortFieldLabel = (field) => {
-  const labels = {
-    studentName: 'Студент',
-    group: 'Группа',
-    submissionDate: 'Дата сдачи',
-    status: 'Статус',
-    score: 'Оценка'
-  };
-  return labels[field] || field;
-};
 
 export default SubmissionsTable;

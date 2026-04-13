@@ -1,7 +1,9 @@
 import React from 'react';
 import Button from '../../UI/Button/Button';
+import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import { useNotification } from '../../../context/NotificationContext';
-import { formatDate } from '../../../utils';
+import { formatDate, getAllowedFormatsFromAssignment } from '../../../utils';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './SubmissionModal.scss';
 
 const SubmissionModal = ({ 
@@ -13,10 +15,23 @@ const SubmissionModal = ({
   onSubmit 
 }) => {
   const { showWarning, showError } = useNotification();
+  const isRetake = assignment?.status === 'returned';
+  const canSubmitRetake = assignment?.canSubmitRetake ?? isRetake;
+  const canSubmitCurrentAttempt = isRetake ? canSubmitRetake : true;
+  const submitButtonLabel = isRetake
+    ? (assignment?.submissionType === 'demo' ? 'Сообщить о готовности к пересдаче' : 'Пересдать работу')
+    : (assignment?.submissionType === 'demo' ? 'Сообщить о готовности' : 'Сдать работу');
+
+  useBodyScrollLock(isOpen);
   
   if (!isOpen || !assignment) return null;
 
   const handleSubmit = () => {
+    if (!canSubmitCurrentAttempt) {
+      showError('Сдача недоступна: пересдача уже использована или задание закрыто для отправки.');
+      return;
+    }
+
     if (assignment.submissionType === 'file') {
       if (!submissionFile) {
         showWarning('Пожалуйста, выберите файл для загрузки');
@@ -34,7 +49,7 @@ const SubmissionModal = ({
         return;
       }
       
-      const allowedFormats = assignment.allowedFormats || ['.pdf', '.docx', '.zip'];
+      const allowedFormats = getAllowedFormatsFromAssignment(assignment);
       const fileExtension = '.' + submissionFile.name.split('.').pop()?.toLowerCase();
       if (!allowedFormats.includes(fileExtension)) {
         showError(`Недопустимый формат файла. Разрешены: ${allowedFormats.join(', ')}`);
@@ -50,7 +65,7 @@ const SubmissionModal = ({
     
     const deadline = new Date(assignment.deadline);
     const now = new Date();
-    if (deadline < now) {
+    if (deadline < now && !isRetake) {
       showWarning('Срок сдачи задания истек. Работа может быть не принята.');
     }
     
@@ -58,14 +73,22 @@ const SubmissionModal = ({
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
+    <div className="modal-overlay student-submission-modal" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Сдача работы: {assignment.title}</h3>
+          <h3>{isRetake ? 'Пересдача работы' : 'Сдача работы'}: {assignment.title}</h3>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         
         <div className="modal-body">
+          {assignment.submissionType === 'demo' && (
+            <div className="submission-status-note">
+              <span className="submission-status-note__badge">Демонстрация</span>
+              <p className="submission-status-note__text">
+                После отправки будет создана заявка о готовности к демонстрации. Файл прикладывать не нужно.
+              </p>
+            </div>
+          )}
           <SubmissionInfo assignment={assignment} />
           
           {assignment.submissionType === 'file' ? (
@@ -86,9 +109,9 @@ const SubmissionModal = ({
           <Button 
             variant="primary"
             onClick={handleSubmit}
-            disabled={assignment.submissionType === 'file' && !submissionFile}
+            disabled={!canSubmitCurrentAttempt || (assignment.submissionType === 'file' && !submissionFile)}
           >
-            📤 Сдать работу
+            {submitButtonLabel}
           </Button>
         </div>
       </div>
@@ -97,20 +120,38 @@ const SubmissionModal = ({
 };
 
 const SubmissionInfo = ({ assignment }) => {
-  const allowedFormats = assignment.allowedFormats || ['.pdf', '.docx', '.zip'];
+  const allowedFormats = getAllowedFormatsFromAssignment(assignment);
   const maxFileSize = assignment.maxFileSize || 50;
   
   return (
     <div className="submission-info">
-      <p><strong>Дисциплина:</strong> {assignment.course}</p>
-      <p><strong>Преподаватель:</strong> {assignment.teacher}</p>
-      <p><strong>Формат сдачи:</strong> {assignment.submissionType === 'file' ? 'Файл' : 'Демонстрация'}</p>
-      <p><strong>Срок сдачи:</strong> {formatDate(assignment.deadline)}</p>
+      <div className="submission-info__row">
+        <span className="submission-info__label">Предмет</span>
+        <span className="submission-info__value">{assignment.subject}</span>
+      </div>
+      <div className="submission-info__row">
+        <span className="submission-info__label">Преподаватель</span>
+        <span className="submission-info__value">{assignment.teacher}</span>
+      </div>
+      <div className="submission-info__row">
+        <span className="submission-info__label">Формат сдачи</span>
+        <span className="submission-info__value">{assignment.submissionType === 'file' ? 'Файл' : 'Демонстрация'}</span>
+      </div>
+      <div className="submission-info__row">
+        <span className="submission-info__label">Срок сдачи</span>
+        <span className="submission-info__value">{formatDate(assignment.deadline)}</span>
+      </div>
       
       {assignment.submissionType === 'file' && (
         <>
-          <p><strong>Допустимые форматы:</strong> {allowedFormats.join(', ')}</p>
-          <p><strong>Максимальный размер:</strong> {maxFileSize} МБ</p>
+          <div className="submission-info__row">
+            <span className="submission-info__label">Допустимые форматы</span>
+            <span className="submission-info__value">{allowedFormats.join(', ')}</span>
+          </div>
+          <div className="submission-info__row">
+            <span className="submission-info__label">Максимальный размер</span>
+            <span className="submission-info__value">{maxFileSize} МБ</span>
+          </div>
         </>
       )}
     </div>
@@ -119,39 +160,26 @@ const SubmissionInfo = ({ assignment }) => {
 
 const FileUpload = ({ assignment, submissionFile, onFileSelect }) => {
   const { showError } = useNotification();
-  const allowedFormats = assignment.allowedFormats || ['.pdf', '.docx', '.zip'];
+  const allowedFormats = getAllowedFormatsFromAssignment(assignment);
   const maxFileSize = (assignment.maxFileSize || 50) * 1024 * 1024;
   
-  const handleFileChange = (e) => {
-    if (!e || !e.target || !e.target.files) {
-      return;
-    }
-    
-    const file = e.target.files[0];
+  const handleFileChange = (files = []) => {
+    const file = files[0];
     if (!file) return;
     
     if (file.size > maxFileSize) {
       showError(`Файл слишком большой. Максимальный размер: ${assignment.maxFileSize || 50} МБ`);
-      if (e.target) {
-        e.target.value = '';
-      }
       return;
     }
     
     if (file.size === 0) {
       showError('Файл не может быть пустым');
-      if (e.target) {
-        e.target.value = '';
-      }
       return;
     }
     
     const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
     if (!allowedFormats.includes(fileExtension)) {
       showError(`Недопустимый формат файла. Разрешены: ${allowedFormats.join(', ')}`);
-      if (e.target) {
-        e.target.value = '';
-      }
       return;
     }
     
@@ -160,18 +188,18 @@ const FileUpload = ({ assignment, submissionFile, onFileSelect }) => {
   
   return (
     <div className="file-upload">
-      <label className="file-input-label">
-        <input
-          type="file"
-          onChange={handleFileChange}
-          accept={allowedFormats.join(',')}
-        />
-        <span className="file-input-button">📎 Выберите файл</span>
-      </label>
+      <FileDropzone
+        accept={allowedFormats.join(',')}
+        buttonText="Выбрать файл"
+        hint="Поддерживаются только допустимые форматы из списка выше."
+        selectedFiles={submissionFile ? [submissionFile] : []}
+        showSelectedFiles={false}
+        onFilesSelected={handleFileChange}
+      />
       {submissionFile && (
         <div className="file-info">
-          <span>📄 {submissionFile.name}</span>
-          <span>📏 {(submissionFile.size / 1024 / 1024).toFixed(2)} МБ</span>
+          <span>{submissionFile.name}</span>
+          <span>{(submissionFile.size / 1024 / 1024).toFixed(2)} МБ</span>
         </div>
       )}
     </div>

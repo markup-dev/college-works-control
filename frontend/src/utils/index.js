@@ -1,6 +1,7 @@
 export * from './teacherHelpers.js';
 export * from './assignmentHelpers.js';
 export * from './validation.js';
+export * from './fileFormats.js';
 export { 
   getRoleInfo, 
   getStatusInfo as getAdminStatusInfo, 

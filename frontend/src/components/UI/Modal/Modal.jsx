@@ -1,5 +1,6 @@
 import React from 'react';
 import './Modal.scss';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 const Modal = ({ 
   isOpen, 
@@ -9,6 +10,8 @@ const Modal = ({
   size = 'medium',
   className = '' 
 }) => {
+  useBodyScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   return (
