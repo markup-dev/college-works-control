@@ -14,6 +14,7 @@ const AdminDashboard = () => {
   const { user } = useAuth();
   const {
     users = [],
+    teacherOptions = [],
     groups = [],
     subjects = [],
     systemLogs = [],
@@ -51,6 +52,9 @@ const AdminDashboard = () => {
 
   const safeStats = {
     totalUsers: adminStats.totalUsers || usersMeta.total || users.length,
+    studentUsers: adminStats.studentUsers ?? users.filter((u) => u.role === 'student').length,
+    teacherUsers: adminStats.teacherUsers ?? users.filter((u) => u.role === 'teacher').length,
+    adminUsers: adminStats.adminUsers ?? users.filter((u) => u.role === 'admin').length,
     totalSubjects: adminStats.totalSubjects || subjectsMeta.total || subjects.length,
     totalGroups: adminStats.totalGroups || groupsMeta.total || groups.length,
     activeSubjects: adminStats.activeSubjects || subjects.filter((s) => s.status === 'active').length,
@@ -91,7 +95,7 @@ const AdminDashboard = () => {
         return (
           <SubjectManagement
             subjects={subjects}
-            teachers={users.filter(u => u.role === 'teacher')}
+            teachers={teacherOptions}
             paginationMeta={subjectsMeta}
             query={subjectsQuery}
             onFetchSubjects={fetchSubjects}

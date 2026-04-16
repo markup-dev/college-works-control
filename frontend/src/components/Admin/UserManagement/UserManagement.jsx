@@ -7,7 +7,44 @@ import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import Pagination from '../../UI/Pagination/Pagination';
 import { useNotification } from '../../../context/NotificationContext';
+import {
+  copyTextToClipboard,
+  downloadCsvTemplate,
+  updateAdminFilterField,
+  resetAdminFilterState,
+  prevAdminFilterPage,
+  nextAdminFilterPage,
+  handleAdminActionResult,
+} from '../../../utils';
 import './UserManagement.scss';
+
+const createDefaultUserFormData = () => ({
+  login: '',
+  lastName: '',
+  firstName: '',
+  middleName: '',
+  email: '',
+  phone: '',
+  password: '',
+  role: 'student',
+  group: '',
+  department: '',
+  status: 'active',
+});
+
+const createUserFormDataFromUser = (user) => ({
+  login: user?.login || '',
+  lastName: user?.lastName || '',
+  firstName: user?.firstName || '',
+  middleName: user?.middleName || '',
+  email: user?.email || '',
+  phone: user?.phone || '',
+  password: '',
+  role: user?.role || 'student',
+  group: user?.group || '',
+  department: user?.department || '',
+  status: user?.status || (user?.isActive === false ? 'inactive' : 'active'),
+});
 
 const UserManagement = ({
   users,
@@ -42,19 +79,20 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
     page: query.page || 1,
     perPage: query.perPage || 24,
   });
-  const [formData, setFormData] = useState({
-    login: '',
-    lastName: '',
-    firstName: '',
-    middleName: '',
-    email: '',
-    phone: '',
-    password: '',
-    role: 'student',
-    group: '',
-    department: '',
-    status: 'active',
-  });
+  const [formData, setFormData] = useState(createDefaultUserFormData);
+
+  const closeUserForm = () => {
+    setShowCreateForm(false);
+    setEditingUser(null);
+    setFormData(createDefaultUserFormData());
+  };
+
+  const closeImportPanel = () => {
+    setShowImportPanel(false);
+    setImportFile(null);
+    setImportPreview(null);
+    setImportMode('strict');
+  };
 
   useEffect(() => {
     onFetchUsers?.({
@@ -69,25 +107,13 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
   }, [filterState, onFetchUsers]);
 
   const handleCreate = () => {
-    setFormData({ login: '', lastName: '', firstName: '', middleName: '', email: '', phone: '', password: '', role: 'student', group: '', department: '', status: 'active' });
+    setFormData(createDefaultUserFormData());
     setEditingUser(null);
     setShowCreateForm(true);
   };
 
   const handleEdit = (user) => {
-    setFormData({
-      login: user.login,
-      lastName: user.lastName || '',
-      firstName: user.firstName || '',
-      middleName: user.middleName || '',
-      email: user.email || '',
-      phone: user.phone || '',
-      password: '',
-      role: user.role,
-      group: user.group || '',
-      department: user.department || '',
-      status: user.status || (user.isActive === false ? 'inactive' : 'active'),
-    });
+    setFormData(createUserFormDataFromUser(user));
     setEditingUser(user);
     setShowCreateForm(true);
   };
@@ -129,21 +155,30 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
       
       if (editingUser) {
         const result = await onUpdateUser(editingUser.id, submitData);
-        if (!result?.success) {
-          showError(result?.error || 'Не удалось обновить пользователя');
+        const isSuccess = handleAdminActionResult({
+          result,
+          showSuccess,
+          showError,
+          successMessage: 'Пользователь обновлен',
+          errorMessage: 'Не удалось обновить пользователя',
+        });
+        if (!isSuccess) {
           return;
         }
-        showSuccess('Пользователь обновлен');
       } else {
         const result = await onCreateUser(submitData);
-        if (!result?.success) {
-          showError(result?.error || 'Не удалось создать пользователя');
+        const isSuccess = handleAdminActionResult({
+          result,
+          showSuccess,
+          showError,
+          successMessage: 'Пользователь создан',
+          errorMessage: 'Не удалось создать пользователя',
+        });
+        if (!isSuccess) {
           return;
         }
-        showSuccess('Пользователь создан');
       }
-      setShowCreateForm(false);
-      setEditingUser(null);
+      closeUserForm();
     } catch (error) {
       showError(error.message);
     }
@@ -157,11 +192,16 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
   const confirmDelete = async () => {
     if (userToDelete) {
       const result = await onDeleteUser(userToDelete.id);
-      if (!result?.success) {
-        showError(result?.error || 'Не удалось удалить пользователя');
+      const isSuccess = handleAdminActionResult({
+        result,
+        showSuccess,
+        showError,
+        successMessage: 'Пользователь удален',
+        errorMessage: 'Не удалось удалить пользователя',
+      });
+      if (!isSuccess) {
         return;
       }
-      showSuccess('Пользователь удален');
       setShowDeleteConfirm(false);
       setUserToDelete(null);
     }
@@ -177,8 +217,13 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
     const result = await onPreviewUsersImport?.(importFile);
     setImportLoading(false);
 
-    if (!result?.success) {
-      showError(result?.error || 'Не удалось проверить файл');
+    const isSuccess = handleAdminActionResult({
+      result,
+      showSuccess,
+      showError,
+      errorMessage: 'Не удалось проверить файл',
+    });
+    if (!isSuccess) {
       return;
     }
 
@@ -198,8 +243,13 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
     const result = await onImportUsers?.(importPreview.validRows, importMode, true);
     setImportLoading(false);
 
-    if (!result?.success) {
-      showError(result?.error || 'Импорт завершился с ошибкой');
+    const isSuccess = handleAdminActionResult({
+      result,
+      showSuccess,
+      showError,
+      errorMessage: 'Импорт завершился с ошибкой',
+    });
+    if (!isSuccess) {
       if (result?.data?.rows) {
         setImportPreview((prev) => ({ ...(prev || {}), rows: result.data.rows, summary: result.data.summary }));
       }
@@ -219,29 +269,12 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
   };
 
   const onFilterChange = (field, value) => {
-    setFilterState((prev) => ({
-      ...prev,
-      [field]: value,
-      page: field === 'page' ? value : 1,
-    }));
-  };
-
-  const downloadTemplate = (filename, content) => {
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setFilterState((prev) => updateAdminFilterField(prev, field, value));
   };
 
   const copyTemplate = async (content) => {
     try {
-      await navigator.clipboard.writeText(content);
+      await copyTextToClipboard(content);
       showSuccess('Шаблон скопирован в буфер обмена');
     } catch {
       showError('Не удалось скопировать шаблон');
@@ -317,15 +350,14 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
             <Button
               variant="outline"
               onClick={() =>
-                setFilterState({
+                setFilterState((prev) => resetAdminFilterState(prev, {
                   search: '',
                   role: 'all',
                   status: 'all',
                   groupId: 'all',
                   sort: 'newest',
                   page: 1,
-                  perPage: filterState.perPage,
-                })
+                }))
               }
             >
               Сбросить
@@ -336,7 +368,7 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
 
       <Modal
         isOpen={showImportPanel}
-        onClose={() => setShowImportPanel(false)}
+        onClose={closeImportPanel}
         title="Массовый импорт пользователей"
         size="large"
         className="admin-form-modal"
@@ -356,7 +388,7 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
                 type="button"
                 variant="secondary"
                 size="small"
-                onClick={() => downloadTemplate('users-import-template.csv', USERS_IMPORT_TEMPLATE)}
+                onClick={() => downloadCsvTemplate('users-import-template.csv', USERS_IMPORT_TEMPLATE)}
               >
                 Скачать шаблон CSV
               </Button>
@@ -444,10 +476,7 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
 
       <Modal
         isOpen={showCreateForm}
-        onClose={() => {
-          setShowCreateForm(false);
-          setEditingUser(null);
-        }}
+        onClose={closeUserForm}
         title={editingUser ? 'Редактировать пользователя' : 'Создать пользователя'}
         size="large"
         className="admin-form-modal"
@@ -586,10 +615,7 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
               <Button 
                 type="button" 
                 variant="secondary"
-                onClick={() => {
-                  setShowCreateForm(false);
-                  setEditingUser(null);
-                }}
+                onClick={closeUserForm}
               >
                 Отмена
               </Button>
@@ -643,8 +669,8 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
         lastPage={paginationMeta.lastPage}
         total={paginationMeta.total}
         fallbackCount={users.length}
-        onPrev={() => onFilterChange('page', Math.max(1, (paginationMeta.currentPage || 1) - 1))}
-        onNext={() => onFilterChange('page', (paginationMeta.currentPage || 1) + 1)}
+        onPrev={() => setFilterState((prev) => prevAdminFilterPage(prev, paginationMeta.currentPage))}
+        onNext={() => setFilterState((prev) => nextAdminFilterPage(prev, paginationMeta.currentPage))}
       />
 
       <ConfirmModal

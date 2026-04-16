@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Button from '../../UI/Button/Button';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import { useNotification } from '../../../context/NotificationContext';
@@ -36,6 +36,44 @@ const normalizeSubjectOptions = (subjects = []) => {
     .filter((subject, index, array) => array.findIndex((item) => item.id === subject.id) === index);
 };
 
+const normalizeGroupSelection = (value) => {
+  const normalizeSingleGroup = (group) => (
+    (group || '')
+      .toString()
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/[—–−]/g, '-')
+      .toUpperCase()
+  );
+
+  if (Array.isArray(value)) {
+    return value
+      .map((group) => normalizeSingleGroup(group))
+      .filter(Boolean)
+      .filter((group, index, array) => array.indexOf(group) === index);
+  }
+
+  const singleGroup = normalizeSingleGroup(value);
+  return singleGroup ? [singleGroup] : [];
+};
+
+const buildEmptyFormData = () => ({
+  title: '',
+  subjectId: null,
+  subject: '',
+  studentGroups: [],
+  deadline: '',
+  description: '',
+  maxScore: 100,
+  submissionType: 'file',
+  criteria: [],
+  priority: 'medium',
+  allowedFormats: [...DEFAULT_ALLOWED_FORMATS],
+  materialFiles: [],
+  existingMaterials: [],
+  removedMaterialIds: []
+});
+
 const AssignmentModal = ({ 
   assignment, 
   isOpen, 
@@ -48,31 +86,10 @@ const AssignmentModal = ({
 }) => {
   const { showError } = useNotification();
   const [acceptAllFormats, setAcceptAllFormats] = useState(true);
-  const [formData, setFormData] = useState(() => ({
-    title: '',
-    subjectId: null,
-    subject: '',
-    group: availableGroups[0] || '',
-    deadline: '',
-    description: '',
-    maxScore: 100,
-    submissionType: 'file',
-    criteria: [],
-    allowedFormats: [...DEFAULT_ALLOWED_FORMATS],
-    materialFiles: [],
-    existingMaterials: [],
-    removedMaterialIds: []
-  }));
-
-  const getDefaultGroup = useCallback(() => {
-    if (assignment?.studentGroups?.length) {
-      return assignment.studentGroups[0];
-    }
-    if (assignment?.group) {
-      return assignment.group;
-    }
-    return availableGroups[0] || '';
-  }, [assignment, availableGroups]);
+  const [formData, setFormData] = useState(() => buildEmptyFormData());
+  const [isGroupsDropdownOpen, setIsGroupsDropdownOpen] = useState(false);
+  const wasOpenRef = useRef(false);
+  const groupsDropdownRef = useRef(null);
 
   const subjectOptions = useMemo(() => {
     const normalized = normalizeSubjectOptions(availableSubjects);
@@ -87,70 +104,90 @@ const AssignmentModal = ({
 
   const groupOptions = useMemo(() => {
     const uniqueGroups = new Set(availableGroups.filter(Boolean));
-    if (formData.group) {
-      uniqueGroups.add(formData.group);
-    }
+    normalizeGroupSelection(formData.studentGroups).forEach((group) => uniqueGroups.add(group));
     return Array.from(uniqueGroups);
-  }, [availableGroups, formData.group]);
+  }, [availableGroups, formData.studentGroups]);
 
-  useEffect(() => {
+  const createInitialFormData = useCallback(() => {
     if (assignment && initialFormData) {
-      setFormData({
+      return {
+        ...buildEmptyFormData(),
         ...initialFormData,
         subjectId: initialFormData.subjectId ?? null,
         subject: initialFormData.subject ?? '',
+        studentGroups: normalizeGroupSelection(initialFormData.studentGroups ?? initialFormData.group),
+        criteria: Array.isArray(initialFormData.criteria) ? initialFormData.criteria : [],
         materialFiles: Array.isArray(initialFormData.materialFiles) ? initialFormData.materialFiles : [],
         existingMaterials: Array.isArray(initialFormData.existingMaterials) ? initialFormData.existingMaterials : [],
         removedMaterialIds: Array.isArray(initialFormData.removedMaterialIds) ? initialFormData.removedMaterialIds : [],
-      });
-      return;
+      };
     }
 
     if (assignment) {
-      const criteria = (assignment.criteria || []).map(criterion => {
+      const criteria = (assignment.criteria || []).map((criterion) => {
         if (typeof criterion === 'string') {
           return { text: criterion, maxPoints: 0 };
         }
         return criterion;
       });
-      
-      const group = getDefaultGroup();
 
-      setFormData({
+      return {
+        ...buildEmptyFormData(),
         title: assignment.title || '',
         subjectId: assignment.subjectId || assignment.subjectRelation?.id || null,
         subject: assignment.subject || assignment.subjectRelation?.name || '',
-        group: group,
+        studentGroups: normalizeGroupSelection(
+          Array.isArray(assignment.studentGroups) && assignment.studentGroups.length > 0
+            ? assignment.studentGroups
+            : assignment.group
+        ),
         deadline: assignment.deadline ? assignment.deadline.split('T')[0] : '',
         description: assignment.description || '',
         maxScore: assignment.maxScore || 100,
         submissionType: assignment.submissionType || 'file',
-        criteria: criteria,
+        criteria,
         priority: assignment.priority || 'medium',
         allowedFormats: normalizeAllowedFormats(assignment.allowedFormats || assignment.allowedFormatItems?.map((item) => item?.format) || []),
         materialFiles: [],
         existingMaterials: normalizeMaterialFiles(assignment.materialFiles || assignment.materialItems || []),
-        removedMaterialIds: []
-      });
-    } else {
-      setFormData({
-        title: '',
-        subjectId: subjectOptions[0]?.id || null,
-        subject: subjectOptions[0]?.name || '',
-        group: availableGroups[0] || '',
-        deadline: '',
-        description: '',
-        maxScore: 100,
-        submissionType: 'file',
-        criteria: [],
-        priority: 'medium',
-        allowedFormats: [...DEFAULT_ALLOWED_FORMATS],
-        materialFiles: [],
-        existingMaterials: [],
-        removedMaterialIds: []
-      });
+        removedMaterialIds: [],
+      };
     }
-  }, [assignment, initialFormData, isOpen, availableGroups, subjectOptions, getDefaultGroup]);
+
+    return buildEmptyFormData();
+  }, [assignment, initialFormData]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      setIsGroupsDropdownOpen(false);
+      return;
+    }
+
+    if (wasOpenRef.current) {
+      return;
+    }
+
+    wasOpenRef.current = true;
+    setFormData(createInitialFormData());
+  }, [isOpen, createInitialFormData]);
+
+  useEffect(() => {
+    if (!isGroupsDropdownOpen) {
+      return undefined;
+    }
+
+    const handleOutsideClick = (event) => {
+      if (!groupsDropdownRef.current?.contains(event.target)) {
+        setIsGroupsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isGroupsDropdownOpen]);
 
   useEffect(() => {
     const selectedFormats = normalizeAllowedFormats(formData.allowedFormats);
@@ -168,6 +205,12 @@ const AssignmentModal = ({
   const materialSlotsLeft = Math.max(0, MAX_MATERIAL_FILES - totalMaterialsCount);
   const hasNoAssignableGroups = !isEdit && groupOptions.length === 0;
   const hasNoAssignableSubjects = !isEdit && subjectOptions.length === 0;
+  const selectedGroups = normalizeGroupSelection(formData.studentGroups);
+  const selectedGroupsSummary = selectedGroups.length === 0
+    ? 'Выберите группы'
+    : selectedGroups.length <= 2
+      ? selectedGroups.join(', ')
+      : `Выбрано групп: ${selectedGroups.length}`;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -192,9 +235,7 @@ const AssignmentModal = ({
     const { validateAssignmentForm } = require('../../../utils/validation');
     const validation = validateAssignmentForm({
       ...trimmedFormData,
-      studentGroups: formData.group
-        ? [formData.group.trim()] 
-        : []
+      studentGroups: normalizeGroupSelection(formData.studentGroups)
     });
     
     if (!validation.isValid) {
@@ -203,9 +244,7 @@ const AssignmentModal = ({
       return;
     }
 
-    const studentGroups = formData.group
-      ? [formData.group.trim()] 
-      : [];
+    const studentGroups = normalizeGroupSelection(formData.studentGroups);
     
     const criteriaArray = formData.criteria
       .map(criterion => {
@@ -248,6 +287,29 @@ const AssignmentModal = ({
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleToggleGroup = (groupName) => {
+    setFormData((prev) => {
+      const currentGroups = normalizeGroupSelection(prev.studentGroups);
+      const isSelected = currentGroups.includes(groupName);
+      const nextGroups = isSelected
+        ? currentGroups.filter((group) => group !== groupName)
+        : [...currentGroups, groupName];
+
+      return {
+        ...prev,
+        studentGroups: nextGroups,
+      };
+    });
+  };
+
+  const handleSelectAllGroups = () => {
+    handleInputChange('studentGroups', [...groupOptions]);
+  };
+
+  const handleClearGroups = () => {
+    handleInputChange('studentGroups', []);
   };
 
   const addCriterion = () => {
@@ -433,21 +495,44 @@ const AssignmentModal = ({
                 
                 <div className="form-row">
                   <FormGroup label="Учебная группа:" required>
-                    <select
-                      value={formData.group}
-                      onChange={(e) => handleInputChange('group', e.target.value)}
-                      className="form-select"
-                    >
-                      {groupOptions.length > 0 ? (
-                        groupOptions.map((group) => (
-                          <option key={group} value={group}>
-                            {group}
-                          </option>
-                        ))
-                      ) : (
-                        <option value="">Нет назначенных групп</option>
-                      )}
-                    </select>
+                    {groupOptions.length > 0 ? (
+                      <div className="group-dropdown" ref={groupsDropdownRef}>
+                        <button
+                          type="button"
+                          className={`group-dropdown__trigger ${isGroupsDropdownOpen ? 'is-open' : ''}`}
+                          onClick={() => setIsGroupsDropdownOpen((prev) => !prev)}
+                        >
+                          <span className="group-dropdown__trigger-label">{selectedGroupsSummary}</span>
+                          <span className="group-dropdown__trigger-arrow" aria-hidden="true">▾</span>
+                        </button>
+                        {isGroupsDropdownOpen && (
+                          <div className="group-dropdown__menu">
+                            <div className="group-dropdown__actions">
+                              <button type="button" onClick={handleSelectAllGroups}>Выбрать все</button>
+                              <button type="button" onClick={handleClearGroups}>Очистить</button>
+                            </div>
+                            <div className="group-dropdown__list">
+                              {groupOptions.map((group) => {
+                                const checked = selectedGroups.includes(group);
+                                return (
+                                  <label key={group} className={`group-checkbox-item ${checked ? 'group-checkbox-item--checked' : ''}`}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => handleToggleGroup(group)}
+                                    />
+                                    <span>{group}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="group-checkbox-empty">Нет назначенных групп</div>
+                    )}
+                    <small className="form-hint">Откройте список и отметьте нужные группы.</small>
                   </FormGroup>
                   
                   <FormGroup label="Срок сдачи:" required>

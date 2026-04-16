@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
-import { useAuth } from './AuthContext';
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
 import api from '../services/api';
-import { DEFAULT_ALLOWED_FORMATS, getAllowedFormatsFromAssignment } from '../utils';
+import { DEFAULT_ALLOWED_FORMATS, getAllowedFormatsFromAssignment, normalizeGroupName, PAGINATION_DEFAULTS } from '../utils';
 
 const normalizeAssignment = (assignment) => ({
   ...assignment,
@@ -15,7 +14,7 @@ const normalizeAssignment = (assignment) => ({
 const normalizeSubmission = (submission) => ({
   ...submission,
   subject: submission.subject || submission.subjectName || '',
-  group: submission.group || submission.groupName || '',
+  group: normalizeGroupName(submission.group || submission.groupName || ''),
   teacherComment: submission.teacherComment || '',
   submissionType: submission.submissionType || 'file',
 });
@@ -60,35 +59,38 @@ export const TeacherProvider = ({ children }) => {
   const [submissionsMeta, setSubmissionsMeta] = useState({});
   const [assignmentsQuery, setAssignmentsQuery] = useState({
     page: 1,
-    perPage: 18,
+    perPage: PAGINATION_DEFAULTS.teacherAssignments,
     sort: 'priority',
   });
   const [submissionsQuery, setSubmissionsQuery] = useState({
     page: 1,
-    perPage: 20,
+    perPage: PAGINATION_DEFAULTS.teacherSubmissions,
     sort: 'newest',
   });
+  const assignmentsQueryRef = useRef(assignmentsQuery);
+  const submissionsQueryRef = useRef(submissionsQuery);
   const [metaSubjects, setMetaSubjects] = useState([]);
   const [metaGroups, setMetaGroups] = useState([]);
+  const [metaAssignments, setMetaAssignments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const { user } = useAuth();
 
   const loadTeacherAssignments = useCallback(async (queryOverrides = {}) => {
+    const currentQuery = assignmentsQueryRef.current;
     const nextQuery = {
       page: 1,
-      perPage: 18,
+      perPage: PAGINATION_DEFAULTS.teacherAssignments,
       sort: 'priority',
-      ...assignmentsQuery,
+      ...currentQuery,
       ...queryOverrides,
     };
     const params = {
       page: nextQuery.page,
-      perPage: nextQuery.perPage,
+      per_page: nextQuery.perPage,
       sort: nextQuery.sort,
       search: nextQuery.search || undefined,
       group: nextQuery.group && nextQuery.group !== 'all' ? nextQuery.group : undefined,
-      subjectId: nextQuery.subjectId && nextQuery.subjectId !== 'all' ? nextQuery.subjectId : undefined,
+      subject_id: nextQuery.subjectId && nextQuery.subjectId !== 'all' ? nextQuery.subjectId : undefined,
       status: nextQuery.status && nextQuery.status !== 'all' ? nextQuery.status : undefined,
     };
 
@@ -102,7 +104,8 @@ export const TeacherProvider = ({ children }) => {
 
       setAllTeacherAssignments(assignmentList.map(normalizeAssignment));
       setAssignmentsMeta(assignmentsRes.data?.meta || {});
-      if (!areQueriesEqual(assignmentsQuery, nextQuery)) {
+      if (!areQueriesEqual(assignmentsQueryRef.current, nextQuery)) {
+        assignmentsQueryRef.current = nextQuery;
         setAssignmentsQuery(nextQuery);
       }
     } catch (err) {
@@ -110,23 +113,25 @@ export const TeacherProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [assignmentsQuery]);
+  }, []);
 
   const loadTeacherSubmissions = useCallback(async (queryOverrides = {}) => {
+    const currentQuery = submissionsQueryRef.current;
     const nextQuery = {
       page: 1,
-      perPage: 20,
+      perPage: PAGINATION_DEFAULTS.teacherSubmissions,
       sort: 'newest',
-      ...submissionsQuery,
+      ...currentQuery,
       ...queryOverrides,
     };
     const params = {
       page: nextQuery.page,
-      perPage: nextQuery.perPage,
+      per_page: nextQuery.perPage,
       sort: nextQuery.sort,
       search: nextQuery.search || undefined,
       status: nextQuery.status && nextQuery.status !== 'all' ? nextQuery.status : undefined,
-      assignmentId: nextQuery.assignmentId && nextQuery.assignmentId !== 'all' ? nextQuery.assignmentId : undefined,
+      assignment_id: nextQuery.assignmentId && nextQuery.assignmentId !== 'all' ? nextQuery.assignmentId : undefined,
+      subject_id: nextQuery.subjectId && nextQuery.subjectId !== 'all' ? nextQuery.subjectId : undefined,
       group: nextQuery.group && nextQuery.group !== 'all' ? nextQuery.group : undefined,
     };
 
@@ -140,7 +145,8 @@ export const TeacherProvider = ({ children }) => {
 
       setAllSubmissions(submissionList.map(normalizeSubmission));
       setSubmissionsMeta(submissionsRes.data?.meta || {});
-      if (!areQueriesEqual(submissionsQuery, nextQuery)) {
+      if (!areQueriesEqual(submissionsQueryRef.current, nextQuery)) {
+        submissionsQueryRef.current = nextQuery;
         setSubmissionsQuery(nextQuery);
       }
     } catch (err) {
@@ -148,25 +154,53 @@ export const TeacherProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [submissionsQuery]);
+  }, []);
 
-  const loadTeacherData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadTeacherMeta = useCallback(async (options = {}) => {
+    const silent = Boolean(options.silent);
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       const metaRes = await api.get('/assignments/meta');
       setMetaSubjects(Array.isArray(metaRes?.data?.subjects) ? metaRes.data.subjects : []);
       setMetaGroups(Array.isArray(metaRes?.data?.groups) ? metaRes.data.groups : []);
-
-      await Promise.all([
-        loadTeacherAssignments(),
-        loadTeacherSubmissions(),
-      ]);
+      setMetaAssignments(Array.isArray(metaRes?.data?.assignments) ? metaRes.data.assignments : []);
+      setError(null);
     } catch {
       setError('Ошибка загрузки данных преподавателя');
+    } finally {
+      if (!silent) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  const loadTeacherData = useCallback(async (options = {}) => {
+    const includeAssignments = options.includeAssignments !== false;
+    const includeSubmissions = options.includeSubmissions !== false;
+    setLoading(true);
+    setError(null);
+    try {
+      await loadTeacherMeta({ silent: true });
+
+      const requests = [];
+      if (includeAssignments) {
+        requests.push(loadTeacherAssignments());
+      }
+      if (includeSubmissions) {
+        requests.push(loadTeacherSubmissions());
+      }
+
+      if (requests.length > 0) {
+        await Promise.all(requests);
+      }
+    } catch {
+      setError('Ошибка загрузки данных преподавателя');
+    } finally {
       setLoading(false);
     }
-  }, [loadTeacherAssignments, loadTeacherSubmissions]);
+  }, [loadTeacherAssignments, loadTeacherMeta, loadTeacherSubmissions]);
 
   const gradeSubmission = useCallback(async (submissionId, score, comment, criterionScores = []) => {
     setLoading(true);
@@ -321,7 +355,7 @@ export const TeacherProvider = ({ children }) => {
   const availableGroups = useMemo(() => {
     const set = new Set();
     metaGroups.forEach((group) => {
-      const normalized = (group || '').toString().trim();
+      const normalized = normalizeGroupName(group);
       if (normalized) {
         set.add(normalized);
       }
@@ -341,11 +375,17 @@ export const TeacherProvider = ({ children }) => {
       .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   }, [metaSubjects]);
 
-  useEffect(() => {
-    if (user) {
-      loadTeacherData();
-    }
-  }, [user, loadTeacherData]);
+  const assignmentFilterOptions = useMemo(() => {
+    return metaAssignments
+      .filter((assignment) => assignment && assignment.id && assignment.title)
+      .map((assignment) => ({
+        id: Number(assignment.id),
+        title: String(assignment.title).trim(),
+        status: String(assignment.status || 'active'),
+      }))
+      .filter((assignment) => assignment.title)
+      .sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+  }, [metaAssignments]);
 
   const value = {
     teacherAssignments: assignmentsWithSubmissions,
@@ -356,8 +396,11 @@ export const TeacherProvider = ({ children }) => {
     submissionsQuery,
     availableGroups,
     availableSubjects,
+    assignmentFilterOptions,
     loading,
     error,
+    loadTeacherMeta,
+    loadTeacherData,
     loadTeacherAssignments,
     loadTeacherSubmissions,
     gradeSubmission,

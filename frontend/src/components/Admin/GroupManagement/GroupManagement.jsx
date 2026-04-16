@@ -7,6 +7,17 @@ import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import Pagination from '../../UI/Pagination/Pagination';
 import { useNotification } from '../../../context/NotificationContext';
+import {
+  copyTextToClipboard,
+  downloadCsvTemplate,
+  parseCsvText,
+  readTextFromInputSource,
+  updateAdminFilterField,
+  resetAdminFilterState,
+  prevAdminFilterPage,
+  nextAdminFilterPage,
+  handleAdminActionResult,
+} from '../../../utils';
 import './GroupManagement.scss';
 
 const GROUP_NAME_REGEX = /^[А-ЯЁA-Z0-9-]+$/i;
@@ -18,36 +29,6 @@ const BATCH_TEMPLATE = `group_name,login,email,last_name,first_name,middle_name,
 ИСП-401,ivanov01,ivanov@mail.ru,Иванов,Иван,Иванович,+7 (999) 123-45-67
 ИСП-401,petrov01,petrov@mail.ru,Петров,Петр,Петрович,+7 (999) 234-56-78
 ИСП-402,sidorov01,sidorov@mail.ru,Сидоров,Сидор,Сидорович,+7 (999) 345-67-89`;
-
-const splitCsvRow = (line) => {
-  const cells = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    if (char === '"') {
-      inQuotes = !inQuotes;
-      continue;
-    }
-    if (char === ',' && !inQuotes) {
-      cells.push(current.trim());
-      current = '';
-      continue;
-    }
-    current += char;
-  }
-
-  cells.push(current.trim());
-  return cells;
-};
-
-const parseCsvText = (text) =>
-  text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map(splitCsvRow);
 
 const normalizeStudent = (cells = []) => ({
   login: String(cells[0] || '').trim(),
@@ -97,22 +78,43 @@ const GroupManagement = ({
   const [manageLoading, setManageLoading] = useState(false);
   const [batchPreview, setBatchPreview] = useState(null);
 
-  const downloadTemplate = (filename, content) => {
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const resetCreateWizardState = () => {
+    setCreateMode('single');
+    setSingleGroupName('');
+    setSingleStudentsText('');
+    setSingleStudentsFile(null);
+    setBatchText('');
+    setBatchFile(null);
+    setBatchPreview(null);
+    setSendCredentials(true);
+  };
+
+  const closeCreateWizard = () => {
+    setShowCreateWizard(false);
+    resetCreateWizardState();
+  };
+
+  const openCreateWizard = () => {
+    resetCreateWizardState();
+    setShowCreateWizard(true);
+  };
+
+  const resetManageState = () => {
+    setActiveGroup(null);
+    setManageGroupName('');
+    setManageGroupStatus('active');
+    setManageStudentsInput('');
+    setManageStudentsFile(null);
+  };
+
+  const closeManageModal = () => {
+    setShowManageModal(false);
+    resetManageState();
   };
 
   const copyTemplate = async (content) => {
     try {
-      await navigator.clipboard.writeText(content);
+      await copyTextToClipboard(content);
       showSuccess('Шаблон скопирован в буфер обмена');
     } catch {
       showError('Не удалось скопировать шаблон');
@@ -200,13 +202,6 @@ const GroupManagement = ({
     };
   };
 
-  const readInputSource = async (textValue, fileValue) => {
-    if (fileValue) {
-      return fileValue.text();
-    }
-    return textValue;
-  };
-
   const handleCreateSingleGroup = async () => {
     const normalizedName = singleGroupName.trim().toUpperCase();
     if (!normalizedName) {
@@ -218,7 +213,7 @@ const GroupManagement = ({
       return;
     }
 
-    const sourceText = await readInputSource(singleStudentsText, singleStudentsFile);
+    const sourceText = await readTextFromInputSource(singleStudentsText, singleStudentsFile);
     const parsed = parseStudents(sourceText);
     if (parsed.errors.length) {
       showError(parsed.errors[0]);
@@ -234,20 +229,22 @@ const GroupManagement = ({
     });
     setWizardLoading(false);
 
-    if (!result?.success) {
-      showError(result?.error || 'Не удалось создать группу со студентами.');
+    const isSuccess = handleAdminActionResult({
+      result,
+      showSuccess,
+      showError,
+      errorMessage: 'Не удалось создать группу со студентами.',
+    });
+    if (!isSuccess) {
       return;
     }
 
     showSuccess(`Создана группа ${normalizedName}, добавлено студентов: ${parsed.students.length}.`);
-    setShowCreateWizard(false);
-    setSingleGroupName('');
-    setSingleStudentsText('');
-    setSingleStudentsFile(null);
+    closeCreateWizard();
   };
 
   const handlePreviewBatch = async () => {
-    const sourceText = await readInputSource(batchText, batchFile);
+    const sourceText = await readTextFromInputSource(batchText, batchFile);
     const parsed = parseGroupedStudents(sourceText);
 
     setBatchPreview({
@@ -268,7 +265,7 @@ const GroupManagement = ({
     const preview = batchPreview?.grouped?.length ? batchPreview : null;
     let parsedData = preview;
     if (!parsedData) {
-      const sourceText = await readInputSource(batchText, batchFile);
+      const sourceText = await readTextFromInputSource(batchText, batchFile);
       const groupedResult = parseGroupedStudents(sourceText || '');
       parsedData = {
         totalGroups: groupedResult.grouped.length,
@@ -319,10 +316,7 @@ const GroupManagement = ({
       return;
     }
 
-    setShowCreateWizard(false);
-    setBatchText('');
-    setBatchFile(null);
-    setBatchPreview(null);
+    closeCreateWizard();
   };
 
   const handleOpenManageGroup = (group) => {
@@ -356,8 +350,13 @@ const GroupManagement = ({
     });
     setManageLoading(false);
 
-    if (!result?.success) {
-      showError(result?.error || 'Не удалось обновить группу.');
+    const isSuccess = handleAdminActionResult({
+      result,
+      showSuccess,
+      showError,
+      errorMessage: 'Не удалось обновить группу.',
+    });
+    if (!isSuccess) {
       return;
     }
 
@@ -376,7 +375,7 @@ const GroupManagement = ({
 
   const handleBulkAttach = async () => {
     if (!activeGroup) return;
-    const sourceText = await readInputSource(manageStudentsInput, manageStudentsFile);
+    const sourceText = await readTextFromInputSource(manageStudentsInput, manageStudentsFile);
     const parsed = parseStudents(sourceText);
     if (parsed.errors.length) {
       showError(parsed.errors[0]);
@@ -384,8 +383,13 @@ const GroupManagement = ({
     }
 
     const result = await onBulkAttachStudents?.(activeGroup.id, { students: parsed.students });
-    if (!result?.success) {
-      showError(result?.error || 'Не удалось добавить студентов.');
+    const isSuccess = handleAdminActionResult({
+      result,
+      showSuccess,
+      showError,
+      errorMessage: 'Не удалось добавить студентов.',
+    });
+    if (!isSuccess) {
       return;
     }
 
@@ -401,20 +405,20 @@ const GroupManagement = ({
     const result = await onDeleteGroup?.(groupToDelete.id);
     setPendingGroupId(null);
 
-    if (!result?.success) {
-      showError(result?.error || 'Не удалось удалить группу');
+    const isSuccess = handleAdminActionResult({
+      result,
+      showSuccess,
+      showError,
+      errorMessage: 'Не удалось удалить группу',
+    });
+    if (!isSuccess) {
       return;
     }
 
     setGroupToDelete(null);
     showSuccess('Группа удалена');
     if (activeGroup?.id === groupToDelete.id) {
-      setShowManageModal(false);
-      setActiveGroup(null);
-      setManageGroupName('');
-      setManageGroupStatus('active');
-      setManageStudentsInput('');
-      setManageStudentsFile(null);
+      closeManageModal();
     }
   };
 
@@ -426,7 +430,7 @@ const GroupManagement = ({
           <p>Создавайте группы сразу со студентами: одной группой или массово.</p>
         </div>
         <div className="group-management__header-actions">
-          <Button variant="primary" onClick={() => setShowCreateWizard(true)}>
+          <Button variant="primary" onClick={openCreateWizard}>
             Создать группы и студентов
           </Button>
         </div>
@@ -434,7 +438,7 @@ const GroupManagement = ({
 
       <Modal
         isOpen={showCreateWizard}
-        onClose={() => setShowCreateWizard(false)}
+        onClose={closeCreateWizard}
         title="Создание групп и студентов"
         size="large"
         className="admin-form-modal"
@@ -505,7 +509,7 @@ const GroupManagement = ({
                     type="button"
                     variant="secondary"
                     size="small"
-                    onClick={() => downloadTemplate('group-single-template.csv', SINGLE_TEMPLATE)}
+                    onClick={() => downloadCsvTemplate('group-single-template.csv', SINGLE_TEMPLATE)}
                   >
                     Скачать шаблон CSV
                   </Button>
@@ -556,7 +560,7 @@ const GroupManagement = ({
                     type="button"
                     variant="secondary"
                     size="small"
-                    onClick={() => downloadTemplate('groups-batch-template.csv', BATCH_TEMPLATE)}
+                    onClick={() => downloadCsvTemplate('groups-batch-template.csv', BATCH_TEMPLATE)}
                   >
                     Скачать шаблон CSV
                   </Button>
@@ -606,7 +610,7 @@ const GroupManagement = ({
             <input
               type="text"
               value={filterState.search}
-              onChange={(event) => setFilterState((prev) => ({ ...prev, search: event.target.value, page: 1 }))}
+              onChange={(event) => setFilterState((prev) => updateAdminFilterField(prev, 'search', event.target.value))}
               placeholder="По названию группы"
             />
           </div>
@@ -614,7 +618,7 @@ const GroupManagement = ({
             <label>Статус</label>
             <select
               value={filterState.status}
-              onChange={(event) => setFilterState((prev) => ({ ...prev, status: event.target.value, page: 1 }))}
+              onChange={(event) => setFilterState((prev) => updateAdminFilterField(prev, 'status', event.target.value))}
             >
               <option value="all">Все</option>
               <option value="active">Активные</option>
@@ -623,7 +627,7 @@ const GroupManagement = ({
           </div>
           <div className="group-management__sort">
             <label>Сортировка</label>
-            <select value={filterState.sort} onChange={(event) => setFilterState((prev) => ({ ...prev, sort: event.target.value, page: 1 }))}>
+            <select value={filterState.sort} onChange={(event) => setFilterState((prev) => updateAdminFilterField(prev, 'sort', event.target.value))}>
               <option value="name_asc">Название (А-Я)</option>
               <option value="name_desc">Название (Я-А)</option>
               <option value="students_desc">Больше студентов</option>
@@ -636,8 +640,7 @@ const GroupManagement = ({
               type="button"
               variant="outline"
               onClick={() =>
-                setFilterState((prev) => ({
-                  ...prev,
+                setFilterState((prev) => resetAdminFilterState(prev, {
                   search: '',
                   status: 'all',
                   sort: query.sort || 'name_asc',
@@ -692,20 +695,13 @@ const GroupManagement = ({
         lastPage={paginationMeta.lastPage}
         total={paginationMeta.total}
         fallbackCount={groups.length}
-        onPrev={() => setFilterState((prev) => ({ ...prev, page: Math.max(1, (paginationMeta.currentPage || 1) - 1) }))}
-        onNext={() => setFilterState((prev) => ({ ...prev, page: (paginationMeta.currentPage || 1) + 1 }))}
+        onPrev={() => setFilterState((prev) => prevAdminFilterPage(prev, paginationMeta.currentPage))}
+        onNext={() => setFilterState((prev) => nextAdminFilterPage(prev, paginationMeta.currentPage))}
       />
 
       <Modal
         isOpen={showManageModal}
-        onClose={() => {
-          setShowManageModal(false);
-          setActiveGroup(null);
-          setManageGroupName('');
-          setManageGroupStatus('active');
-          setManageStudentsInput('');
-          setManageStudentsFile(null);
-        }}
+        onClose={closeManageModal}
         title="Управление группой"
         size="large"
         className="admin-form-modal"
@@ -756,7 +752,7 @@ const GroupManagement = ({
             <p className="admin-modal-help__title">Шаблон для добавления студентов</p>
             <p className="admin-modal-help__sample">{SINGLE_TEMPLATE}</p>
             <div className="admin-modal-help__actions">
-              <Button type="button" variant="secondary" size="small" onClick={() => downloadTemplate('group-students-template.csv', SINGLE_TEMPLATE)}>
+              <Button type="button" variant="secondary" size="small" onClick={() => downloadCsvTemplate('group-students-template.csv', SINGLE_TEMPLATE)}>
                 Скачать шаблон CSV
               </Button>
               <Button type="button" variant="warning" size="small" onClick={() => copyTemplate(SINGLE_TEMPLATE)}>

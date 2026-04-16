@@ -5,6 +5,13 @@ import Button from '../../UI/Button/Button';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import Pagination from '../../UI/Pagination/Pagination';
 import { useNotification } from '../../../context/NotificationContext';
+import {
+  updateAdminFilterField,
+  resetAdminFilterState,
+  prevAdminFilterPage,
+  nextAdminFilterPage,
+  downloadCsvTemplate,
+} from '../../../utils';
 import './SystemLogs.scss';
 
 const SystemLogs = ({ logs = [], paginationMeta = {}, query = {}, onFetchLogs }) => {
@@ -33,15 +40,14 @@ const SystemLogs = ({ logs = [], paginationMeta = {}, query = {}, onFetchLogs })
   }, [filterState, onFetchLogs]);
 
   const handleResetFilters = () => {
-    setFilterState({
+    setFilterState((prev) => resetAdminFilterState(prev, {
       action: 'all',
       period: 'all',
       role: 'all',
       sort: 'newest',
       search: '',
       page: 1,
-      perPage: filterState.perPage,
-    });
+    }));
   };
 
   const getActionVariant = (action) => {
@@ -64,16 +70,7 @@ const SystemLogs = ({ logs = [], paginationMeta = {}, query = {}, onFetchLogs })
       ])
     ].map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
 
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `system-logs-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadCsvTemplate(`system-logs-${new Date().toISOString().split('T')[0]}.csv`, csvContent);
   };
 
   const handleClearLogs = () => {
@@ -110,7 +107,7 @@ const SystemLogs = ({ logs = [], paginationMeta = {}, query = {}, onFetchLogs })
             <label>Тип действия:</label>
             <select 
               value={filterState.action} 
-              onChange={(e) => setFilterState((prev) => ({ ...prev, action: e.target.value, page: 1 }))}
+              onChange={(e) => setFilterState((prev) => updateAdminFilterField(prev, 'action', e.target.value))}
               className="filter-select"
             >
               <option value="all">Все действия</option>
@@ -125,7 +122,7 @@ const SystemLogs = ({ logs = [], paginationMeta = {}, query = {}, onFetchLogs })
             <label>Период:</label>
             <select 
               value={filterState.period} 
-              onChange={(e) => setFilterState((prev) => ({ ...prev, period: e.target.value, page: 1 }))}
+              onChange={(e) => setFilterState((prev) => updateAdminFilterField(prev, 'period', e.target.value))}
               className="filter-select"
             >
               <option value="all">За всё время</option>
@@ -139,7 +136,7 @@ const SystemLogs = ({ logs = [], paginationMeta = {}, query = {}, onFetchLogs })
             <label>Роль:</label>
             <select
               value={filterState.role}
-              onChange={(e) => setFilterState((prev) => ({ ...prev, role: e.target.value, page: 1 }))}
+              onChange={(e) => setFilterState((prev) => updateAdminFilterField(prev, 'role', e.target.value))}
               className="filter-select"
             >
               <option value="all">Все роли</option>
@@ -156,7 +153,7 @@ const SystemLogs = ({ logs = [], paginationMeta = {}, query = {}, onFetchLogs })
               type="text"
               placeholder="Поиск по логам..."
               value={filterState.search}
-              onChange={(e) => setFilterState((prev) => ({ ...prev, search: e.target.value, page: 1 }))}
+              onChange={(e) => setFilterState((prev) => updateAdminFilterField(prev, 'search', e.target.value))}
               className="search-input"
             />
           </div>
@@ -165,7 +162,7 @@ const SystemLogs = ({ logs = [], paginationMeta = {}, query = {}, onFetchLogs })
             <label>Сортировка:</label>
             <select
               value={filterState.sort}
-              onChange={(e) => setFilterState((prev) => ({ ...prev, sort: e.target.value, page: 1 }))}
+              onChange={(e) => setFilterState((prev) => updateAdminFilterField(prev, 'sort', e.target.value))}
               className="filter-select"
             >
               <option value="newest">Сначала новые</option>
@@ -211,8 +208,8 @@ const SystemLogs = ({ logs = [], paginationMeta = {}, query = {}, onFetchLogs })
         lastPage={paginationMeta.lastPage}
         total={paginationMeta.total}
         fallbackCount={logs.length}
-        onPrev={() => setFilterState((prev) => ({ ...prev, page: Math.max(1, (paginationMeta.currentPage || 1) - 1) }))}
-        onNext={() => setFilterState((prev) => ({ ...prev, page: (paginationMeta.currentPage || 1) + 1 }))}
+        onPrev={() => setFilterState((prev) => prevAdminFilterPage(prev, paginationMeta.currentPage))}
+        onNext={() => setFilterState((prev) => nextAdminFilterPage(prev, paginationMeta.currentPage))}
       />
 
       <div className="logs-summary">

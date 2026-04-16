@@ -7,6 +7,15 @@ import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import Pagination from '../../UI/Pagination/Pagination';
 import { useNotification } from '../../../context/NotificationContext';
+import {
+  copyTextToClipboard,
+  downloadCsvTemplate,
+  updateAdminFilterField,
+  resetAdminFilterState,
+  prevAdminFilterPage,
+  nextAdminFilterPage,
+  handleAdminActionResult,
+} from '../../../utils';
 import './SubjectManagement.scss';
 
 const SUBJECT_IMPORT_TEMPLATE = `name,teacher,status
@@ -15,6 +24,18 @@ const SUBJECT_IMPORT_TEMPLATE = `name,teacher,status
 
 const getTeacherFullName = (teacher) =>
   [teacher?.lastName, teacher?.firstName, teacher?.middleName].filter(Boolean).join(' ').trim();
+
+const createDefaultSubjectFormData = () => ({
+  name: '',
+  teacherId: '',
+  status: 'active',
+});
+
+const createSubjectFormDataFromSubject = (subject) => ({
+  name: subject?.name || '',
+  teacherId: subject?.teacherId || subject?.teacher?.id || '',
+  status: subject?.status || 'active',
+});
 
 const SubjectManagement = ({
   subjects = [],
@@ -34,11 +55,7 @@ const SubjectManagement = ({
   const [createMode, setCreateMode] = useState('manual');
   const [manualNamesInput, setManualNamesInput] = useState('');
   const [editingSubject, setEditingSubject] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    teacherId: '',
-    status: 'active',
-  });
+  const [formData, setFormData] = useState(createDefaultSubjectFormData);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [subjectToDelete, setSubjectToDelete] = useState(null);
   const [formErrors, setFormErrors] = useState({});
@@ -55,22 +72,15 @@ const SubjectManagement = ({
     perPage: query.perPage || 18,
   });
 
-  const downloadTemplate = (filename, content) => {
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const closeSubjectForm = () => {
+    setShowForm(false);
+    setEditingSubject(null);
+    setFormData(createDefaultSubjectFormData());
   };
 
   const copyTemplate = async (content) => {
     try {
-      await navigator.clipboard.writeText(content);
+      await copyTextToClipboard(content);
       showSuccess('Шаблон скопирован в буфер обмена');
     } catch {
       showError('Не удалось скопировать шаблон');
@@ -96,8 +106,35 @@ const SubjectManagement = ({
     return map;
   }, [teachers]);
 
+  const teacherOptions = useMemo(() => {
+    const options = new Map();
+
+    teachers.forEach((teacher) => {
+      const teacherId = Number(teacher.id);
+      if (Number.isFinite(teacherId) && teacherId > 0) {
+        options.set(teacherId, {
+          id: teacherId,
+          label: teacher.fullName || teacher.name || teacher.login || `teacher_${teacherId}`,
+        });
+      }
+    });
+
+    const editingTeacherId = Number(editingSubject?.teacherId || editingSubject?.teacher?.id || formData.teacherId);
+    if (Number.isFinite(editingTeacherId) && editingTeacherId > 0 && !options.has(editingTeacherId)) {
+      const fallbackLabel = getTeacherFullName(editingSubject?.teacher)
+        || teacherMap.get(editingTeacherId)
+        || `ID ${editingTeacherId}`;
+      options.set(editingTeacherId, {
+        id: editingTeacherId,
+        label: fallbackLabel,
+      });
+    }
+
+    return Array.from(options.values()).sort((left, right) => left.label.localeCompare(right.label, 'ru'));
+  }, [teachers, editingSubject, formData.teacherId, teacherMap]);
+
   const handleCreate = () => {
-    setFormData({ name: '', teacherId: '', status: 'active' });
+    setFormData(createDefaultSubjectFormData());
     setManualNamesInput('');
     setImportFile(null);
     setImportPreview(null);
@@ -109,11 +146,7 @@ const SubjectManagement = ({
   };
 
   const handleEdit = (subject) => {
-    setFormData({
-      name: subject.name || '',
-      teacherId: subject.teacherId || subject.teacher?.id || '',
-      status: subject.status || 'active',
-    });
+    setFormData(createSubjectFormDataFromSubject(subject));
     setEditingSubject(subject);
     setFormErrors({});
     setShowForm(true);
@@ -159,14 +192,18 @@ const SubjectManagement = ({
     }
 
     const result = await onUpdateSubject?.(editingSubject.id, payload);
-    if (!result?.success) {
-      showError(result?.error || 'Не удалось обновить предмет');
+    const isSuccess = handleAdminActionResult({
+      result,
+      showSuccess,
+      showError,
+      errorMessage: 'Не удалось обновить предмет',
+    });
+    if (!isSuccess) {
       return;
     }
 
     showSuccess('Изменения сохранены');
-    setShowForm(false);
-    setEditingSubject(null);
+    closeSubjectForm();
   };
 
   const handleCreateManual = async () => {
@@ -203,7 +240,7 @@ const SubjectManagement = ({
       return;
     }
 
-    setShowForm(false);
+    closeSubjectForm();
     setManualNamesInput('');
   };
 
@@ -229,8 +266,13 @@ const SubjectManagement = ({
     setImportLoading(true);
     const result = await onPreviewSubjectsImport?.(importFile);
     setImportLoading(false);
-    if (!result?.success) {
-      showError(result?.error || 'Не удалось проверить файл');
+    const isSuccess = handleAdminActionResult({
+      result,
+      showSuccess,
+      showError,
+      errorMessage: 'Не удалось проверить файл',
+    });
+    if (!isSuccess) {
       return;
     }
     setImportPreview(result.data?.data || result.data);
@@ -246,14 +288,19 @@ const SubjectManagement = ({
     setImportLoading(true);
     const result = await onImportSubjects?.(importPreview.validRows, importMode);
     setImportLoading(false);
-    if (!result?.success) {
-      showError(result?.error || 'Импорт завершился с ошибкой');
+    const isSuccess = handleAdminActionResult({
+      result,
+      showSuccess,
+      showError,
+      errorMessage: 'Импорт завершился с ошибкой',
+    });
+    if (!isSuccess) {
       return;
     }
     showSuccess('Импорт предметов завершен');
     setImportPreview(null);
     setImportFile(null);
-    setShowForm(false);
+    closeSubjectForm();
   };
 
   return (
@@ -278,14 +325,14 @@ const SubjectManagement = ({
               type="text"
               placeholder="По названию предмета"
               value={filterState.search}
-              onChange={(event) => setFilterState((prev) => ({ ...prev, search: event.target.value, page: 1 }))}
+              onChange={(event) => setFilterState((prev) => updateAdminFilterField(prev, 'search', event.target.value))}
             />
           </div>
           <div className="subject-management__filter-field">
             <label>Статус</label>
             <select
               value={filterState.status}
-              onChange={(event) => setFilterState((prev) => ({ ...prev, status: event.target.value, page: 1 }))}
+              onChange={(event) => setFilterState((prev) => updateAdminFilterField(prev, 'status', event.target.value))}
             >
               <option value="all">Любой статус</option>
               <option value="active">Активные</option>
@@ -296,7 +343,7 @@ const SubjectManagement = ({
             <label>Преподаватель</label>
             <select
               value={filterState.teacherId}
-              onChange={(event) => setFilterState((prev) => ({ ...prev, teacherId: event.target.value, page: 1 }))}
+              onChange={(event) => setFilterState((prev) => updateAdminFilterField(prev, 'teacherId', event.target.value))}
             >
               <option value="all">Любой преподаватель</option>
               {teachers.map((teacher) => (
@@ -310,7 +357,7 @@ const SubjectManagement = ({
             <label>Сортировка</label>
             <select
               value={filterState.sort}
-              onChange={(event) => setFilterState((prev) => ({ ...prev, sort: event.target.value, page: 1 }))}
+              onChange={(event) => setFilterState((prev) => updateAdminFilterField(prev, 'sort', event.target.value))}
             >
               <option value="name_asc">Название А-Я</option>
               <option value="name_desc">Название Я-А</option>
@@ -324,8 +371,7 @@ const SubjectManagement = ({
               type="button"
               variant="outline"
               onClick={() =>
-                setFilterState((prev) => ({
-                  ...prev,
+                setFilterState((prev) => resetAdminFilterState(prev, {
                   search: '',
                   status: 'all',
                   teacherId: 'all',
@@ -342,10 +388,7 @@ const SubjectManagement = ({
 
       <Modal
         isOpen={showForm}
-        onClose={() => {
-          setShowForm(false);
-          setEditingSubject(null);
-        }}
+        onClose={closeSubjectForm}
         title={editingSubject ? 'Редактировать предмет' : 'Создание и импорт предметов'}
         size="large"
         className="admin-form-modal"
@@ -373,9 +416,9 @@ const SubjectManagement = ({
                     onChange={(event) => setFormData((prev) => ({ ...prev, teacherId: event.target.value }))}
                   >
                     <option value="">Не назначен</option>
-                    {teachers.map((teacher) => (
+                    {teacherOptions.map((teacher) => (
                       <option key={teacher.id} value={teacher.id}>
-                        {teacher.fullName || teacher.name || teacher.login}
+                        {teacher.label}
                       </option>
                     ))}
                   </select>
@@ -399,10 +442,7 @@ const SubjectManagement = ({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingSubject(null);
-                  }}
+                  onClick={closeSubjectForm}
                 >
                   Отмена
                 </Button>
@@ -435,9 +475,9 @@ const SubjectManagement = ({
                     onChange={(event) => setFormData((prev) => ({ ...prev, teacherId: event.target.value }))}
                   >
                     <option value="">Не назначен</option>
-                    {teachers.map((teacher) => (
+                    {teacherOptions.map((teacher) => (
                       <option key={teacher.id} value={teacher.id}>
-                        {teacher.fullName || teacher.name || teacher.login}
+                        {teacher.label}
                       </option>
                     ))}
                   </select>
@@ -495,7 +535,7 @@ const SubjectManagement = ({
                         type="button"
                         variant="secondary"
                         size="small"
-                        onClick={() => downloadTemplate('subjects-import-template.csv', SUBJECT_IMPORT_TEMPLATE)}
+                        onClick={() => downloadCsvTemplate('subjects-import-template.csv', SUBJECT_IMPORT_TEMPLATE)}
                       >
                         Скачать шаблон CSV
                       </Button>
@@ -569,8 +609,8 @@ const SubjectManagement = ({
         lastPage={paginationMeta.lastPage}
         total={paginationMeta.total}
         fallbackCount={subjects.length}
-        onPrev={() => setFilterState((prev) => ({ ...prev, page: Math.max(1, (paginationMeta.currentPage || 1) - 1) }))}
-        onNext={() => setFilterState((prev) => ({ ...prev, page: (paginationMeta.currentPage || 1) + 1 }))}
+        onPrev={() => setFilterState((prev) => prevAdminFilterPage(prev, paginationMeta.currentPage))}
+        onNext={() => setFilterState((prev) => nextAdminFilterPage(prev, paginationMeta.currentPage))}
       />
 
       <ConfirmModal

@@ -20,8 +20,9 @@ const IconAlert = () => <span className="overview-icon overview-icon--panel" ari
 const IconHistory = () => <span className="overview-icon overview-icon--panel" aria-hidden="true">🕒</span>;
 
 const StatisticsSection = ({ stats, users = [], groups = [], subjects = [], logs = [] }) => {
-  const studentCount = users.filter((user) => user.role === 'student').length;
-  const teacherCount = users.filter((user) => user.role === 'teacher').length;
+  const studentCount = Number(stats.studentUsers ?? users.filter((user) => user.role === 'student').length);
+  const teacherCount = Number(stats.teacherUsers ?? users.filter((user) => user.role === 'teacher').length);
+  const adminCount = Number(stats.adminUsers ?? users.filter((user) => user.role === 'admin').length);
   const inactiveUsers = users.filter((user) => user.status === 'inactive' || user.isActive === false).length;
   const groupsWithoutStudents = groups.filter((group) => Number(group.studentsCount || 0) === 0).length;
   const inactiveSubjects = subjects.filter((subject) => subject.status === 'inactive').length;
@@ -55,7 +56,7 @@ const StatisticsSection = ({ stats, users = [], groups = [], subjects = [], logs
         <KpiCard
           title="Всего пользователей"
           value={stats.totalUsers ?? users.length}
-          note={`Студентов: ${studentCount} · Преподавателей: ${teacherCount}`}
+          note={`Студентов: ${studentCount} · Преподавателей: ${teacherCount} · Админов: ${adminCount}`}
           tone="primary"
           icon={<IconUsers />}
         />

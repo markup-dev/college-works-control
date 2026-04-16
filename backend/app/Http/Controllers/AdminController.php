@@ -18,11 +18,23 @@ use Throwable;
 
 class AdminController extends Controller
 {
+    private const USERS_PER_PAGE = 20;
+    private const GROUPS_PER_PAGE = 20;
+    private const SUBJECTS_PER_PAGE = 20;
+    private const LOGS_PER_PAGE = 20;
+
     public function stats()
     {
+        $usersByRole = User::selectRaw('role, COUNT(*) as total')
+            ->groupBy('role')
+            ->pluck('total', 'role');
+
         return response()->json([
             'total_users' => User::count(),
             'active_users' => User::where('is_active', true)->count(),
+            'student_users' => (int) ($usersByRole['student'] ?? 0),
+            'teacher_users' => (int) ($usersByRole['teacher'] ?? 0),
+            'admin_users' => (int) ($usersByRole['admin'] ?? 0),
             'total_groups' => Group::count(),
             'total_subjects' => Subject::count(),
             'active_subjects' => Subject::where('status', 'active')->count(),
@@ -139,7 +151,7 @@ class AdminController extends Controller
                 break;
         }
 
-        $perPage = (int) ($validated['per_page'] ?? 24);
+        $perPage = (int) ($validated['per_page'] ?? self::USERS_PER_PAGE);
         $users = $query->paginate($perPage)->withQueryString();
 
         return response()->json([
@@ -512,7 +524,7 @@ class AdminController extends Controller
                 break;
         }
 
-        $perPage = (int) ($validated['per_page'] ?? 18);
+        $perPage = (int) ($validated['per_page'] ?? self::GROUPS_PER_PAGE);
         $groups = $query->paginate($perPage)->withQueryString();
 
         return response()->json([
@@ -944,7 +956,7 @@ class AdminController extends Controller
                 break;
         }
 
-        $perPage = (int) ($validated['per_page'] ?? 18);
+        $perPage = (int) ($validated['per_page'] ?? self::SUBJECTS_PER_PAGE);
         $subjects = $query->paginate($perPage)->withQueryString();
 
         return response()->json([
@@ -1097,18 +1109,6 @@ class AdminController extends Controller
         ]);
     }
 
-    // --- Assignments (admin) ---
-
-    public function deleteAssignment(Request $request, Assignment $assignment)
-    {
-        $title = $assignment->title;
-        $assignment->delete();
-
-        $this->log($request, 'delete_assignment', "Удалено задание {$title}");
-
-        return response()->json(['success' => true]);
-    }
-
     // --- Logs ---
 
     public function logs()
@@ -1170,7 +1170,7 @@ class AdminController extends Controller
             $query->latest('created_at');
         }
 
-        $perPage = (int) ($validated['per_page'] ?? 20);
+        $perPage = (int) ($validated['per_page'] ?? self::LOGS_PER_PAGE);
         $logs = $query->paginate($perPage)->withQueryString();
 
         $items = collect($logs->items())

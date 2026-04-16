@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import DashboardHeader from '../../components/Teacher/DashboardHeader/DashboardHeader';
 import AssignmentCard from '../../components/Teacher/AssignmentCard/AssignmentCard';
 import SubmissionsTable from '../../components/Teacher/SubmissionsTable/SubmissionsTable';
@@ -14,7 +14,13 @@ import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsMod
 import { useAuth } from '../../context/AuthContext';
 import { useTeacher } from '../../context/TeacherContext';
 import { useNotification } from '../../context/NotificationContext';
-import { calculateSubmissionStats, formatDate } from '../../utils';
+import {
+  calculateSubmissionStats,
+  formatDate,
+  buildNormalizedGroupOptions,
+  buildSubmissionSubjectOptions,
+  PAGINATION_DEFAULTS,
+} from '../../utils';
 import api from '../../services/api';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 import './TeacherDashboard.scss';
@@ -47,6 +53,7 @@ const TeacherDashboard = () => {
     availableGroups: teacherAvailableGroups,
     availableSubjects: teacherAvailableSubjects,
     loading, 
+    loadTeacherMeta,
     loadTeacherAssignments, 
     loadTeacherSubmissions,
     gradeSubmission,
@@ -88,6 +95,9 @@ const TeacherDashboard = () => {
   const [assignmentFormDraft, setAssignmentFormDraft] = useState(null);
   const [assignmentPage, setAssignmentPage] = useState(1);
   const [submissionPage, setSubmissionPage] = useState(1);
+  const [analyticsAssignments, setAnalyticsAssignments] = useState([]);
+  const [analyticsSubmissions, setAnalyticsSubmissions] = useState([]);
+  const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
   const debouncedAssignmentSearch = useDebouncedValue(assignmentSearchTerm, 350);
   const debouncedSubmissionsSearch = useDebouncedValue(searchTerm, 350);
 
@@ -106,27 +116,78 @@ const TeacherDashboard = () => {
     setSubmissionPage(1);
   };
 
+  const loadAnalyticsSnapshot = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const [assignmentsRes, submissionsRes] = await Promise.all([
+        api.get('/assignments', { params: { sort: 'newest' } }),
+        api.get('/submissions', { params: { sort: 'newest' } }),
+      ]);
+
+      const analyticsAssignmentList = Array.isArray(assignmentsRes.data?.data)
+        ? assignmentsRes.data.data
+        : (assignmentsRes.data || []);
+      const analyticsSubmissionList = Array.isArray(submissionsRes.data?.data)
+        ? submissionsRes.data.data
+        : (submissionsRes.data || []);
+
+      setAnalyticsAssignments(analyticsAssignmentList);
+      setAnalyticsSubmissions(analyticsSubmissionList);
+      setAnalyticsLoaded(true);
+    } catch (error) {
+      setAnalyticsLoaded(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadTeacherMeta();
+      loadAnalyticsSnapshot();
+    }
+  }, [user, loadTeacherMeta, loadAnalyticsSnapshot]);
+
+  useEffect(() => {
+    if (activeTab === 'analytics' && !analyticsLoaded) {
+      loadAnalyticsSnapshot();
+    }
+  }, [activeTab, analyticsLoaded, loadAnalyticsSnapshot]);
+
+  useEffect(() => {
+    if (activeTab === 'assignments' || activeTab === 'completed') {
+      setAssignmentPage(1);
+    }
+    if (activeTab === 'submissions') {
+      setSubmissionPage(1);
+    }
+  }, [activeTab]);
+
   useEffect(() => {
     loadTeacherAssignments({
       page: assignmentPage,
-      perPage: 18,
+      perPage: PAGINATION_DEFAULTS.teacherAssignments,
       sort: assignmentSortBy,
       search: debouncedAssignmentSearch || undefined,
       group: assignmentGroupFilter !== 'all' ? assignmentGroupFilter : undefined,
+      status: activeTab === 'completed' ? 'archived' : (activeTab === 'assignments' ? 'not_archived' : undefined),
     });
-  }, [assignmentPage, assignmentSortBy, debouncedAssignmentSearch, assignmentGroupFilter, loadTeacherAssignments]);
+  }, [activeTab, assignmentPage, assignmentSortBy, debouncedAssignmentSearch, assignmentGroupFilter, loadTeacherAssignments]);
 
   useEffect(() => {
+    if (activeTab !== 'submissions') {
+      return;
+    }
+
     loadTeacherSubmissions({
       page: submissionPage,
-      perPage: 20,
+      perPage: PAGINATION_DEFAULTS.teacherSubmissions,
       sort: 'newest',
       search: debouncedSubmissionsSearch || undefined,
       status: statusFilter !== 'all' ? statusFilter : undefined,
-      assignmentId: assignmentFilter !== 'all' ? assignmentFilter : undefined,
+      subjectId: assignmentFilter !== 'all' ? assignmentFilter : undefined,
       group: groupFilter !== 'all' ? groupFilter : undefined,
     });
-  }, [submissionPage, debouncedSubmissionsSearch, statusFilter, assignmentFilter, groupFilter, loadTeacherSubmissions]);
+  }, [activeTab, submissionPage, debouncedSubmissionsSearch, statusFilter, assignmentFilter, groupFilter, loadTeacherSubmissions]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -160,16 +221,20 @@ const TeacherDashboard = () => {
     filteredActiveAssignments,
     filteredCompletedAssignments
   } = useMemo(() => {
-    const completedAssignmentsCount = assignments.filter((assignment) => assignment.isCompleted || assignment.status === 'archived').length;
-    const activeAssignmentsCount = assignments.length - completedAssignmentsCount;
+    const completedAssignmentsCount = analyticsAssignments.filter((assignment) => assignment.isCompleted || assignment.status === 'archived').length;
+    const activeAssignmentsCount = analyticsAssignments.length - completedAssignmentsCount;
+    const hasAssignmentsTotal = assignmentsMeta?.total !== undefined && assignmentsMeta?.total !== null;
+    const hasSubmissionsTotal = submissionsMeta?.total !== undefined && submissionsMeta?.total !== null;
 
     const dashboardStats = {
-      totalAssignments: activeAssignmentsCount,
+      totalAssignments: hasAssignmentsTotal ? Number(assignmentsMeta.total) : activeAssignmentsCount,
       completedAssignments: completedAssignmentsCount,
-      pendingSubmissions: submissions.filter(s => s.status === 'submitted').length,
-      gradedSubmissions: submissions.filter(s => s.status === 'graded').length,
-      returnedSubmissions: submissions.filter(s => s.status === 'returned').length,
-      totalSubmissions: submissions.length
+      pendingSubmissions: hasSubmissionsTotal
+        ? Number(submissionsMeta.total)
+        : analyticsSubmissions.filter(s => s.status === 'submitted').length,
+      gradedSubmissions: analyticsSubmissions.filter(s => s.status === 'graded').length,
+      returnedSubmissions: analyticsSubmissions.filter(s => s.status === 'returned').length,
+      totalSubmissions: analyticsSubmissions.length
     };
     const filteredSubs = [...submissions];
     const filteredAssigns = [...assignments];
@@ -188,30 +253,48 @@ const TeacherDashboard = () => {
       filteredActiveAssignments: activeAssignments,
       filteredCompletedAssignments: completedAssignments,
     };
-  }, [assignments, submissions]);
+  }, [assignments, submissions, analyticsAssignments, analyticsSubmissions, assignmentsMeta, submissionsMeta]);
 
-  const availableGroups = useMemo(() => {
-    const groupSet = new Set();
-    const addGroup = (value) => {
-      const normalized = value?.trim();
-      if (normalized) {
-        groupSet.add(normalized);
-      }
-    };
+  const assignmentGroupOptions = useMemo(
+    () => buildNormalizedGroupOptions(teacherAvailableGroups),
+    [teacherAvailableGroups]
+  );
 
-    assignments.forEach((assignment) => {
-      addGroup(assignment.group);
-      (assignment.studentGroups || []).forEach(addGroup);
-    });
+  const submissionAssignmentOptions = useMemo(
+    () => buildSubmissionSubjectOptions({
+      teacherSubjects: teacherAvailableSubjects,
+      analyticsAssignments,
+    }),
+    [analyticsAssignments, teacherAvailableSubjects]
+  );
 
-    submissions.forEach((submission) => {
-      addGroup(submission.group);
-    });
+  const submissionGroupOptions = useMemo(() => assignmentGroupOptions, [assignmentGroupOptions]);
 
-    teacherAvailableGroups.forEach(addGroup);
+  useEffect(() => {
+    if (assignmentFilter === 'all') {
+      return;
+    }
 
-    return Array.from(groupSet);
-  }, [assignments, submissions, teacherAvailableGroups]);
+    const hasSelectedSubject = submissionAssignmentOptions.some(
+      (item) => String(item.id) === String(assignmentFilter)
+    );
+
+    if (!hasSelectedSubject) {
+      setAssignmentFilter('all');
+      setSubmissionPage(1);
+    }
+  }, [assignmentFilter, submissionAssignmentOptions]);
+
+  useEffect(() => {
+    if (groupFilter === 'all') {
+      return;
+    }
+
+    if (!submissionGroupOptions.includes(groupFilter)) {
+      setGroupFilter('all');
+      setSubmissionPage(1);
+    }
+  }, [groupFilter, submissionGroupOptions]);
 
   const reviewQueue = useMemo(() => (
     submissions
@@ -307,6 +390,7 @@ const TeacherDashboard = () => {
         gradeData.useCriteriaScoring ? normalizedCriterionScores : []
       );
       if (result.success) {
+        loadAnalyticsSnapshot();
         setShowGradingModal(false);
         setSelectedSubmission(null);
         setGradeData({ score: '', comment: '', criterionScores: [], draftSubmissionId: null, useCriteriaScoring: false });
@@ -332,6 +416,7 @@ const TeacherDashboard = () => {
           try {
             const result = await returnSubmission(submission.id, comment);
             if (result.success) {
+              loadAnalyticsSnapshot();
               showSuccess(`Работа "${submission.assignmentTitle}" возвращена студенту на доработку`);
             } else {
               showError(result.error || 'Ошибка при возврате работы');
@@ -411,7 +496,10 @@ const TeacherDashboard = () => {
   };
 
   const handleViewSubmissions = (assignmentId) => {
-    setAssignmentFilter(assignmentId.toString());
+    const relatedAssignment = assignments.find((assignment) => Number(assignment.id) === Number(assignmentId));
+    const nextSubjectId = relatedAssignment?.subjectId || relatedAssignment?.subject_id;
+    setAssignmentFilter(nextSubjectId ? String(nextSubjectId) : 'all');
+    setStatusFilter('all');
     setSubmissionPage(1);
     setActiveTab('submissions');
   };
@@ -458,6 +546,7 @@ const TeacherDashboard = () => {
     try {
       const result = await deleteAssignment(assignment.id);
       if (result.success) {
+        loadAnalyticsSnapshot();
         showSuccess(`Задание "${assignment.title}" удалено`);
       } else {
         showError(result.error || 'Не удалось удалить задание');
@@ -483,6 +572,7 @@ const TeacherDashboard = () => {
           })
         : await createAssignment(assignmentData);
       if (result.success) {
+        loadAnalyticsSnapshot();
         setAssignmentFormDraft(null);
         closeAssignmentModal();
         showSuccess(selectedAssignment ? 'Задание обновлено!' : 'Задание успешно создано!');
@@ -528,6 +618,9 @@ const TeacherDashboard = () => {
             activeAssignments={filteredActiveAssignments}
             completedAssignments={filteredCompletedAssignments}
             filteredSubmissions={filteredSubmissions}
+            analyticsAssignments={analyticsAssignments}
+            analyticsSubmissions={analyticsSubmissions}
+            submissionAssignmentOptions={submissionAssignmentOptions}
             assignmentFilter={assignmentFilter}
             groupFilter={groupFilter}
             statusFilter={statusFilter}
@@ -535,7 +628,8 @@ const TeacherDashboard = () => {
             assignmentSearchTerm={assignmentSearchTerm}
             assignmentGroupFilter={assignmentGroupFilter}
             assignmentSortBy={assignmentSortBy}
-            availableGroups={availableGroups}
+            assignmentGroupOptions={assignmentGroupOptions}
+            submissionGroupOptions={submissionGroupOptions}
             assignmentsMeta={assignmentsMeta}
             submissionsMeta={submissionsMeta}
             onAssignmentFilterChange={(value) => {
@@ -687,6 +781,9 @@ const DashboardContent = ({
   activeAssignments,
   completedAssignments,
   filteredSubmissions,
+  analyticsAssignments,
+  analyticsSubmissions,
+  submissionAssignmentOptions,
   assignmentFilter,
   groupFilter,
   statusFilter,
@@ -694,7 +791,8 @@ const DashboardContent = ({
   assignmentSearchTerm,
   assignmentGroupFilter,
   assignmentSortBy,
-  availableGroups,
+  assignmentGroupOptions,
+  submissionGroupOptions,
   assignmentsMeta,
   submissionsMeta,
   onAssignmentFilterChange,
@@ -728,7 +826,7 @@ const DashboardContent = ({
             activeAssignments={activeAssignments}
             searchTerm={assignmentSearchTerm}
             groupFilter={assignmentGroupFilter}
-            availableGroups={availableGroups}
+            availableGroups={assignmentGroupOptions}
             sortBy={assignmentSortBy}
             onSearchChange={onAssignmentSearchChange}
             onGroupFilterChange={onAssignmentGroupFilterChange}
@@ -750,7 +848,7 @@ const DashboardContent = ({
             completedAssignments={completedAssignments}
             searchTerm={assignmentSearchTerm}
             groupFilter={assignmentGroupFilter}
-            availableGroups={availableGroups}
+            availableGroups={assignmentGroupOptions}
             sortBy={assignmentSortBy}
             onSearchChange={onAssignmentSearchChange}
             onGroupFilterChange={onAssignmentGroupFilterChange}
@@ -769,12 +867,12 @@ const DashboardContent = ({
         return (
           <SubmissionsSection
             submissions={filteredSubmissions}
-            assignments={assignments}
+            assignmentOptions={submissionAssignmentOptions}
             assignmentFilter={assignmentFilter}
             groupFilter={groupFilter}
             statusFilter={statusFilter}
             searchTerm={searchTerm}
-            availableGroups={availableGroups}
+            availableGroups={submissionGroupOptions}
             onAssignmentFilterChange={onAssignmentFilterChange}
             onGroupFilterChange={onGroupFilterChange}
             onStatusFilterChange={onStatusFilterChange}
@@ -792,7 +890,7 @@ const DashboardContent = ({
         );
       
       case 'analytics':
-        return <AnalyticsSection submissions={filteredSubmissions} assignments={assignments} />;
+        return <AnalyticsSection submissions={analyticsSubmissions} assignments={analyticsAssignments} />;
       
       case 'students':
         return (
@@ -1049,7 +1147,7 @@ const CompletedAssignmentsSection = ({
 
 const SubmissionsSection = ({
   submissions,
-  assignments,
+  assignmentOptions = [],
   assignmentFilter,
   groupFilter,
   statusFilter,
@@ -1094,8 +1192,8 @@ const SubmissionsSection = ({
             onChange={(e) => onAssignmentFilterChange(e.target.value)}
             className="teacher-submissions-select assignment-filter"
           >
-            <option value="all">Все задания</option>
-            {assignments.map(assignment => (
+            <option value="all">Все предметы</option>
+            {assignmentOptions.map(assignment => (
               <option key={assignment.id} value={assignment.id}>
                 {assignment.title}
               </option>
@@ -1120,8 +1218,8 @@ const SubmissionsSection = ({
           >
             <option value="all">Все статусы</option>
             <option value="submitted">На проверке</option>
-            <option value="graded">Зачтена</option>
-            <option value="returned">Возвращена</option>
+            <option value="returned">Возвращены на доработку</option>
+            <option value="graded">Зачтены</option>
           </select>
         </div>
       </div>
@@ -1134,7 +1232,7 @@ const SubmissionsSection = ({
 
     <SubmissionsTable
       submissions={submissions}
-      assignments={assignments}
+      assignments={assignmentOptions}
       onGradeSubmission={onGradeSubmission}
       onReturnSubmission={onReturnSubmission}
       onDownloadFile={onDownloadFile}

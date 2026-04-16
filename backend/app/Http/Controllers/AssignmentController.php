@@ -7,11 +7,14 @@ use App\Models\AssignmentMaterial;
 use App\Models\Group;
 use App\Models\Subject;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class AssignmentController extends Controller
 {
+    private const DEFAULT_PER_PAGE = 9;
+
     public function meta(Request $request)
     {
         $user = $request->user();
@@ -24,6 +27,7 @@ class AssignmentController extends Controller
         }
 
         $subjects = Subject::where('teacher_id', $user->id)
+            ->where('status', 'active')
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -31,6 +35,10 @@ class AssignmentController extends Controller
             ->orWhereHas('assignments', fn($query) => $query->where('teacher_id', $user->id))
             ->orderBy('name')
             ->pluck('name');
+
+        $assignments = Assignment::where('teacher_id', $user->id)
+            ->orderByDesc('created_at')
+            ->get(['id', 'title', 'status']);
 
         return response()->json([
             'subjects' => $subjects
@@ -41,7 +49,21 @@ class AssignmentController extends Controller
                 ])
                 ->values()
                 ->all(),
-            'groups' => $groupNames->filter()->unique()->values()->all(),
+            'groups' => $groupNames
+                ->map(fn($name) => $this->normalizeGroupName((string) $name))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all(),
+            'assignments' => $assignments
+                ->filter(fn($assignment) => !empty($assignment->title))
+                ->map(fn($assignment) => [
+                    'id' => (int) $assignment->id,
+                    'title' => (string) $assignment->title,
+                    'status' => (string) ($assignment->status ?? 'active'),
+                ])
+                ->values()
+                ->all(),
         ]);
     }
 
@@ -50,12 +72,14 @@ class AssignmentController extends Controller
         $user = $request->user();
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
-            'status' => ['nullable', 'in:active,inactive,archived,not_submitted,submitted,graded,returned,urgent'],
+            'status' => ['nullable', 'in:active,inactive,archived,not_archived,not_submitted,submitted,graded,returned,urgent'],
             'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
+            'subject' => ['nullable', 'string', 'max:255'],
             'teacher_id' => ['nullable', 'integer', 'exists:users,id'],
+            'teacher' => ['nullable', 'string', 'max:255'],
             'group_id' => ['nullable', 'integer', 'exists:groups,id'],
             'group' => ['nullable', 'string', 'max:100'],
-            'sort' => ['nullable', 'in:priority,deadline,deadline_desc,newest,oldest,title,subject,pending_desc,pending_asc'],
+            'sort' => ['nullable', 'in:priority,deadline,deadline_desc,newest,oldest,title,subject,status,pending_desc,pending_asc'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -64,7 +88,7 @@ class AssignmentController extends Controller
         $perPage = (int) ($validated['per_page'] ?? 0);
         $shouldPaginate = $perPage > 0 || array_key_exists('page', $validated);
         if ($shouldPaginate && $perPage <= 0) {
-            $perPage = 24;
+            $perPage = self::DEFAULT_PER_PAGE;
         }
 
         if ($user->role === 'student') {
@@ -77,6 +101,14 @@ class AssignmentController extends Controller
                             'last_page' => 1,
                             'per_page' => $perPage,
                             'total' => 0,
+                            'counts' => [
+                                'all' => 0,
+                                'not_submitted' => 0,
+                                'submitted' => 0,
+                                'graded' => 0,
+                                'returned' => 0,
+                                'urgent' => 0,
+                            ],
                         ],
                     ]);
                 }
@@ -87,6 +119,11 @@ class AssignmentController extends Controller
                 'teacher:id,login,last_name,first_name,middle_name',
                 'subjectRelation:id,name',
                 'groups:id,name,teacher_id',
+                'submissions' => fn ($submissionQuery) => $submissionQuery
+                    ->where('student_id', $user->id)
+                    ->orderByDesc('submitted_at')
+                    ->orderByDesc('id')
+                    ->select(['id', 'assignment_id', 'student_id', 'status', 'score', 'teacher_comment', 'criterion_scores', 'submitted_at', 'is_resubmission']),
                 'criteriaItems:id,assignment_id,position,text,max_points',
                 'allowedFormatItems:id,assignment_id,format',
                 'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
@@ -116,9 +153,16 @@ class AssignmentController extends Controller
             if (!empty($validated['subject_id'])) {
                 $query->where('subject_id', (int) $validated['subject_id']);
             }
+            if (!empty($validated['subject'])) {
+                $subjectName = trim((string) $validated['subject']);
+                $query->whereHas('subjectRelation', fn ($subjectQuery) => $subjectQuery->where('name', $subjectName));
+            }
 
             if (!empty($validated['teacher_id'])) {
                 $query->where('teacher_id', (int) $validated['teacher_id']);
+            }
+            if (!empty($validated['teacher'])) {
+                $this->applyTeacherTextFilter($query, (string) $validated['teacher']);
             }
 
             if (!empty($validated['group_id'])) {
@@ -164,12 +208,10 @@ class AssignmentController extends Controller
 
             $assignments = $query->get();
 
-            $transformed = $assignments->map(function ($assignment) use ($user) {
-                $studentSubmissions = $assignment->submissions()
-                    ->where('student_id', $user->id)
-                    ->orderByDesc('submitted_at')
-                    ->orderByDesc('id')
-                    ->get(['id', 'status', 'score', 'teacher_comment', 'criterion_scores', 'submitted_at', 'is_resubmission']);
+            $transformed = $assignments->map(function ($assignment) {
+                $studentSubmissions = $assignment->relationLoaded('submissions')
+                    ? $assignment->submissions
+                    : collect();
 
                 $submission = $studentSubmissions->first();
                 $retakeUsed = $studentSubmissions->contains(fn($item) => (bool) $item->is_resubmission);
@@ -196,18 +238,28 @@ class AssignmentController extends Controller
                 return $data;
             });
 
+            $counts = $this->buildStudentStatusCounts($transformed);
+
             if (!empty($validated['status'])) {
                 $status = $validated['status'];
                 $transformed = $transformed->filter(function ($assignment) use ($status) {
+                    $assignmentStatus = (string) ($assignment['status'] ?? '');
+
+                    if ($status === 'not_submitted') {
+                        return $this->isStudentActionRequiredStatus($assignmentStatus);
+                    }
+
                     if ($status === 'urgent') {
-                        return $assignment['status'] === 'not_submitted'
+                        return $this->isStudentActionRequiredStatus($assignmentStatus)
                             && !empty($assignment['deadline'])
                             && now()->diffInDays($assignment['deadline'], false) <= 3;
                     }
 
-                    return ($assignment['status'] ?? null) === $status;
+                    return $assignmentStatus === $status;
                 })->values();
             }
+
+            $transformed = $this->sortStudentAssignments($transformed, $sort);
 
             if ($shouldPaginate) {
                 $total = $transformed->count();
@@ -222,6 +274,7 @@ class AssignmentController extends Controller
                         'last_page' => $lastPage,
                         'per_page' => $perPage,
                         'total' => $total,
+                        'counts' => $counts,
                     ],
                 ]);
             }
@@ -258,16 +311,27 @@ class AssignmentController extends Controller
             });
         }
 
-        if (!empty($validated['status']) && in_array($validated['status'], ['active', 'inactive', 'archived'], true)) {
-            $query->where('status', $validated['status']);
+        if (!empty($validated['status'])) {
+            if ($validated['status'] === 'not_archived') {
+                $query->whereIn('status', ['active', 'inactive']);
+            } elseif (in_array($validated['status'], ['active', 'inactive', 'archived'], true)) {
+                $query->where('status', $validated['status']);
+            }
         }
 
         if (!empty($validated['subject_id'])) {
             $query->where('subject_id', (int) $validated['subject_id']);
         }
+        if (!empty($validated['subject'])) {
+            $subjectName = trim((string) $validated['subject']);
+            $query->whereHas('subjectRelation', fn ($subjectQuery) => $subjectQuery->where('name', $subjectName));
+        }
 
         if (!empty($validated['teacher_id'])) {
             $query->where('teacher_id', (int) $validated['teacher_id']);
+        }
+        if (!empty($validated['teacher'])) {
+            $this->applyTeacherTextFilter($query, (string) $validated['teacher']);
         }
 
         if (!empty($validated['group_id'])) {
@@ -346,7 +410,9 @@ class AssignmentController extends Controller
         $validated = $request->validate(
             [
                 'title' => ['required', 'string', 'min:3', 'max:255'],
-                'subject_id' => ['required', Rule::exists('subjects', 'id')->where(fn($query) => $query->where('teacher_id', $request->user()->id))],
+                'subject_id' => ['required', Rule::exists('subjects', 'id')->where(fn($query) => $query
+                    ->where('teacher_id', $request->user()->id)
+                    ->where('status', 'active'))],
                 'description' => ['required', 'string', 'min:10', 'max:5000'],
                 'deadline' => ['required', 'date', 'after_or_equal:today'],
                 'max_score' => ['nullable', 'integer', 'min:1', 'max:1000'],
@@ -389,17 +455,11 @@ class AssignmentController extends Controller
         ]);
 
         $groupIds = collect($groupNames)
-            ->filter(fn($name) => is_string($name) && trim($name) !== '')
-            ->map(fn($name) => trim($name))
+            ->map(fn($name) => $this->normalizeGroupName((string) $name))
+            ->filter()
             ->unique()
             ->map(function ($groupName) use ($request) {
-                return Group::firstOrCreate(
-                    [
-                        'name' => $groupName,
-                        'teacher_id' => $request->user()->id,
-                    ],
-                    ['status' => 'active']
-                )->id;
+                return $this->resolveGroupIdByName($groupName, $request->user()->id);
             })
             ->values()
             ->all();
@@ -447,7 +507,9 @@ class AssignmentController extends Controller
         $validated = $request->validate(
             [
                 'title' => ['sometimes', 'required', 'string', 'min:3', 'max:255'],
-                'subject_id' => ['sometimes', 'required', Rule::exists('subjects', 'id')->where(fn($query) => $query->where('teacher_id', $request->user()->id))],
+                'subject_id' => ['sometimes', 'required', Rule::exists('subjects', 'id')->where(fn($query) => $query
+                    ->where('teacher_id', $request->user()->id)
+                    ->where('status', 'active'))],
                 'description' => ['nullable', 'string', 'min:10', 'max:5000'],
                 'deadline' => ['sometimes', 'required', 'date', 'after_or_equal:today'],
                 'status' => ['nullable', 'in:active,inactive,archived'],
@@ -478,17 +540,11 @@ class AssignmentController extends Controller
         $newGroupIds = null;
         if ($request->has('student_groups')) {
             $newGroupIds = collect($request->input('student_groups', []))
-                ->filter(fn($name) => is_string($name) && trim($name) !== '')
-                ->map(fn($name) => trim($name))
+                ->map(fn($name) => $this->normalizeGroupName((string) $name))
+                ->filter()
                 ->unique()
                 ->map(function ($groupName) use ($assignment) {
-                    return Group::firstOrCreate(
-                        [
-                            'name' => $groupName,
-                            'teacher_id' => $assignment->teacher_id,
-                        ],
-                        ['status' => 'active']
-                    )->id;
+                    return $this->resolveGroupIdByName($groupName, $assignment->teacher_id);
                 })
                 ->values()
                 ->all();
@@ -703,5 +759,202 @@ class AssignmentController extends Controller
                 return $criterion;
             })
             ->all();
+    }
+
+    private function sortStudentAssignments(Collection $assignments, string $sort): Collection
+    {
+        switch ($sort) {
+            case 'deadline':
+                return $assignments->sort(fn ($a, $b) => $this->timestampFromDate($a['deadline'] ?? null) <=> $this->timestampFromDate($b['deadline'] ?? null))->values();
+            case 'deadline_desc':
+                return $assignments->sort(fn ($a, $b) => $this->timestampFromDate($b['deadline'] ?? null) <=> $this->timestampFromDate($a['deadline'] ?? null))->values();
+            case 'newest':
+                return $assignments->sort(fn ($a, $b) => $this->timestampFromDate($b['created_at'] ?? null) <=> $this->timestampFromDate($a['created_at'] ?? null))->values();
+            case 'oldest':
+                return $assignments->sort(fn ($a, $b) => $this->timestampFromDate($a['created_at'] ?? null) <=> $this->timestampFromDate($b['created_at'] ?? null))->values();
+            case 'title':
+                return $assignments->sort(fn ($a, $b) => strcasecmp((string) ($a['title'] ?? ''), (string) ($b['title'] ?? '')))->values();
+            case 'subject':
+                return $assignments->sort(fn ($a, $b) => strcasecmp((string) ($a['subject'] ?? ''), (string) ($b['subject'] ?? '')))->values();
+            case 'status':
+                return $assignments->sort(fn ($a, $b) => strcasecmp((string) ($a['status'] ?? ''), (string) ($b['status'] ?? '')))->values();
+            case 'priority':
+            default:
+                return $assignments->sort(function ($a, $b) {
+                    $bucketA = $this->studentPriorityBucket($a);
+                    $bucketB = $this->studentPriorityBucket($b);
+                    if ($bucketA !== $bucketB) {
+                        return $bucketA <=> $bucketB;
+                    }
+
+                    if (in_array($bucketA, [0, 1], true)) {
+                        return $this->timestampFromDate($a['deadline'] ?? null) <=> $this->timestampFromDate($b['deadline'] ?? null);
+                    }
+
+                    if ($bucketA === 2) {
+                        $priorityDiff = $this->priorityRank($b['priority'] ?? null) <=> $this->priorityRank($a['priority'] ?? null);
+                        if ($priorityDiff !== 0) {
+                            return $priorityDiff;
+                        }
+                        return $this->timestampFromDate($a['deadline'] ?? null) <=> $this->timestampFromDate($b['deadline'] ?? null);
+                    }
+
+                    if (in_array($bucketA, [3, 4], true)) {
+                        return $this->timestampFromDate($b['submitted_at'] ?? null) <=> $this->timestampFromDate($a['submitted_at'] ?? null);
+                    }
+
+                    return strcasecmp((string) ($a['title'] ?? ''), (string) ($b['title'] ?? ''));
+                })->values();
+        }
+    }
+
+    private function buildStudentStatusCounts(Collection $assignments): array
+    {
+        $all = $assignments->count();
+        $notSubmitted = $assignments
+            ->filter(fn ($assignment) => $this->isStudentActionRequiredStatus((string) ($assignment['status'] ?? '')))
+            ->count();
+        $submitted = $assignments->where('status', 'submitted')->count();
+        $graded = $assignments->where('status', 'graded')->count();
+        $returned = $assignments->where('status', 'returned')->count();
+        $urgent = $assignments
+            ->filter(fn ($assignment) => $this->isStudentActionRequiredStatus((string) ($assignment['status'] ?? '')))
+            ->filter(fn ($assignment) => ($this->daysUntilDeadline($assignment['deadline'] ?? null) ?? 999) <= 3)
+            ->count();
+
+        return [
+            'all' => $all,
+            'not_submitted' => $notSubmitted,
+            'submitted' => $submitted,
+            'graded' => $graded,
+            'returned' => $returned,
+            'urgent' => $urgent,
+        ];
+    }
+
+    private function isStudentActionRequiredStatus(string $status): bool
+    {
+        return in_array($status, ['not_submitted', 'returned'], true);
+    }
+
+    private function studentPriorityBucket(array $assignment): int
+    {
+        $status = (string) ($assignment['status'] ?? 'not_submitted');
+        $daysUntilDeadline = $this->daysUntilDeadline($assignment['deadline'] ?? null);
+
+        if ($status === 'not_submitted' && $daysUntilDeadline !== null && $daysUntilDeadline <= 3) {
+            return 0; // Срочные дедлайны
+        }
+        if ($status === 'returned') {
+            return 1; // Пересдачи
+        }
+        if ($status === 'not_submitted') {
+            return 2; // Обычные несданные
+        }
+        if ($status === 'submitted') {
+            return 3; // На проверке
+        }
+        if ($status === 'graded') {
+            return 4; // Оцененные
+        }
+
+        return 5;
+    }
+
+    private function priorityRank(?string $priority): int
+    {
+        return match ((string) $priority) {
+            'high' => 3,
+            'medium' => 2,
+            'low' => 1,
+            default => 0,
+        };
+    }
+
+    private function daysUntilDeadline(mixed $value): ?int
+    {
+        $timestamp = $this->timestampFromDate($value);
+        if ($timestamp <= 0) {
+            return null;
+        }
+
+        $today = strtotime(date('Y-m-d'));
+        return (int) floor(($timestamp - $today) / 86400);
+    }
+
+    private function timestampFromDate(mixed $value): int
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->getTimestamp();
+        }
+
+        $timestamp = strtotime((string) $value);
+        return $timestamp !== false ? $timestamp : 0;
+    }
+
+    private function normalizeGroupName(string $name): string
+    {
+        $normalized = trim($name);
+        $normalized = preg_replace('/\s+/u', ' ', $normalized) ?? $normalized;
+        $normalized = str_replace(['—', '–', '−'], '-', $normalized);
+
+        return mb_strtoupper($normalized);
+    }
+
+    private function resolveGroupIdByName(string $groupName, int $teacherId): int
+    {
+        $exactGroup = Group::where('name', $groupName)->first();
+        if ($exactGroup) {
+            return (int) $exactGroup->id;
+        }
+
+        $normalizedExistingGroup = Group::all(['id', 'name'])
+            ->first(fn($group) => $this->normalizeGroupName((string) $group->name) === $groupName);
+
+        if ($normalizedExistingGroup) {
+            return (int) $normalizedExistingGroup->id;
+        }
+
+        $created = Group::create([
+            'name' => $groupName,
+            'teacher_id' => $teacherId,
+            'status' => 'active',
+        ]);
+
+        return (int) $created->id;
+    }
+
+    private function applyTeacherTextFilter($query, string $teacherFilter): void
+    {
+        $teacherName = trim($teacherFilter);
+        if ($teacherName === '') {
+            return;
+        }
+
+        $tokens = collect(preg_split('/\s+/u', $teacherName) ?: [])
+            ->map(fn ($token) => trim((string) $token))
+            ->filter()
+            ->values()
+            ->all();
+
+        $query->whereHas('teacher', function ($teacherQuery) use ($teacherName, $tokens) {
+            $teacherQuery->where(function ($fullTextQuery) use ($teacherName) {
+                $fullTextQuery
+                    ->where('login', 'like', "%{$teacherName}%")
+                    ->orWhere('last_name', 'like', "%{$teacherName}%")
+                    ->orWhere('first_name', 'like', "%{$teacherName}%")
+                    ->orWhere('middle_name', 'like', "%{$teacherName}%");
+            });
+
+            foreach ($tokens as $token) {
+                $teacherQuery->where(function ($tokenQuery) use ($token) {
+                    $tokenQuery
+                        ->where('last_name', 'like', "%{$token}%")
+                        ->orWhere('first_name', 'like', "%{$token}%")
+                        ->orWhere('middle_name', 'like', "%{$token}%")
+                        ->orWhere('login', 'like', "%{$token}%");
+                });
+            }
+        });
     }
 }

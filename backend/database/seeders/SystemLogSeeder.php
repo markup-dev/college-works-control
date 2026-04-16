@@ -10,10 +10,12 @@ class SystemLogSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = User::where('login', 'Administrator')->first();
+        $admin = User::whereIn('login', ['Administrator', 'admin'])->orderByDesc('id')->first();
         $teacherJs = User::where('login', 'teacher_kartseva')->first();
         $teacherPhp = User::where('login', 'teacher_karevskiy')->first();
-        if (!$admin || !$teacherJs || !$teacherPhp) {
+        $studentForReturnLog = User::where('login', 'zabiriucenko_ka')->first()
+            ?: User::where('role', 'student')->orderBy('id')->first();
+        if (!$admin || !$teacherJs || !$teacherPhp || !$studentForReturnLog) {
             return;
         }
 
@@ -44,7 +46,7 @@ class SystemLogSeeder extends Seeder
         SystemLog::firstOrCreate([
             'user_id' => $teacherPhp->id,
             'action' => 'Проверка работы',
-            'details' => 'Работа "php_crud_v1.zip" возвращена на доработку студенту abramov_to',
+            'details' => 'Работа "php_crud_v1.zip" возвращена на доработку студенту ' . $studentForReturnLog->login,
         ], [
             'created_at' => now()->subDays(2),
         ]);

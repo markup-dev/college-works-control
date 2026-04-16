@@ -13,7 +13,7 @@ const SubmissionsTable = ({
   loading = false,
   showLatestOnly = true
 }) => {
-  const [sortBy, setSortBy] = useState('submissionDate_desc');
+  const [sortBy, setSortBy] = useState('review_first');
 
   const latestSubmissions = useMemo(() => {
     if (!showLatestOnly || submissions.length === 0) {
@@ -36,9 +36,24 @@ const SubmissionsTable = ({
   const sortedSubmissions = useMemo(() => {
     const sorted = [...latestSubmissions];
     sorted.sort((a, b) => {
+      const aDate = new Date(a?.submissionDate || 0);
+      const bDate = new Date(b?.submissionDate || 0);
       switch (sortBy) {
+        case 'review_first': {
+          const rank = (status) => {
+            if (status === 'submitted') return 0;
+            if (status === 'returned') return 1;
+            if (status === 'graded') return 2;
+            return 3;
+          };
+          const rankDiff = rank(a?.status) - rank(b?.status);
+          if (rankDiff !== 0) {
+            return rankDiff;
+          }
+          return bDate - aDate;
+        }
         case 'submissionDate_asc':
-          return new Date(a?.submissionDate || 0) - new Date(b?.submissionDate || 0);
+          return aDate - bDate;
         case 'student_asc':
           return (a?.studentName || '').localeCompare(b?.studentName || '');
         case 'student_desc':
@@ -49,7 +64,7 @@ const SubmissionsTable = ({
           return (a?.score ?? -1) - (b?.score ?? -1);
         case 'submissionDate_desc':
         default:
-          return new Date(b?.submissionDate || 0) - new Date(a?.submissionDate || 0);
+          return bDate - aDate;
       }
     });
     return sorted;
@@ -83,10 +98,9 @@ const SubmissionsTable = ({
           value={sortBy}
           onChange={(event) => setSortBy(event.target.value)}
         >
+          <option value="review_first">Сначала на проверке</option>
           <option value="submissionDate_desc">Сначала новые сдачи</option>
           <option value="submissionDate_asc">Сначала старые сдачи</option>
-          <option value="student_asc">Студент А-Я</option>
-          <option value="student_desc">Студент Я-А</option>
           <option value="score_desc">Оценка по убыванию</option>
           <option value="score_asc">Оценка по возрастанию</option>
         </select>

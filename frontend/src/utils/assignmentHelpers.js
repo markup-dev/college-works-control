@@ -27,17 +27,6 @@ export const getPriorityInfo = (priority) => {
   return priorityMap[priority] || priorityMap['medium'];
 };
 
-export const getDaysUntilDeadlineWithColor = (deadline) => {
-  const days = getDaysUntilDeadline(deadline);
-  
-  if (days === null) return { days: '—', color: '#6c757d' };
-  if (days < 0) return { days: 'Просрочено', color: '#dc3545' };
-  if (days === 0) return { days: 'Сегодня', color: '#fd7e14' };
-  if (days <= 3) return { days: `${days} дня`, color: '#ffc107' };
-  
-  return { days: `${days} дней`, color: '#28a745' };
-};
-
 export const getDaysUntilDeadline = (deadline) => {
   if (!deadline) return null;
   

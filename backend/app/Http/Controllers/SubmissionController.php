@@ -13,6 +13,7 @@ class SubmissionController extends Controller
 {
     private const DEFAULT_ALLOWED_FORMATS = ['pdf', 'doc', 'docx', 'zip', 'rar'];
     private const DEFAULT_MAX_FILE_SIZE_MB = 50;
+    private const DEFAULT_PER_PAGE = 20;
 
     public function index(Request $request)
     {
@@ -21,6 +22,7 @@ class SubmissionController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:submitted,graded,returned'],
             'assignment_id' => ['nullable', 'integer', 'exists:assignments,id'],
+            'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
             'group_id' => ['nullable', 'integer', 'exists:groups,id'],
             'group' => ['nullable', 'string', 'max:100'],
             'sort' => ['nullable', 'in:newest,oldest,student_asc,student_desc,score_desc,score_asc'],
@@ -32,7 +34,7 @@ class SubmissionController extends Controller
         $perPage = (int) ($validated['per_page'] ?? 0);
         $shouldPaginate = $perPage > 0 || array_key_exists('page', $validated);
         if ($shouldPaginate && $perPage <= 0) {
-            $perPage = 24;
+            $perPage = self::DEFAULT_PER_PAGE;
         }
 
         if ($user->role === 'student') {
@@ -56,6 +58,9 @@ class SubmissionController extends Controller
 
         if (!empty($validated['assignment_id'])) {
             $query->where('assignment_id', (int) $validated['assignment_id']);
+        }
+        if (!empty($validated['subject_id'])) {
+            $query->whereHas('assignment', fn ($assignmentQuery) => $assignmentQuery->where('subject_id', (int) $validated['subject_id']));
         }
 
         if (!empty($validated['group_id'])) {

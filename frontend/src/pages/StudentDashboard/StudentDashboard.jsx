@@ -12,7 +12,14 @@ import { useNotification } from '../../context/NotificationContext';
 import api from '../../services/api';
 import { 
   assignmentFilters,
-  getDaysUntilDeadline 
+  getDaysUntilDeadline,
+  mergeStudentFilterCatalog,
+  buildTeacherOptionsFromCatalog,
+  buildAvailableSubjectsForStudent,
+  buildAvailableTeachersForStudent,
+  resolveTeacherIdByName,
+  PAGINATION_DEFAULTS,
+  ATTENTION_BLOCK_LIMITS,
 } from '../../utils';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 import './StudentDashboard.scss';
@@ -33,6 +40,51 @@ const getStoredStudentFilters = () => {
   } catch (error) {
     return null;
   }
+};
+
+const buildAttentionAssignments = (sourceAssignments = []) => {
+  if (!Array.isArray(sourceAssignments)) {
+    return { retakes: [], deadlines: [] };
+  }
+
+  const dedupeAssignments = (items = []) => {
+    const seen = new Set();
+    return items.filter((assignment) => {
+      const key = assignment?.id
+        ? `id:${assignment.id}`
+        : `fallback:${assignment?.status || ''}:${assignment?.title || ''}:${assignment?.deadline || ''}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  };
+
+  const retakes = dedupeAssignments(
+    sourceAssignments.filter((assignment) => assignment?.status === 'returned')
+  )
+    .slice(0, 3);
+
+  const deadlines = dedupeAssignments(
+    sourceAssignments.filter((assignment) => assignment?.status === 'not_submitted')
+  )
+    .map((assignment) => ({
+      ...assignment,
+      daysLeft: getDaysUntilDeadline(assignment?.deadline),
+    }))
+    .filter((assignment) => assignment.daysLeft !== null && assignment.daysLeft <= 3)
+    .sort((a, b) => {
+      const aIsOverdue = a.daysLeft < 0;
+      const bIsOverdue = b.daysLeft < 0;
+      if (aIsOverdue !== bIsOverdue) {
+        return aIsOverdue ? -1 : 1;
+      }
+      return a.daysLeft - b.daysLeft;
+    })
+    .slice(0, 3);
+
+  return { retakes, deadlines };
 };
 
 const StudentDashboard = () => {
@@ -60,7 +112,52 @@ const StudentDashboard = () => {
   const [showAssignmentDetails, setShowAssignmentDetails] = useState(false);
   const [submissionFile, setSubmissionFile] = useState(null);
   const [detailsAssignment, setDetailsAssignment] = useState(null);
+  const [filterCatalog, setFilterCatalog] = useState([]);
+  const [attentionAssignments, setAttentionAssignments] = useState({ retakes: [], deadlines: [] });
   const debouncedSearchTerm = useDebouncedValue(searchTerm, 350);
+
+  useEffect(() => {
+    setFilterCatalog([]);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!Array.isArray(assignments) || assignments.length === 0) {
+      return;
+    }
+
+    setFilterCatalog((prev) => mergeStudentFilterCatalog(prev, assignments));
+  }, [assignments]);
+
+  const teacherOptions = useMemo(
+    () => buildTeacherOptionsFromCatalog(filterCatalog),
+    [filterCatalog]
+  );
+
+  const availableSubjects = useMemo(
+    () => buildAvailableSubjectsForStudent(filterCatalog, teacherFilter),
+    [filterCatalog, teacherFilter]
+  );
+
+  const availableTeachers = useMemo(
+    () => buildAvailableTeachersForStudent(filterCatalog, subjectFilter),
+    [filterCatalog, subjectFilter]
+  );
+
+  useEffect(() => {
+    if (teacherFilter !== 'all' && !availableTeachers.includes(teacherFilter)) {
+      setTeacherFilter('all');
+    }
+  }, [teacherFilter, availableTeachers]);
+
+  useEffect(() => {
+    if (subjectFilter !== 'all' && !availableSubjects.includes(subjectFilter)) {
+      setSubjectFilter('all');
+    }
+  }, [subjectFilter, availableSubjects]);
+
+  const selectedTeacherId = useMemo(() => {
+    return resolveTeacherIdByName(teacherFilter, teacherOptions);
+  }, [teacherFilter, teacherOptions]);
 
   const handleSubmitWork = useCallback((assignment) => {
     const isRetake = assignment?.status === 'returned';
@@ -112,6 +209,7 @@ const StudentDashboard = () => {
 
   const handleSearchChange = useCallback((value) => {
     setSearchTerm(value);
+    setPage(1);
   }, []);
 
   const handleSortChange = useCallback((value) => {
@@ -143,15 +241,62 @@ const StudentDashboard = () => {
     setPage(1);
   }, []);
 
+  const loadAttentionAssignments = useCallback(async () => {
+    if (!user) {
+      setAttentionAssignments({ retakes: [], deadlines: [] });
+      return;
+    }
+
+    try {
+      // Separate query from list filters: this block must always stay stable.
+      // We intentionally fetch without subject/teacher/search params.
+      const [retakesResponse, deadlinesResponse] = await Promise.all([
+        api.get('/assignments', {
+          params: {
+            page: 1,
+            perPage: ATTENTION_BLOCK_LIMITS.retakes,
+            sort: 'deadline',
+            status: 'returned',
+          },
+        }),
+        api.get('/assignments', {
+          params: {
+            page: 1,
+            perPage: ATTENTION_BLOCK_LIMITS.notSubmittedPool,
+            sort: 'deadline',
+            status: 'not_submitted',
+          },
+        }),
+      ]);
+
+      const retakesData = Array.isArray(retakesResponse.data?.data)
+        ? retakesResponse.data.data
+        : (retakesResponse.data || []);
+      const deadlinesData = Array.isArray(deadlinesResponse.data?.data)
+        ? deadlinesResponse.data.data
+        : (deadlinesResponse.data || []);
+
+      setAttentionAssignments(buildAttentionAssignments([...retakesData, ...deadlinesData]));
+    } catch {
+      setAttentionAssignments({ retakes: [], deadlines: [] });
+    }
+  }, [user]);
+
   useEffect(() => {
     loadStudentAssignments({
       page,
-      perPage: 18,
+      perPage: PAGINATION_DEFAULTS.studentAssignments,
       sort: sortBy,
       status: activeFilter !== 'all' ? activeFilter : undefined,
       search: debouncedSearchTerm || undefined,
+      subject: subjectFilter !== 'all' ? subjectFilter : undefined,
+      teacherId: selectedTeacherId,
     });
-  }, [page, sortBy, activeFilter, debouncedSearchTerm, loadStudentAssignments]);
+  }, [page, sortBy, activeFilter, debouncedSearchTerm, subjectFilter, selectedTeacherId, loadStudentAssignments]);
+
+  useEffect(() => {
+    loadAttentionAssignments();
+  }, [loadAttentionAssignments]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -166,46 +311,9 @@ const StudentDashboard = () => {
     );
   }, [activeFilter, sortBy, searchTerm, subjectFilter, teacherFilter]);
 
-  const availableSubjects = useMemo(() => {
-    if (!assignments || !Array.isArray(assignments)) return [];
-    const subjects = new Set();
-    assignments.forEach(assignment => {
-      if (assignment?.subject) {
-        subjects.add(assignment.subject);
-      }
-    });
-    return Array.from(subjects).sort();
-  }, [assignments]);
-
-  const availableTeachers = useMemo(() => {
-    if (!assignments || !Array.isArray(assignments)) return [];
-    const teachers = new Set();
-    assignments.forEach(assignment => {
-      if (assignment?.teacher) {
-        teachers.add(assignment.teacher);
-      }
-    });
-    return Array.from(teachers).sort();
-  }, [assignments]);
-
-  const filteredAssignments = useMemo(() => {
-    if (!assignments || !Array.isArray(assignments)) {
-      return [];
-    }
-    
-    let filtered = [...assignments];
-    
-    if (subjectFilter !== 'all') {
-      filtered = filtered.filter(assignment => assignment?.subject === subjectFilter);
-    }
-    
-    if (teacherFilter !== 'all') {
-      filtered = filtered.filter(assignment => assignment?.teacher === teacherFilter);
-    }
-    
-
-    return filtered;
-  }, [assignments, subjectFilter, teacherFilter]);
+  const filteredAssignments = useMemo(() => (
+    Array.isArray(assignments) ? assignments : []
+  ), [assignments]);
 
   const dashboardStats = useMemo(() => {
     if (!assignments || !Array.isArray(assignments)) {
@@ -240,6 +348,37 @@ const StudentDashboard = () => {
   }, [assignments]);
 
   const filterCounts = useMemo(() => {
+    const metaCounts = assignmentsMeta?.counts;
+    if (metaCounts && typeof metaCounts === 'object') {
+      const toNumber = (value, fallback = 0) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+      };
+      const fallbackAll = Array.isArray(assignments) ? assignments.length : 0;
+      const fallbackNotSubmitted = Array.isArray(assignments)
+        ? assignments.filter((a) => a?.status === 'not_submitted').length
+        : 0;
+      const fallbackSubmitted = Array.isArray(assignments)
+        ? assignments.filter((a) => a?.status === 'submitted').length
+        : 0;
+      const fallbackGraded = Array.isArray(assignments)
+        ? assignments.filter((a) => a?.status === 'graded').length
+        : 0;
+      const fallbackReturned = Array.isArray(assignments)
+        ? assignments.filter((a) => a?.status === 'returned').length
+        : 0;
+      const fallbackUrgent = dashboardStats.urgent;
+
+      return {
+        all: toNumber(metaCounts.all, fallbackAll),
+        not_submitted: toNumber(metaCounts.not_submitted ?? metaCounts.notSubmitted, fallbackNotSubmitted),
+        submitted: toNumber(metaCounts.submitted, fallbackSubmitted),
+        graded: toNumber(metaCounts.graded, fallbackGraded),
+        returned: toNumber(metaCounts.returned, fallbackReturned),
+        urgent: toNumber(metaCounts.urgent, fallbackUrgent)
+      };
+    }
+
     if (!assignments || !Array.isArray(assignments)) {
       return {
         all: 0,
@@ -259,36 +398,7 @@ const StudentDashboard = () => {
       returned: assignments.filter(a => a?.status === 'returned').length,
       urgent: dashboardStats.urgent
     };
-  }, [assignments, dashboardStats.urgent]);
-
-  const attentionAssignments = useMemo(() => {
-    if (!Array.isArray(assignments)) {
-      return { retakes: [], deadlines: [] };
-    }
-
-    const retakes = assignments
-      .filter((assignment) => assignment?.status === 'returned')
-      .slice(0, 3);
-
-    const deadlines = assignments
-      .filter((assignment) => assignment?.status === 'not_submitted')
-      .map((assignment) => ({
-        ...assignment,
-        daysLeft: getDaysUntilDeadline(assignment?.deadline),
-      }))
-      .filter((assignment) => assignment.daysLeft !== null && assignment.daysLeft <= 3)
-      .sort((a, b) => {
-        const aIsOverdue = a.daysLeft < 0;
-        const bIsOverdue = b.daysLeft < 0;
-        if (aIsOverdue !== bIsOverdue) {
-          return aIsOverdue ? -1 : 1;
-        }
-        return a.daysLeft - b.daysLeft;
-      })
-      .slice(0, 3);
-
-    return { retakes, deadlines };
-  }, [assignments]);
+  }, [assignmentsMeta, assignments, dashboardStats.urgent]);
 
   const handleSubmission = useCallback(async () => {
     if (selectedAssignment.submissionType === 'file') {
@@ -309,6 +419,7 @@ const StudentDashboard = () => {
         setShowSubmissionModal(false);
         setSubmissionFile(null);
         setSelectedAssignment(null);
+        loadAttentionAssignments();
         showSuccess(`Работа "${selectedAssignment.title}" успешно сдана на проверку!`);
       } else {
         showError(result.error || 'Ошибка при сдаче работы');
@@ -316,7 +427,7 @@ const StudentDashboard = () => {
     } catch (error) {
       showError('Ошибка при сдаче работы');
     }
-  }, [submissionFile, selectedAssignment, submitWork, showSuccess, showError, showWarning]);
+  }, [submissionFile, selectedAssignment, submitWork, showSuccess, showError, showWarning, loadAttentionAssignments]);
 
   const handleDownloadAssignmentMaterial = useCallback(async (assignment, material) => {
     if (!assignment?.id || !material?.id) {
@@ -381,12 +492,8 @@ const StudentDashboard = () => {
             onTeacherFilterChange={handleTeacherFilterChange}
             availableTeachers={availableTeachers}
             onResetFilters={handleResetFilters}
-          />
-
-          <AttentionBlock
-            retakes={attentionAssignments.retakes}
-            deadlines={attentionAssignments.deadlines}
-            onOpenAssignment={handleViewDetails}
+            attentionAssignments={attentionAssignments}
+            onOpenAttentionAssignment={handleViewDetails}
           />
 
           <DashboardContent
@@ -492,64 +599,6 @@ const DashboardContent = React.memo(({
         />
       ))}
     </div>
-  );
-});
-
-const AttentionBlock = React.memo(({ retakes = [], deadlines = [], onOpenAssignment }) => {
-  if (retakes.length === 0 && deadlines.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="attention-block">
-      <div className="attention-block__header">
-        <h3>Требует внимания</h3>
-      </div>
-      <div className="attention-block__content">
-        {retakes.length > 0 && (
-          <div className="attention-block__group">
-            <h4>Пересдачи</h4>
-            <ul>
-              {retakes.map((assignment) => (
-                <li key={`retake-${assignment.id}`}>
-                  <button
-                    type="button"
-                    className="attention-block__item"
-                    onClick={() => onOpenAssignment?.(assignment)}
-                  >
-                    {assignment.title}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {deadlines.length > 0 && (
-          <div className="attention-block__group">
-            <h4>Ближайшие дедлайны</h4>
-            <ul>
-              {deadlines.map((assignment) => (
-                <li key={`deadline-${assignment.id}`}>
-                  <button
-                    type="button"
-                    className="attention-block__item"
-                    onClick={() => onOpenAssignment?.(assignment)}
-                  >
-                    {assignment.title} — {
-                      assignment.daysLeft < 0
-                        ? `просрочено на ${Math.abs(assignment.daysLeft)} дн.`
-                        : assignment.daysLeft === 0
-                          ? 'сегодня'
-                          : `${assignment.daysLeft} дн.`
-                    }
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    </section>
   );
 });
 

@@ -56,7 +56,7 @@ const DashboardTabs = ({ activeTab, onTabChange, totalAssignments, pendingSubmis
     <TabButton
       active={activeTab === 'submissions'}
       onClick={() => onTabChange('submissions')}
-      label="Работы на проверке"
+      label="Работы студентов"
       badge={pendingSubmissions}
       loading={loading}
     />

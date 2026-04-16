@@ -43,6 +43,117 @@
   }
 }
 
+.attention-block {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+  box-shadow: none;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 55%, #93c5fd 100%);
+  }
+}
+
+.attention-block__header {
+  h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    color: #1e3a8a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.01em;
+  }
+
+  h3::before {
+    content: '⚠️';
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+}
+
+.attention-block__content {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.attention-block__group {
+  padding: 10px 12px;
+  border: 1px solid #d7e5fb;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+
+  h4 {
+    margin: 0 0 8px;
+    font-size: 0.9rem;
+    color: #1f2937;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+    color: #475569;
+    display: grid;
+    gap: 4px;
+  }
+}
+
+.attention-block__item {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 8px;
+  padding: 4px 6px;
+  text-align: left;
+  color: #334155;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+
+  &:hover {
+    background: #eaf2ff;
+    border-color: #93c5fd;
+    color: #0f172a;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 1px;
+  }
+}
+
+.attention-block__badge {
+  min-width: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  color: #334155;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+}
+
 .stats-container {
   flex-shrink: 1;
 }
@@ -213,6 +324,10 @@
     .header-subtitle {
       font-size: 1rem;
     }
+  }
+
+  .attention-block__content {
+    grid-template-columns: 1fr;
   }
 }
 

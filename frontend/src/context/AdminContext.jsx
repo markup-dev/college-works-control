@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import api from '../services/api';
+import { PAGINATION_DEFAULTS } from '../utils';
 
 const normalizeUser = (user) => ({
   ...user,
@@ -16,7 +17,7 @@ const normalizeGroup = (group) => ({
 const normalizeMeta = (meta) => ({
   currentPage: meta?.currentPage || 1,
   lastPage: meta?.lastPage || 1,
-  perPage: meta?.perPage || 20,
+  perPage: meta?.perPage || PAGINATION_DEFAULTS.adminLogs,
   total: meta?.total || 0,
 });
 
@@ -27,6 +28,14 @@ const areQueriesEqual = (left, right) => {
     return false;
   }
   return leftKeys.every((key) => left[key] === right[key]);
+};
+
+const withApiPagination = (params = {}) => {
+  const { perPage, ...rest } = params;
+  return {
+    ...rest,
+    per_page: perPage,
+  };
 };
 
 const AdminContext = createContext();
@@ -41,6 +50,7 @@ export const useAdmin = () => {
 
 export const AdminProvider = ({ children }) => {
   const [users, setUsers] = useState([]);
+  const [teacherOptions, setTeacherOptions] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [groups, setGroups] = useState([]);
   const [systemLogs, setSystemLogs] = useState([]);
@@ -50,10 +60,10 @@ export const AdminProvider = ({ children }) => {
   const [subjectsMeta, setSubjectsMeta] = useState(normalizeMeta());
   const [logsMeta, setLogsMeta] = useState(normalizeMeta());
 
-  const [usersQuery, setUsersQuery] = useState({ page: 1, perPage: 24, sort: 'newest' });
-  const [groupsQuery, setGroupsQuery] = useState({ page: 1, perPage: 18, sort: 'name_asc' });
-  const [subjectsQuery, setSubjectsQuery] = useState({ page: 1, perPage: 18, sort: 'name_asc' });
-  const [logsQuery, setLogsQuery] = useState({ page: 1, perPage: 20, sort: 'newest' });
+  const [usersQuery, setUsersQuery] = useState({ page: 1, perPage: PAGINATION_DEFAULTS.adminUsers, sort: 'newest' });
+  const [groupsQuery, setGroupsQuery] = useState({ page: 1, perPage: PAGINATION_DEFAULTS.adminGroups, sort: 'name_asc' });
+  const [subjectsQuery, setSubjectsQuery] = useState({ page: 1, perPage: PAGINATION_DEFAULTS.adminSubjects, sort: 'name_asc' });
+  const [logsQuery, setLogsQuery] = useState({ page: 1, perPage: PAGINATION_DEFAULTS.adminLogs, sort: 'newest' });
   const usersQueryRef = useRef(usersQuery);
   const groupsQueryRef = useRef(groupsQuery);
   const subjectsQueryRef = useRef(subjectsQuery);
@@ -102,11 +112,37 @@ export const AdminProvider = ({ children }) => {
       usersQueryRef.current = params;
       setUsersQuery(params);
     }
-    const response = await api.get('/admin/users', { params });
+    const response = await api.get('/admin/users', { params: withApiPagination(params) });
     const list = (response.data?.data || []).map(normalizeUser);
     setUsers((prev) => (append ? [...prev, ...list] : list));
     setUsersMeta(normalizeMeta(response.data?.meta));
     return response.data;
+  }, []);
+
+  const fetchTeacherOptions = useCallback(async () => {
+    const perPage = 100;
+    let page = 1;
+    let lastPage = 1;
+    const teachers = [];
+
+    do {
+      // eslint-disable-next-line no-await-in-loop
+      const response = await api.get('/admin/users', {
+        params: { role: 'teacher', page, per_page: perPage, sort: 'name_asc' },
+      });
+
+      const list = (response.data?.data || []).map(normalizeUser);
+      teachers.push(...list);
+      lastPage = Number(response.data?.meta?.lastPage || response.data?.meta?.last_page || 1);
+      page += 1;
+    } while (page <= lastPage);
+
+    const uniqueTeachers = Array.from(
+      new Map(teachers.map((teacher) => [teacher.id, teacher])).values()
+    ).sort((left, right) => (left.fullName || '').localeCompare((right.fullName || ''), 'ru'));
+
+    setTeacherOptions(uniqueTeachers);
+    return uniqueTeachers;
   }, []);
 
   const fetchGroups = useCallback(async (nextParams = {}, append = false) => {
@@ -115,7 +151,7 @@ export const AdminProvider = ({ children }) => {
       groupsQueryRef.current = params;
       setGroupsQuery(params);
     }
-    const response = await api.get('/admin/groups', { params });
+    const response = await api.get('/admin/groups', { params: withApiPagination(params) });
     const list = (response.data?.data || []).map(normalizeGroup);
     setGroups((prev) => (append ? [...prev, ...list] : list));
     setGroupsMeta(normalizeMeta(response.data?.meta));
@@ -128,7 +164,7 @@ export const AdminProvider = ({ children }) => {
       subjectsQueryRef.current = params;
       setSubjectsQuery(params);
     }
-    const response = await api.get('/admin/subjects', { params });
+    const response = await api.get('/admin/subjects', { params: withApiPagination(params) });
     const list = response.data?.data || [];
     setSubjects((prev) => (append ? [...prev, ...list] : list));
     setSubjectsMeta(normalizeMeta(response.data?.meta));
@@ -141,7 +177,7 @@ export const AdminProvider = ({ children }) => {
       logsQueryRef.current = params;
       setLogsQuery(params);
     }
-    const response = await api.get('/admin/logs', { params });
+    const response = await api.get('/admin/logs', { params: withApiPagination(params) });
     const list = response.data?.data || [];
     setSystemLogs((prev) => (append ? [...prev, ...list] : list));
     setLogsMeta(normalizeMeta(response.data?.meta));
@@ -152,13 +188,13 @@ export const AdminProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([loadStats(), fetchUsers(), fetchGroups(), fetchSubjects(), fetchLogs()]);
+      await Promise.all([loadStats(), fetchUsers(), fetchGroups(), fetchSubjects(), fetchLogs(), fetchTeacherOptions()]);
     } catch (err) {
       setError('Ошибка загрузки данных администратора');
     } finally {
       setLoading(false);
     }
-  }, [fetchGroups, fetchLogs, fetchSubjects, fetchUsers, loadStats]);
+  }, [fetchGroups, fetchLogs, fetchSubjects, fetchTeacherOptions, fetchUsers, loadStats]);
 
   const wrapMutation = useCallback(async (request, onSuccess) => {
     try {
@@ -177,28 +213,28 @@ export const AdminProvider = ({ children }) => {
     return wrapMutation(
       () => api.post('/admin/users', userData),
       async () => {
-        await Promise.all([loadStats(), fetchUsers({ page: 1 })]);
+        await Promise.all([loadStats(), fetchUsers({ page: 1 }), fetchTeacherOptions()]);
       }
     );
-  }, [fetchUsers, loadStats, wrapMutation]);
+  }, [fetchTeacherOptions, fetchUsers, loadStats, wrapMutation]);
 
   const updateUser = useCallback(async (userId, userData) => {
     return wrapMutation(
       () => api.put(`/admin/users/${userId}`, userData),
       async () => {
-        await Promise.all([loadStats(), fetchUsers()]);
+        await Promise.all([loadStats(), fetchUsers(), fetchTeacherOptions()]);
       }
     );
-  }, [fetchUsers, loadStats, wrapMutation]);
+  }, [fetchTeacherOptions, fetchUsers, loadStats, wrapMutation]);
 
   const deleteUser = useCallback(async (userId) => {
     return wrapMutation(
       () => api.delete(`/admin/users/${userId}`),
       async () => {
-        await Promise.all([loadStats(), fetchUsers()]);
+        await Promise.all([loadStats(), fetchUsers(), fetchTeacherOptions()]);
       }
     );
-  }, [fetchUsers, loadStats, wrapMutation]);
+  }, [fetchTeacherOptions, fetchUsers, loadStats, wrapMutation]);
 
   const previewUsersImport = useCallback(async (file) => {
     return wrapMutation(() => {
@@ -214,10 +250,10 @@ export const AdminProvider = ({ children }) => {
     return wrapMutation(
       () => api.post('/admin/users/import', { rows, mode, sendCredentials }),
       async () => {
-        await Promise.all([loadStats(), fetchUsers({ page: 1 })]);
+        await Promise.all([loadStats(), fetchUsers({ page: 1 }), fetchTeacherOptions()]);
       }
     );
-  }, [fetchUsers, loadStats, wrapMutation]);
+  }, [fetchTeacherOptions, fetchUsers, loadStats, wrapMutation]);
 
   const createGroup = useCallback(async (groupData) => {
     return wrapMutation(
@@ -336,6 +372,7 @@ export const AdminProvider = ({ children }) => {
   const value = {
     users,
     groups,
+    teacherOptions,
     subjects,
     systemLogs,
     usersMeta,
@@ -352,6 +389,7 @@ export const AdminProvider = ({ children }) => {
     loadAdminData,
     loadStats,
     fetchUsers,
+    fetchTeacherOptions,
     fetchGroups,
     fetchSubjects,
     fetchLogs,

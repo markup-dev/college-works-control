@@ -15,26 +15,6 @@ export const formatDate = (dateString) => {
   }
 };
 
-export const formatDateTime = (dateString) => {
-  if (!dateString) return 'Дата не указана';
-  
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return 'Неверная дата';
-    
-    return new Intl.DateTimeFormat('ru-RU', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
-  } catch (error) {
-    return 'Неверная дата';
-  }
-};
-
-
 export const getSubmissionStatusInfo = (status) => {
   const statusMap = {
     'submitted': { label: 'На проверке', variant: 'warning', icon: '📋' },
@@ -97,14 +77,6 @@ export const validateGradingComment = (comment) => {
   }
   
   return { isValid: true };
-};
-
-export const generateDownloadFileName = (submission) => {
-  const studentName = submission.studentName?.replace(/\s+/g, '_') || 'student';
-  const assignmentTitle = submission.assignmentTitle?.replace(/\s+/g, '_') || 'assignment';
-  const extension = submission.fileName?.split('.').pop() || 'zip';
-  
-  return `${studentName}_${assignmentTitle}.${extension}`;
 };
 
 export const calculateSubmissionStats = (submissions = [], assignment = null) => {

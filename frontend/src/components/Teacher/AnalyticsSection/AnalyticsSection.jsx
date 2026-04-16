@@ -1,7 +1,7 @@
 import React from 'react';
 import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
-import { formatDate } from '../../../utils';
+import { formatDate, normalizeGroupName } from '../../../utils';
 import './AnalyticsSection.scss';
 
 const PERIOD_OPTIONS = [
@@ -195,7 +195,7 @@ const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
   const groupSummary = React.useMemo(() => {
     const grouped = new Map();
     latestSubmissions.forEach((submission) => {
-      const groupName = submission.group || 'Не указана';
+      const groupName = normalizeGroupName(submission.group) || 'Не указана';
       if (!grouped.has(groupName)) {
         grouped.set(groupName, { total: 0, pending: 0, graded: 0, returned: 0 });
       }

@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Assignment;
+use App\Models\Group;
 use App\Models\Submission;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -11,25 +12,38 @@ class SubmissionSeeder extends Seeder
 {
     public function run(): void
     {
-        $studentMain = User::where('login', 'st_029_24')->first();
-        $studentSecond = User::where('login', 'st_029_01')->first();
-        $studentThird = User::where('login', 'st_0029_01')->first();
+        $group029 = Group::where('name', 'ИСП-029')->first();
+        $group0029 = Group::where('name', 'ИСП-0029')->first();
+        if (!$group029 || !$group0029) {
+            return;
+        }
+
+        $students029 = User::where('role', 'student')->where('group_id', $group029->id)->orderBy('id')->get();
+        $students0029 = User::where('role', 'student')->where('group_id', $group0029->id)->orderBy('id')->get();
+
+        $studentMain = User::where('login', 'zabiriucenko_ka')->first() ?: $students029->first();
+        $studentSecond = $students029->skip(1)->first() ?: $students029->first();
+        $studentThird = $students0029->first();
         if (!$studentMain || !$studentSecond || !$studentThird) {
             return;
         }
 
-        $assignmentDb = Assignment::where('title', 'Курсовой проект БД колледжа')->first();
-        $assignmentSpa = Assignment::where('title', 'SPA на React для расписания')->first();
-        $assignmentPhp = Assignment::where('title', 'CRUD модуль на чистом PHP')->first();
-        $assignmentApi = Assignment::where('title', 'REST API на Laravel')->first();
-        if (!$assignmentDb || !$assignmentSpa || !$assignmentPhp || !$assignmentApi) {
+        $requiredTitles = [
+            'Курсовой проект БД колледжа',
+            'SPA на React для расписания',
+            'CRUD модуль на чистом PHP',
+            'REST API на Laravel',
+            'Очереди и фоновые задачи',
+            'Миграции и сидеры Laravel',
+        ];
+        $assignmentsByTitle = Assignment::whereIn('title', $requiredTitles)
+            ->get()
+            ->keyBy('title');
+        if ($assignmentsByTitle->isEmpty()) {
             return;
         }
 
-        Submission::updateOrCreate([
-            'assignment_id' => $assignmentDb->id,
-            'student_id' => $studentMain->id,
-        ], [
+        $this->seedIfAssignmentExists($assignmentsByTitle->get('Курсовой проект БД колледжа'), $studentMain->id, [
             'status' => 'submitted',
             'comment' => null,
             'teacher_comment' => null,
@@ -40,10 +54,7 @@ class SubmissionSeeder extends Seeder
             'submitted_at' => now()->subDays(1),
         ]);
 
-        Submission::updateOrCreate([
-            'assignment_id' => $assignmentSpa->id,
-            'student_id' => $studentMain->id,
-        ], [
+        $this->seedIfAssignmentExists($assignmentsByTitle->get('SPA на React для расписания'), $studentMain->id, [
             'status' => 'graded',
             'score' => 92,
             'comment' => null,
@@ -55,10 +66,7 @@ class SubmissionSeeder extends Seeder
             'submitted_at' => now()->subDays(3),
         ]);
 
-        Submission::updateOrCreate([
-            'assignment_id' => $assignmentPhp->id,
-            'student_id' => $studentThird->id,
-        ], [
+        $this->seedIfAssignmentExists($assignmentsByTitle->get('CRUD модуль на чистом PHP'), $studentThird->id, [
             'status' => 'returned',
             'score' => null,
             'comment' => null,
@@ -71,10 +79,7 @@ class SubmissionSeeder extends Seeder
             'is_resubmission' => false,
         ]);
 
-        Submission::updateOrCreate([
-            'assignment_id' => $assignmentApi->id,
-            'student_id' => $studentSecond->id,
-        ], [
+        $this->seedIfAssignmentExists($assignmentsByTitle->get('REST API на Laravel'), $studentSecond->id, [
             'status' => 'graded',
             'score' => 88,
             'comment' => null,
@@ -86,5 +91,43 @@ class SubmissionSeeder extends Seeder
             'submitted_at' => now()->subDays(6),
             'is_resubmission' => true,
         ]);
+
+        $this->seedIfAssignmentExists($assignmentsByTitle->get('Очереди и фоновые задачи'), $studentThird->id, [
+            'status' => 'submitted',
+            'score' => null,
+            'comment' => null,
+            'teacher_comment' => null,
+            'file_name' => 'queues_background_tasks.zip',
+            'file_path' => 'submissions/queues_background_tasks.zip',
+            'file_size' => '5.7 MB',
+            'file_type' => 'application/zip',
+            'submitted_at' => now()->subHours(8),
+            'is_resubmission' => false,
+        ]);
+
+        $this->seedIfAssignmentExists($assignmentsByTitle->get('Миграции и сидеры Laravel'), $studentMain->id, [
+            'status' => 'submitted',
+            'score' => null,
+            'comment' => null,
+            'teacher_comment' => null,
+            'file_name' => 'laravel_migrations_seeders.zip',
+            'file_path' => 'submissions/laravel_migrations_seeders.zip',
+            'file_size' => '6.1 MB',
+            'file_type' => 'application/zip',
+            'submitted_at' => now()->subHours(2),
+            'is_resubmission' => false,
+        ]);
+    }
+
+    private function seedIfAssignmentExists(?Assignment $assignment, int $studentId, array $payload): void
+    {
+        if (!$assignment) {
+            return;
+        }
+
+        Submission::updateOrCreate([
+            'assignment_id' => $assignment->id,
+            'student_id' => $studentId,
+        ], $payload);
     }
 }
