@@ -35,7 +35,8 @@ const AssignmentDetailsModal = ({
   onDownloadMaterial = null,
   onSubmitWork = null,
   onViewResults = null,
-  onResubmit = null
+  onResubmit = null,
+  onViewSubmissions = null,
 }) => {
   if (!assignment) {
     return null;
@@ -225,14 +226,26 @@ const AssignmentDetailsModal = ({
           </div>
         )}
 
-        {mode === 'teacher' && typeof onEdit === 'function' && (
+        {mode === 'teacher' && (typeof onEdit === 'function' || typeof onViewSubmissions === 'function') && (
           <div className="assignment-details-modal__actions">
-            <Button
-              variant="primary"
-              onClick={() => onEdit(assignment)}
-            >
-              Редактировать задание
-            </Button>
+            <div className="assignment-details-modal__actions-group">
+              {typeof onViewSubmissions === 'function' && (
+                <Button
+                  variant="secondary"
+                  onClick={() => onViewSubmissions(assignment)}
+                >
+                  Просмотреть работы
+                </Button>
+              )}
+              {typeof onEdit === 'function' && (
+                <Button
+                  variant="primary"
+                  onClick={() => onEdit(assignment)}
+                >
+                  Редактировать задание
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </div>

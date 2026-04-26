@@ -9,9 +9,8 @@ import './Profile.scss';
 const roleConfig = {
   student: {
     title: 'Личный кабинет студента',
-    icon: '🎒',
     accent: '#2c5aa0',
-    badge: '👨‍🎓 Студент',
+    badge: 'Студент',
     tips: [
       'Учебная группа назначается администратором',
       'Заполните контактный номер, чтобы преподаватели могли связаться с вами'
@@ -19,18 +18,16 @@ const roleConfig = {
   },
   teacher: {
     title: 'Личный кабинет преподавателя',
-    icon: '📚',
     accent: '#5c2cbf',
-    badge: '👩‍🏫 Преподаватель',
+    badge: 'Преподаватель',
     tips: [
       'Актуализируйте контакты — студенты видят их в карточках заданий'
     ]
   },
   admin: {
     title: 'Личный кабинет администратора',
-    icon: '⚙️',
     accent: '#0f7b6c',
-    badge: '🛡 Администратор',
+    badge: 'Администратор',
     tips: [
       'Рекомендуем включить все уведомления для критичных событий системы'
     ]
@@ -263,7 +260,7 @@ const Profile = () => {
               <p className="profile-hero__badge">{currentRoleConfig.badge}</p>
               <h1>{currentRoleConfig.title}</h1>
               <p className="profile-hero__subtitle">
-                {currentRoleConfig.icon} Управляйте личными данными, контактами и настройками безопасности
+                Управляйте личными данными, контактами и настройками безопасности
               </p>
               <div className="profile-hero__meta">
                 <span>Логин: {profileData.login}</span>

@@ -248,8 +248,6 @@ const StudentDashboard = () => {
     }
 
     try {
-      // Separate query from list filters: this block must always stay stable.
-      // We intentionally fetch without subject/teacher/search params.
       const [retakesResponse, deadlinesResponse] = await Promise.all([
         api.get('/assignments', {
           params: {

@@ -10,9 +10,9 @@ const Header = ({ user, onLogout }) => {
 
   const getRoleLabel = (role) => {
     const roles = {
-      student: '👨‍🎓 Студент',
-      teacher: '👩‍🏫 Преподаватель',
-      admin: '⚙️ Администратор'
+      student: 'Студент',
+      teacher: 'Преподаватель',
+      admin: 'Администратор'
     };
     return roles[role] || role;
   };

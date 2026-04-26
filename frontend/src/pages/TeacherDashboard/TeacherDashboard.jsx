@@ -227,7 +227,9 @@ const TeacherDashboard = () => {
     const hasSubmissionsTotal = submissionsMeta?.total !== undefined && submissionsMeta?.total !== null;
 
     const dashboardStats = {
-      totalAssignments: hasAssignmentsTotal ? Number(assignmentsMeta.total) : activeAssignmentsCount,
+      totalAssignments: activeAssignmentsCount > 0 || !hasAssignmentsTotal
+        ? activeAssignmentsCount
+        : Number(assignmentsMeta.total),
       completedAssignments: completedAssignmentsCount,
       pendingSubmissions: hasSubmissionsTotal
         ? Number(submissionsMeta.total)
@@ -504,6 +506,12 @@ const TeacherDashboard = () => {
     setActiveTab('submissions');
   };
 
+  const handleViewSubmissionsFromDetails = (assignment) => {
+    if (!assignment?.id) return;
+    handleCloseAssignmentDetails();
+    handleViewSubmissions(assignment.id);
+  };
+
   const handleViewAssignmentDetails = (assignment) => {
     setDetailsAssignment(assignment);
     setShowAssignmentDetails(true);
@@ -716,6 +724,7 @@ const TeacherDashboard = () => {
         mode="teacher"
         stats={detailsAssignment ? calculateSubmissionStats(detailsAssignment.submissions || [], detailsAssignment) : null}
         onEdit={handleEditAssignmentFromDetails}
+        onViewSubmissions={handleViewSubmissionsFromDetails}
         onDownloadMaterial={handleDownloadAssignmentMaterial}
       />
 

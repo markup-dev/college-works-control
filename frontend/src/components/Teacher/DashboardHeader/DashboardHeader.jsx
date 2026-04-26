@@ -5,6 +5,7 @@ const DashboardHeader = ({
   user, 
   stats = {
     totalAssignments: 0,
+    completedAssignments: 0,
     pendingSubmissions: 0,
     gradedSubmissions: 0,
     returnedSubmissions: 0
@@ -37,6 +38,7 @@ const DashboardHeader = ({
         activeTab={activeTab}
         onTabChange={onTabChange}
         totalAssignments={stats.totalAssignments}
+        completedAssignments={stats.completedAssignments}
         pendingSubmissions={stats.pendingSubmissions}
         loading={loading}
       />
@@ -44,7 +46,7 @@ const DashboardHeader = ({
   );
 };
 
-const DashboardTabs = ({ activeTab, onTabChange, totalAssignments, pendingSubmissions, loading }) => (
+const DashboardTabs = ({ activeTab, onTabChange, totalAssignments, completedAssignments, pendingSubmissions, loading }) => (
   <nav className="dashboard-tabs">
     <TabButton
       active={activeTab === 'assignments'}
@@ -64,6 +66,7 @@ const DashboardTabs = ({ activeTab, onTabChange, totalAssignments, pendingSubmis
       active={activeTab === 'completed'}
       onClick={() => onTabChange('completed')}
       label="Завершенные"
+      badge={completedAssignments}
       loading={loading}
     />
     <TabButton

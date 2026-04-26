@@ -2,6 +2,14 @@ import React from 'react';
 import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
 import { getAssignmentStatusInfo, getPriorityInfo, getDaysUntilDeadline, formatDate } from '../../../utils';
+import iconDeadline from '../../../assets/assignment/assignment-deadline.svg';
+import iconPriority from '../../../assets/assignment/assignment-priority.svg';
+import iconMaxScore from '../../../assets/assignment/assignment-max-score.svg';
+import iconSubmissionFormat from '../../../assets/assignment/assignment-submission-format.svg';
+import iconSubmitted from '../../../assets/assignment/assignment-submitted.svg';
+import iconGrade from '../../../assets/assignment/assignment-grade.svg';
+import iconSubmissionFile from '../../../assets/assignment/submission-type-file.svg';
+import iconSubmissionDemo from '../../../assets/assignment/submission-type-demonstration.svg';
 import './AssignmentCard.scss';
 
 const AssignmentCard = ({ 
@@ -154,7 +162,7 @@ const AssignmentCard = ({
       
       <div className="assignment-details">
         <DetailRow 
-          icon="📅"
+          iconSrc={iconDeadline}
           label="Срок сдачи:" 
           value={
             <div className="deadline-info">
@@ -169,7 +177,7 @@ const AssignmentCard = ({
         />
         
         <DetailRow 
-          icon="🎯"
+          iconSrc={iconPriority}
           label="Приоритет:" 
           value={
             <span className={`priority-info priority-info--${assignment.priority || 'medium'}`}>
@@ -179,24 +187,30 @@ const AssignmentCard = ({
         />
         
         <DetailRow 
-          icon="📊"
+          iconSrc={iconMaxScore}
           label="Макс. балл:" 
           value={<span className="max-score">{assignment.maxScore}</span>} 
         />
 
         <DetailRow 
-          icon="📤"
+          iconSrc={iconSubmissionFormat}
           label="Формат сдачи:" 
           value={
-            assignment.submissionType === 'file' ? 
-            '📎 Файл' : 
-            '🎤 Демонстрация'
+            <span className="submission-format-value">
+              <img
+                className="submission-format-value__icon"
+                src={assignment.submissionType === 'file' ? iconSubmissionFile : iconSubmissionDemo}
+                alt=""
+                aria-hidden
+              />
+              {assignment.submissionType === 'file' ? 'Файл' : 'Демонстрация'}
+            </span>
           } 
         />
         
         {assignment.submittedAt && (
           <DetailRow 
-            icon="📨"
+            iconSrc={iconSubmitted}
             label="Сдано:" 
             value={formatDate(assignment.submittedAt)} 
           />
@@ -204,7 +218,7 @@ const AssignmentCard = ({
         
         {assignment.score !== null && assignment.score !== undefined && (
           <DetailRow 
-            icon="⭐"
+            iconSrc={iconGrade}
             label="Оценка:" 
             value={
               <div className="score-info">
@@ -228,10 +242,12 @@ const AssignmentCard = ({
   );
 };
 
-const DetailRow = ({ icon, label, value }) => (
+const DetailRow = ({ iconSrc, label, value }) => (
   <div className="detail-row">
     <div className="detail-label">
-      <span className="detail-icon">{icon}</span>
+      {iconSrc ? (
+        <img className="detail-icon" src={iconSrc} alt="" aria-hidden />
+      ) : null}
       {label}
     </div>
     <div className="detail-value">

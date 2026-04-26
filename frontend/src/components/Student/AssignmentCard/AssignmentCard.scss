@@ -232,13 +232,32 @@
 }
 
 .detail-icon {
-  font-size: 14px;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
 }
 
 .detail-value {
   color: #374151;
   font-weight: 500;
   text-align: right;
+}
+
+.submission-format-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.submission-format-value__icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
 }
 
 .deadline-info {
@@ -471,6 +490,10 @@
   
   .detail-value {
     text-align: left;
+  }
+
+  .submission-format-value {
+    justify-content: flex-start;
   }
   
   .deadline-info {

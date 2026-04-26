@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import logo from '../../assets/logo.svg';
+import heroCard1 from '../../assets/welcome/hero-1.svg';
+import heroCard2 from '../../assets/welcome/hero-2.svg';
+import heroCard3 from '../../assets/welcome/hero-3.svg';
+import rocketBadge from '../../assets/welcome/RocketSharp.svg';
+import featureIcon1 from '../../assets/welcome/feature-icon-1.svg';
+import featureIcon2 from '../../assets/welcome/feature-icon-2.svg';
+import featureIcon3 from '../../assets/welcome/feature-icon-3.svg';
+import featureIcon4 from '../../assets/welcome/feature-icon-4.svg';
+import roleIcon1 from '../../assets/welcome/role-1.svg';
+import roleIcon2 from '../../assets/welcome/role-2.svg';
+import roleIcon3 from '../../assets/welcome/role-3.svg';
+import studentCtaIcon from '../../assets/welcome/student.svg';
 import './Welcome.scss';
 
 const Welcome = () => {
@@ -21,28 +33,28 @@ const Welcome = () => {
 
   const features = [
     {
-      icon: '📚',
+      icon: featureIcon1,
       title: 'Управление заданиями',
       description:
         'Создавайте учебные задания, устанавливайте сроки сдачи, прикрепляйте материалы и критерии оценки',
       gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     },
     {
-      icon: '📤',
+      icon: featureIcon2,
       title: 'Легкая сдача работ',
       description:
         'Студенты загружают работы в несколько кликов, отслеживают статус проверки и получают уведомления',
       gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
     },
     {
-      icon: '✏️',
+      icon: featureIcon3,
       title: 'Эффективная проверка',
       description:
         'Преподаватели оценивают работы, оставляют комментарии и предоставляют обратную связь в удобном интерфейсе',
       gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
     },
     {
-      icon: '📊',
+      icon: featureIcon4,
       title: 'Аналитика и отчеты',
       description:
         'Получайте статистику по успеваемости, отслеживайте прогресс студентов и генерируйте отчеты',
@@ -52,37 +64,37 @@ const Welcome = () => {
 
   const roles = [
     {
-      icon: '👨‍🎓',
+      icon: roleIcon1,
       title: 'Студент',
       features: [
-        '📅 Просмотр учебных заданий и сроков',
-        '📤 Простая загрузка выполненных работ',
-        '📈 Отслеживание оценок и прогресса',
-        '💬 Получение обратной связи от преподавателей',
+        'Просмотр учебных заданий и сроков',
+        'Простая загрузка выполненных работ',
+        'Отслеживание оценок и прогресса',
+        'Получение обратной связи от преподавателей',
       ],
       gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       role: 'student',
     },
     {
-      icon: '👩‍🏫',
+      icon: roleIcon2,
       title: 'Преподаватель',
       features: [
-        '📝 Создание и управление заданиями',
-        '✅ Проверка и оценка студенческих работ',
-        '📊 Аналитика успеваемости группы',
-        '💡 Конструктор критериев оценки',
+        'Создание и управление заданиями',
+        'Проверка и оценка студенческих работ',
+        'Аналитика успеваемости группы',
+        'Конструктор критериев оценки',
       ],
       gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
       role: 'teacher',
     },
     {
-      icon: '⚙️',
+      icon: roleIcon3,
       title: 'Администратор',
       features: [
-        '👥 Управление пользователями и группами',
-        '📋 Настройка учебных предметов',
-        '📑 Генерация отчетов и статистики',
-        '🔧 Администрирование системы',
+        'Управление пользователями и группами',
+        'Настройка учебных предметов',
+        'Генерация отчетов и статистики',
+        'Администрирование системы',
       ],
       gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
       role: 'admin',
@@ -119,7 +131,9 @@ const Welcome = () => {
 
         <div className='hero-content'>
           <div className='hero-badge'>
-            <span className='badge-icon'>🚀</span>
+            <span className='badge-icon'>
+              <img src={rocketBadge} alt='' aria-hidden />
+            </span>
             Современная образовательная платформа
           </div>
 
@@ -175,17 +189,23 @@ const Welcome = () => {
         <div className='hero-visual'>
           <div className='floating-cards'>
             <div className='floating-card card-1'>
-              <div className='card-icon'>📚</div>
+              <div className='card-icon'>
+                <img src={heroCard1} alt='' aria-hidden />
+              </div>
               <div className='card-title'>Задания</div>
               <div className='card-subtitle'>Учебные материалы</div>
             </div>
             <div className='floating-card card-2'>
-              <div className='card-icon'>📊</div>
+              <div className='card-icon'>
+                <img src={heroCard2} alt='' aria-hidden />
+              </div>
               <div className='card-title'>Аналитика</div>
               <div className='card-subtitle'>Статистика успеваемости</div>
             </div>
             <div className='floating-card card-3'>
-              <div className='card-icon'>👥</div>
+              <div className='card-icon'>
+                <img src={heroCard3} alt='' aria-hidden />
+              </div>
               <div className='card-title'>Группы</div>
               <div className='card-subtitle'>Учебные коллективы</div>
             </div>
@@ -211,8 +231,12 @@ const Welcome = () => {
                 style={{ '--gradient': feature.gradient }}
               >
                 <div className='feature-icon-wrapper'>
-                  <div className='feature-icon-bg'></div>
-                  <span className='feature-icon'>{feature.icon}</span>
+                  <img
+                    className='feature-icon'
+                    src={feature.icon}
+                    alt=''
+                    aria-hidden
+                  />
                 </div>
                 <h3 className='feature-title'>{feature.title}</h3>
                 <p className='feature-description'>{feature.description}</p>
@@ -243,7 +267,12 @@ const Welcome = () => {
               >
                 <div className='role-header'>
                   <div className='role-icon-wrapper'>
-                    <span className='role-icon'>{role.icon}</span>
+                    <img
+                      className='role-icon'
+                      src={role.icon}
+                      alt=''
+                      aria-hidden
+                    />
                   </div>
                   <h3 className='role-title'>{role.title}</h3>
                 </div>
@@ -281,7 +310,9 @@ const Welcome = () => {
               onClick={handleGetStarted}
             >
               <span className='btn-text'>Начать использовать платформу</span>
-              <span className='btn-icon'>🎓</span>
+              <span className='btn-icon cta-btn-icon'>
+                <img src={studentCtaIcon} alt='' aria-hidden />
+              </span>
             </button>
           </div>
         </div>

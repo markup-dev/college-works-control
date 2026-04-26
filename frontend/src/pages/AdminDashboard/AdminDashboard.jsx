@@ -28,6 +28,7 @@ const AdminDashboard = () => {
     logsQuery = {},
     adminStats = {},
     loading,
+    error,
     fetchUsers,
     fetchGroups,
     fetchSubjects,
@@ -141,6 +142,17 @@ const AdminDashboard = () => {
       <div className="loading-state">
         <div className="spinner"></div>
         <p>Загрузка панели администратора...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="error-state">
+        <div className="error-icon">⚠️</div>
+        <h3>Ошибка загрузки</h3>
+        <p>{error}</p>
+        <button onClick={fetchUsers}>Повторить попытку</button>
       </div>
     );
   }

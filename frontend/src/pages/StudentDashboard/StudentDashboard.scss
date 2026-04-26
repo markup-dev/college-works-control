@@ -31,6 +31,59 @@
   }
 }
 
+.error-state {
+  max-width: 760px;
+  margin: 48px auto;
+  padding: 28px 24px;
+  border: 1px solid #f1d0d0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff8f8 0%, #ffffff 100%);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  text-align: left;
+
+  .error-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+
+  h3 {
+    margin: 0 0 8px;
+    font-size: 1.65rem;
+    color: #7f1d1d;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 0 0 18px;
+    color: #7a2e2e;
+    font-size: 1rem;
+  }
+
+  button {
+    padding: 0.62rem 0.95rem;
+    border: 1px solid #e5b4b4;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #8b2e2e;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+
+    &:hover {
+      border-color: #d69494;
+      background: #fff1f1;
+      color: #7f1d1d;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #fca5a5;
+      outline-offset: 2px;
+    }
+  }
+}
+
 .empty-state {
   text-align: center;
   padding: 60px 20px;
@@ -70,6 +123,15 @@
 @media (max-width: 768px) {
   .dashboard-main {
     padding: 16px;
+  }
+
+  .error-state {
+    margin: 24px 0;
+    padding: 22px 16px;
+
+    h3 {
+      font-size: 1.35rem;
+    }
   }
   
   .assignments-grid {

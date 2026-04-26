@@ -144,13 +144,11 @@ const AssignmentCard = React.memo(({
 
       <div className="assignment-details">
         <DetailRow 
-          icon="📅"
           label="Дата создания:" 
           value={formatDate(createdAt)}
         />
 
         <DetailRow 
-          icon="🗓️"
           label="Срок сдачи:"
           value={
             formatDate(deadline)
@@ -190,20 +188,19 @@ const SubmissionProgress = React.memo(({ stats }) => (
       
       <div className="progress-details">
         {stats.graded > 0 && (
-          <span className="graded-count">✓ {stats.graded} проверено</span>
+          <span className="graded-count">{stats.graded} проверено</span>
         )}
         {stats.pending > 0 && (
-          <span className="pending-count">⏳ {stats.pending} ожидают</span>
+          <span className="pending-count">{stats.pending} ожидают</span>
         )}
       </div>
     </div>
   </div>
 ));
 
-const DetailRow = React.memo(({ icon, label, value }) => (
+const DetailRow = React.memo(({ label, value }) => (
   <div className="detail-row">
     <div className="detail-label">
-      <span className="detail-icon">{icon}</span>
       {label}
     </div>
     <div className="detail-value">
