@@ -1,0 +1,48 @@
+// Единое появление контента после загрузки маршрута / списков
+@keyframes app-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+$app-reveal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+$app-reveal-duration: 0.5s;
+$app-reveal-stagger-step: 0.04s;
+$app-reveal-stagger-max: 36;
+
+.app-page {
+  animation: app-reveal-in $app-reveal-duration $app-reveal-ease both;
+}
+
+.app-reveal {
+  animation: app-reveal-in $app-reveal-duration $app-reveal-ease both;
+}
+
+.app-reveal-stagger > * {
+  opacity: 0;
+  animation: app-reveal-in 0.48s $app-reveal-ease both;
+}
+
+@for $i from 1 through $app-reveal-stagger-max {
+  .app-reveal-stagger > *:nth-child(#{$i}) {
+    animation-delay: #{($i - 1) * $app-reveal-stagger-step};
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-page,
+  .app-reveal {
+    animation: none !important;
+  }
+
+  .app-reveal-stagger > * {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}

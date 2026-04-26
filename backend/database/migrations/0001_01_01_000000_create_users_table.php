@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->string('login')->unique();
             $table->string('email')->unique();
+            $table->boolean('email_notifications_enabled')->default(true);
             $table->string('password');
             $table->string('last_name');
             $table->string('first_name');
@@ -20,9 +21,6 @@ return new class extends Migration
             $table->unsignedBigInteger('group_id')->nullable()->index();
             $table->string('department')->nullable();
             $table->string('phone')->nullable();
-            $table->string('timezone')->default('UTC+3');
-            $table->string('theme')->default('system');
-            $table->text('bio')->nullable();
             $table->boolean('is_active')->default(true);
             $table->boolean('must_change_password')->default(false);
             $table->timestamp('last_login')->nullable();

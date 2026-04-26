@@ -68,7 +68,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'user' => $user->load(['studentGroup.teacher', 'notificationSettings']),
+            'user' => $user->load(['studentGroup.teacher']),
             'token' => $token,
         ]);
     }
@@ -82,7 +82,7 @@ class AuthController extends Controller
 
     public function profile(Request $request)
     {
-        return response()->json($request->user()->load(['studentGroup.teacher', 'notificationSettings']));
+        return response()->json($request->user()->load(['studentGroup.teacher']));
     }
 
     public function updateProfile(Request $request)
@@ -109,11 +109,8 @@ class AuthController extends Controller
                 'first_name' => ['sometimes', 'required', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
                 'middle_name' => ['nullable', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
                 'phone' => ['nullable', 'string', 'regex:/^(\+7\s?\(?\d{3}\)?\s?\d{3}[- ]?\d{2}[- ]?\d{2}|8\(\d{3}\)\d{3}-\d{2}-\d{2})$/'],
-                'theme' => ['nullable', 'in:light,dark,system'],
                 'notifications' => ['nullable', 'array'],
                 'notifications.email' => ['nullable', 'boolean'],
-                'notifications.push' => ['nullable', 'boolean'],
-                'notifications.sms' => ['nullable', 'boolean'],
                 'department' => ['nullable', 'string', 'max:100'],
             ],
             [
@@ -134,7 +131,9 @@ class AuthController extends Controller
             ]
         );
         if (array_key_exists('notifications', $validated)) {
-            $this->syncNotificationSettings($user, $validated['notifications']);
+            if (array_key_exists('email', $validated['notifications'])) {
+                $validated['email_notifications_enabled'] = (bool) $validated['notifications']['email'];
+            }
             unset($validated['notifications']);
         }
         if (array_key_exists('last_name', $validated)) {
@@ -150,7 +149,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'user' => $user->fresh()->load(['studentGroup.teacher', 'notificationSettings']),
+            'user' => $user->fresh()->load(['studentGroup.teacher']),
         ]);
     }
 
@@ -186,18 +185,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'user' => $user->fresh()->load(['studentGroup.teacher', 'notificationSettings']),
+            'user' => $user->fresh()->load(['studentGroup.teacher']),
         ]);
-    }
-
-    private function syncNotificationSettings(User $user, array $notifications): void
-    {
-        $channels = ['email', 'push', 'sms'];
-        foreach ($channels as $channel) {
-            $user->notificationSettings()->updateOrCreate(
-                ['channel' => $channel],
-                ['enabled' => (bool) ($notifications[$channel] ?? false)]
-            );
-        }
     }
 }

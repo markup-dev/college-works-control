@@ -123,4 +123,9 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    | URL фронтенда (React) для ссылок в письмах
+    */
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+
 ];

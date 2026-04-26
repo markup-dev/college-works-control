@@ -223,7 +223,7 @@ const Welcome = () => {
             </p>
           </div>
 
-          <div className='features-grid'>
+          <div className='features-grid app-reveal-stagger'>
             {features.map((feature, index) => (
               <div
                 key={index}
@@ -257,7 +257,7 @@ const Welcome = () => {
             </p>
           </div>
 
-          <div className='roles-grid'>
+          <div className='roles-grid app-reveal-stagger'>
             {roles.map((role, index) => (
               <div
                 key={index}

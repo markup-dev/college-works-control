@@ -70,11 +70,11 @@ const AttentionBlock = React.memo(({ retakes = [], deadlines = [], onOpenAssignm
   }
 
   return (
-    <section className="attention-block">
+    <section className="attention-block app-reveal">
       <div className="attention-block__header">
         <h3>Требует внимания</h3>
       </div>
-      <div className="attention-block__content">
+      <div className="attention-block__content app-reveal-stagger">
         {retakes.length > 0 && (
           <div className="attention-block__group attention-block__group--retakes">
             <h4>

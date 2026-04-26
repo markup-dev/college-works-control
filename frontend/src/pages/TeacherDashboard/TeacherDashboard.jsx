@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import DashboardHeader from '../../components/Teacher/DashboardHeader/DashboardHeader';
 import AssignmentCard from '../../components/Teacher/AssignmentCard/AssignmentCard';
 import SubmissionsTable from '../../components/Teacher/SubmissionsTable/SubmissionsTable';
@@ -11,6 +12,7 @@ import Pagination from '../../components/UI/Pagination/Pagination';
 import InputModal from '../../components/UI/Modal/InputModal';
 import ConfirmModal from '../../components/UI/Modal/ConfirmModal';
 import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsModal/AssignmentDetailsModal';
+import TeacherStudentsSection from '../../components/Teacher/TeacherStudentsSection/TeacherStudentsSection';
 import { useAuth } from '../../context/AuthContext';
 import { useTeacher } from '../../context/TeacherContext';
 import { useNotification } from '../../context/NotificationContext';
@@ -64,7 +66,11 @@ const TeacherDashboard = () => {
     error 
   } = useTeacher();
   const { showSuccess, showError, showInfo } = useNotification();
-  
+  const showInfoRef = useRef(showInfo);
+  showInfoRef.current = showInfo;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [teacherNotificationNav, setTeacherNotificationNav] = useState(null);
+
   const storedFilters = getStoredTeacherFilters();
   const [activeTab, setActiveTab] = useState(storedFilters?.activeTab || 'assignments');
   const [selectedAssignment, setSelectedAssignment] = useState(null);
@@ -95,6 +101,11 @@ const TeacherDashboard = () => {
   const [assignmentFormDraft, setAssignmentFormDraft] = useState(null);
   const [assignmentPage, setAssignmentPage] = useState(1);
   const [submissionPage, setSubmissionPage] = useState(1);
+  const [submissionStudentFilter, setSubmissionStudentFilter] = useState(
+    storedFilters?.submissionStudentFilter || 'all'
+  );
+  const [teacherStudentDirectory, setTeacherStudentDirectory] = useState([]);
+  const [teacherStudentsLoading, setTeacherStudentsLoading] = useState(false);
   const [analyticsAssignments, setAnalyticsAssignments] = useState([]);
   const [analyticsSubmissions, setAnalyticsSubmissions] = useState([]);
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
@@ -113,8 +124,105 @@ const TeacherDashboard = () => {
     setAssignmentFilter('all');
     setGroupFilter('all');
     setStatusFilter('all');
+    setSubmissionStudentFilter('all');
     setSubmissionPage(1);
   };
+
+  const loadTeacherStudentDirectory = useCallback(async () => {
+    if (!user || user.role !== 'teacher') {
+      return;
+    }
+    setTeacherStudentsLoading(true);
+    try {
+      const { data } = await api.get('/teacher/students');
+      setTeacherStudentDirectory(Array.isArray(data?.data) ? data.data : []);
+    } catch {
+      setTeacherStudentDirectory([]);
+    } finally {
+      setTeacherStudentsLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadTeacherStudentDirectory();
+  }, [loadTeacherStudentDirectory]);
+
+  useEffect(() => {
+    if (user?.role !== 'teacher') {
+      return;
+    }
+    const assignmentId = searchParams.get('assignment');
+    if (!assignmentId) {
+      return;
+    }
+    const submissionId = searchParams.get('submission');
+    setTeacherNotificationNav({
+      assignmentId: String(assignmentId),
+      submissionId: submissionId ? String(submissionId) : null,
+    });
+    setActiveTab('submissions');
+    setSearchParams({}, { replace: true });
+  }, [searchParams, user?.role, setSearchParams]);
+
+  useEffect(() => {
+    if (!teacherNotificationNav || activeTab !== 'submissions') {
+      return;
+    }
+    const { assignmentId, submissionId } = teacherNotificationNav;
+    let cancelled = false;
+    (async () => {
+      await loadTeacherSubmissions({
+        page: 1,
+        perPage: 80,
+        assignmentId,
+        subjectId: 'all',
+        group: 'all',
+        studentId: 'all',
+        status: 'all',
+        search: undefined,
+      });
+      if (cancelled) {
+        return;
+      }
+      if (!submissionId) {
+        setTeacherNotificationNav(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [teacherNotificationNav, activeTab, loadTeacherSubmissions]);
+
+  useEffect(() => {
+    if (!teacherNotificationNav?.submissionId || loading) {
+      return;
+    }
+    const sid = String(teacherNotificationNav.submissionId);
+    const sub = submissions.find((s) => String(s.id) === sid);
+    if (sub) {
+      const relatedAssignment = assignments.find((a) => Number(a.id) === Number(sub.assignmentId));
+      setSelectedSubmission(sub);
+      setSelectedAssignment(relatedAssignment || null);
+      setShowDetailsModal(true);
+      setTeacherNotificationNav(null);
+      return;
+    }
+    setTeacherNotificationNav(null);
+    showInfoRef.current('Сдача не найдена в списке. Обновите фильтры или откройте задание вручную.');
+  }, [submissions, teacherNotificationNav, loading, assignments]);
+
+  useEffect(() => {
+    if (submissionStudentFilter === 'all') {
+      return;
+    }
+    const ok = teacherStudentDirectory.some(
+      (s) => String(s.id) === String(submissionStudentFilter)
+    );
+    if (teacherStudentDirectory.length > 0 && !ok) {
+      setSubmissionStudentFilter('all');
+      setSubmissionPage(1);
+    }
+  }, [submissionStudentFilter, teacherStudentDirectory]);
 
   const loadAnalyticsSnapshot = useCallback(async () => {
     if (!user) return;
@@ -177,6 +285,9 @@ const TeacherDashboard = () => {
     if (activeTab !== 'submissions') {
       return;
     }
+    if (teacherNotificationNav) {
+      return;
+    }
 
     loadTeacherSubmissions({
       page: submissionPage,
@@ -186,8 +297,19 @@ const TeacherDashboard = () => {
       status: statusFilter !== 'all' ? statusFilter : undefined,
       subjectId: assignmentFilter !== 'all' ? assignmentFilter : undefined,
       group: groupFilter !== 'all' ? groupFilter : undefined,
+      studentId: submissionStudentFilter !== 'all' ? submissionStudentFilter : undefined,
     });
-  }, [activeTab, submissionPage, debouncedSubmissionsSearch, statusFilter, assignmentFilter, groupFilter, loadTeacherSubmissions]);
+  }, [
+    activeTab,
+    submissionPage,
+    debouncedSubmissionsSearch,
+    statusFilter,
+    assignmentFilter,
+    groupFilter,
+    submissionStudentFilter,
+    teacherNotificationNav,
+    loadTeacherSubmissions,
+  ]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -201,6 +323,7 @@ const TeacherDashboard = () => {
         assignmentSearchTerm,
         assignmentGroupFilter,
         assignmentSortBy,
+        submissionStudentFilter,
       })
     );
   }, [
@@ -212,6 +335,7 @@ const TeacherDashboard = () => {
     assignmentSearchTerm,
     assignmentGroupFilter,
     assignmentSortBy,
+    submissionStudentFilter,
   ]);
 
   const {
@@ -393,6 +517,7 @@ const TeacherDashboard = () => {
       );
       if (result.success) {
         loadAnalyticsSnapshot();
+        loadTeacherStudentDirectory();
         setShowGradingModal(false);
         setSelectedSubmission(null);
         setGradeData({ score: '', comment: '', criterionScores: [], draftSubmissionId: null, useCriteriaScoring: false });
@@ -419,6 +544,7 @@ const TeacherDashboard = () => {
             const result = await returnSubmission(submission.id, comment);
             if (result.success) {
               loadAnalyticsSnapshot();
+              loadTeacherStudentDirectory();
               showSuccess(`Работа "${submission.assignmentTitle}" возвращена студенту на доработку`);
             } else {
               showError(result.error || 'Ошибка при возврате работы');
@@ -555,6 +681,7 @@ const TeacherDashboard = () => {
       const result = await deleteAssignment(assignment.id);
       if (result.success) {
         loadAnalyticsSnapshot();
+        loadTeacherStudentDirectory();
         showSuccess(`Задание "${assignment.title}" удалено`);
       } else {
         showError(result.error || 'Не удалось удалить задание');
@@ -580,10 +707,11 @@ const TeacherDashboard = () => {
           })
         : await createAssignment(assignmentData);
       if (result.success) {
-        loadAnalyticsSnapshot();
         setAssignmentFormDraft(null);
         closeAssignmentModal();
         showSuccess(selectedAssignment ? 'Задание обновлено!' : 'Задание успешно создано!');
+        void loadAnalyticsSnapshot();
+        void loadTeacherStudentDirectory();
       } else {
         showError(result.error || (selectedAssignment ? 'Ошибка при обновлении задания' : 'Ошибка при создании задания'));
       }
@@ -610,7 +738,7 @@ const TeacherDashboard = () => {
   }
 
   return (
-    <div className="teacher-dashboard">
+    <div className="teacher-dashboard app-page">
       <main className="dashboard-main">
         <div className="dashboard-container">
           <DashboardHeader
@@ -653,6 +781,12 @@ const TeacherDashboard = () => {
               setStatusFilter(value);
               setSubmissionPage(1);
             }}
+            submissionStudentFilter={submissionStudentFilter}
+            submissionStudentOptions={teacherStudentDirectory}
+            onSubmissionStudentFilterChange={(value) => {
+              setSubmissionStudentFilter(value);
+              setSubmissionPage(1);
+            }}
             onSearchChange={(value) => {
               setSearchTerm(value);
               setSubmissionPage(1);
@@ -680,6 +814,9 @@ const TeacherDashboard = () => {
             onDownloadFile={handleDownloadFile}
             onViewDetails={handleViewDetails}
             reviewQueue={reviewQueue}
+            teacherStudents={teacherStudentDirectory}
+            teacherStudentsLoading={teacherStudentsLoading}
+            onReloadTeacherStudents={loadTeacherStudentDirectory}
           />
         </div>
       </main>
@@ -825,7 +962,13 @@ const DashboardContent = ({
   onReturnSubmission,
   onDownloadFile,
   onViewDetails,
-  reviewQueue
+  reviewQueue,
+  submissionStudentFilter,
+  submissionStudentOptions,
+  onSubmissionStudentFilterChange,
+  teacherStudents,
+  teacherStudentsLoading,
+  onReloadTeacherStudents
 }) => {
   const renderSection = () => {
     switch (activeTab) {
@@ -880,6 +1023,9 @@ const DashboardContent = ({
             assignmentFilter={assignmentFilter}
             groupFilter={groupFilter}
             statusFilter={statusFilter}
+            studentFilter={submissionStudentFilter}
+            studentOptions={submissionStudentOptions}
+            onStudentFilterChange={onSubmissionStudentFilterChange}
             searchTerm={searchTerm}
             availableGroups={submissionGroupOptions}
             onAssignmentFilterChange={onAssignmentFilterChange}
@@ -903,14 +1049,11 @@ const DashboardContent = ({
       
       case 'students':
         return (
-          <div className="students-section">
-            <div className="section-header">
-              <h2>Студенты</h2>
-            </div>
-            <div className="empty-state">
-              <p>Функционал управления студентами будет добавлен в следующей версии</p>
-            </div>
-          </div>
+          <TeacherStudentsSection
+            students={teacherStudents}
+            loading={teacherStudentsLoading}
+            onReload={onReloadTeacherStudents}
+          />
         );
       
       default:
@@ -1030,7 +1173,7 @@ const AssignmentsSection = ({
     </div>
 
     {activeAssignments.length > 0 ? (
-      <div className="assignments-grid">
+      <div className="assignments-grid app-reveal-stagger">
         {activeAssignments.map((assignment) => (
           <AssignmentCard
             key={assignment.id}
@@ -1127,7 +1270,7 @@ const CompletedAssignmentsSection = ({
     </div>
 
     {completedAssignments.length > 0 ? (
-      <div className="assignments-grid">
+      <div className="assignments-grid app-reveal-stagger">
         {completedAssignments.map((assignment) => (
           <AssignmentCard
             key={assignment.id}
@@ -1160,6 +1303,9 @@ const SubmissionsSection = ({
   assignmentFilter,
   groupFilter,
   statusFilter,
+  studentFilter = 'all',
+  studentOptions = [],
+  onStudentFilterChange,
   searchTerm,
   availableGroups,
   onAssignmentFilterChange,
@@ -1217,6 +1363,19 @@ const SubmissionsSection = ({
             {availableGroups.map((group) => (
               <option key={group} value={group}>
                 {group}
+              </option>
+            ))}
+          </select>
+          <select
+            value={studentFilter}
+            onChange={(e) => onStudentFilterChange?.(e.target.value)}
+            className="teacher-submissions-select student-filter"
+            title="Показать работы только выбранного студента"
+          >
+            <option value="all">Все студенты</option>
+            {studentOptions.map((s) => (
+              <option key={s.id} value={String(s.id)}>
+                {s.fullName}
               </option>
             ))}
           </select>

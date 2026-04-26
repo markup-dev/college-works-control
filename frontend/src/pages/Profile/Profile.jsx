@@ -29,7 +29,7 @@ const roleConfig = {
     accent: '#0f7b6c',
     badge: 'Администратор',
     tips: [
-      'Рекомендуем включить все уведомления для критичных событий системы'
+      'При необходимости включите дублирование уведомлений на email в блоке ниже'
     ]
   }
 };
@@ -42,9 +42,7 @@ const getInitialProfileState = (user) => ({
   email: user?.email || '',
   phone: user?.phone || '',
   notifications: {
-    email: user?.notifications?.email ?? true,
-    push: user?.notifications?.push ?? true,
-    sms: user?.notifications?.sms ?? false
+    email: user?.notifications?.email ?? true
   }
 });
 
@@ -249,7 +247,7 @@ const Profile = () => {
   }
 
   return (
-    <div className="profile-page">
+    <div className="profile-page app-page">
       <div className="profile-page__container">
         <section className="profile-hero" style={{ borderColor: currentRoleConfig.accent }}>
           <div className="profile-hero__info">
@@ -270,7 +268,7 @@ const Profile = () => {
           </div>
         </section>
 
-        <div className="profile-grid">
+        <div className="profile-grid app-reveal-stagger">
           <Card className="profile-card profile-card--wide">
             <div className="profile-card__header">
               <div>
@@ -347,6 +345,36 @@ const Profile = () => {
                   placeholder="+7 (___) ___-__-__"
                 />
                 {profileErrors.phone && <span className="field-error">{profileErrors.phone}</span>}
+              </div>
+
+              <div className="profile-form__group profile-form__group--full">
+                <div className="profile-notification-toggle">
+                  <div className="profile-notification-toggle__copy">
+                    <span className="profile-notification-toggle__title" id="profile-email-notif-label">
+                      Дублировать уведомления на email
+                    </span>
+                    <p
+                      className="profile-notification-toggle__hint"
+                      id="profile-email-notif-hint"
+                    >
+                      Отправлять письма о новых заданиях, сроках, сдаче работ и проверке на адрес выше.
+                      Внутри портала уведомления по-прежнему доступны в колокольчике.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="profile-notification-toggle__checkbox"
+                    checked={profileData.notifications.email}
+                    onChange={(e) =>
+                      setProfileData((prev) => ({
+                        ...prev,
+                        notifications: { email: e.target.checked }
+                      }))
+                    }
+                    aria-labelledby="profile-email-notif-label"
+                    aria-describedby="profile-email-notif-hint"
+                  />
+                </div>
               </div>
 
               <div className="profile-form__actions">

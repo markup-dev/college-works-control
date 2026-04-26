@@ -20,7 +20,6 @@ class UserSeeder extends Seeder
             'role' => 'teacher',
             'department' => 'JS-разработка',
             'phone' => '+7 (999) 444-55-66',
-            'bio' => 'Преподаватель дисциплин по JavaScript',
         ]);
 
         $teacherPhp = $this->upsertUser([
@@ -32,7 +31,6 @@ class UserSeeder extends Seeder
             'role' => 'teacher',
             'department' => 'PHP-разработка',
             'phone' => '+7 (999) 555-77-88',
-            'bio' => 'Преподаватель дисциплин по PHP и backend-разработке',
         ]);
 
         $group029 = Group::updateOrCreate(['name' => 'ИСП-029'], [
@@ -101,8 +99,7 @@ class UserSeeder extends Seeder
             'middle_name' => 'Админович',
             'role' => 'admin',
             'phone' => '+7 (999) 700-00-01',
-            'bio' => 'Главный администратор учебной платформы.',
-        ], ['email' => true, 'push' => false, 'sms' => false]);
+        ]);
     }
 
     private function seedStudents(array $students, string $groupTag, int $groupId, int $startIndex = 1): void
@@ -133,16 +130,15 @@ class UserSeeder extends Seeder
                 'group_id' => $groupId,
                 'phone' => $phone,
                 'department' => null,
-                'bio' => "Студент группы ИСП-{$groupTag}.",
-            ], ['email' => true, 'push' => true, 'sms' => false]);
+            ]);
 
             $counter++;
         }
     }
 
-    private function upsertUser(array $payload, array $notifications = ['email' => true, 'push' => true, 'sms' => false]): User
+    private function upsertUser(array $payload): User
     {
-        $user = User::updateOrCreate(['login' => $payload['login']], [
+        return User::updateOrCreate(['login' => $payload['login']], [
             'email' => $payload['email'],
             'password' => 'Password123',
             'last_name' => $payload['last_name'],
@@ -152,24 +148,9 @@ class UserSeeder extends Seeder
             'group_id' => $payload['group_id'] ?? null,
             'department' => $payload['department'] ?? null,
             'phone' => $payload['phone'] ?? null,
-            'timezone' => 'UTC+3',
-            'theme' => 'system',
-            'bio' => $payload['bio'] ?? null,
             'is_active' => true,
             'must_change_password' => false,
+            'email_notifications_enabled' => true,
         ]);
-
-        $this->syncNotifications($user, $notifications);
-        return $user;
-    }
-
-    private function syncNotifications(User $user, array $notifications): void
-    {
-        foreach (['email', 'push', 'sms'] as $channel) {
-            $user->notificationSettings()->updateOrCreate(
-                ['channel' => $channel],
-                ['enabled' => (bool) ($notifications[$channel] ?? false)]
-            );
-        }
     }
 }

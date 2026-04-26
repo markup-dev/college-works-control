@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import DashboardHeader from '../../components/Student/DashboardHeader/DashboardHeader';
 import AssignmentCard from '../../components/Student/AssignmentCard/AssignmentCard';
 import SubmissionModal from '../../components/Student/SubmissionModal/SubmissionModal';
@@ -7,7 +8,7 @@ import Card from '../../components/UI/Card/Card';
 import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsModal/AssignmentDetailsModal';
 import Pagination from '../../components/UI/Pagination/Pagination';
 import { useAuth } from '../../context/AuthContext';
-import { useStudent } from '../../context/StudentContext';
+import { useStudent, normalizeStudentAssignment } from '../../context/StudentContext';
 import { useNotification } from '../../context/NotificationContext';
 import api from '../../services/api';
 import { 
@@ -98,7 +99,8 @@ const StudentDashboard = () => {
     error 
   } = useStudent();
   const { showSuccess, showError, showWarning } = useNotification();
-  
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const storedFilters = getStoredStudentFilters();
   const [activeFilter, setActiveFilter] = useState(storedFilters?.activeFilter || 'all');
   const [sortBy, setSortBy] = useState(storedFilters?.sortBy || 'priority');
@@ -313,6 +315,63 @@ const StudentDashboard = () => {
     Array.isArray(assignments) ? assignments : []
   ), [assignments]);
 
+  useEffect(() => {
+    const rawId = searchParams.get('assignment');
+    if (!rawId) {
+      return;
+    }
+    const focus = searchParams.get('focus') || 'details';
+    const id = Number(rawId);
+    if (!Number.isFinite(id) || id <= 0) {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      let assignment = filteredAssignments.find((a) => Number(a.id) === id);
+      if (!assignment) {
+        try {
+          const { data } = await api.get(`/assignments/${id}`);
+          if (cancelled) {
+            return;
+          }
+          assignment = normalizeStudentAssignment(data);
+        } catch {
+          if (!cancelled) {
+            showError('Задание не найдено или недоступно');
+            setSearchParams({}, { replace: true });
+          }
+          return;
+        }
+      }
+      if (cancelled) {
+        return;
+      }
+      setSearchParams({}, { replace: true });
+      if (focus === 'results') {
+        handleViewResults(assignment);
+      } else if (focus === 'submit') {
+        handleSubmitWork(assignment);
+      } else {
+        handleViewDetails(assignment);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    searchParams,
+    filteredAssignments,
+    setSearchParams,
+    handleViewResults,
+    handleSubmitWork,
+    handleViewDetails,
+    showError,
+  ]);
+
   const dashboardStats = useMemo(() => {
     if (!assignments || !Array.isArray(assignments)) {
       return { total: 0, urgent: 0, overdue: 0, pending: 0 };
@@ -470,7 +529,7 @@ const StudentDashboard = () => {
   }
 
   return (
-    <div className="student-dashboard">
+    <div className="student-dashboard app-page">
       <main className="dashboard-main">
         <div className="dashboard-container">
           <DashboardHeader
@@ -585,7 +644,7 @@ const DashboardContent = React.memo(({
   }
 
   return (
-    <div className="assignments-grid">
+    <div className="assignments-grid app-reveal-stagger">
       {assignments.map((assignment, index) => (
         <AssignmentCard
           key={assignment?.id ?? `assignment-${index}`}

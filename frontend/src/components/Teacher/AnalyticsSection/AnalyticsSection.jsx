@@ -307,7 +307,7 @@ const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
         </div>
       </div>
 
-      <div className="analytics-kpi">
+      <div className="analytics-kpi app-reveal-stagger">
         <KpiCard label="Работ в срезе" value={kpi.total} tone="default" />
         <KpiCard label="На проверке" value={kpi.pending} tone="warning" />
         <KpiCard label="Проверено" value={kpi.graded} tone="success" />
@@ -316,7 +316,7 @@ const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
         <KpiCard label="Доля возвратов" value={`${kpi.returnRate}%`} tone="secondary" />
       </div>
 
-      <div className="analytics-grid">
+      <div className="analytics-grid app-reveal-stagger">
         <Card className="analytics-card analytics-card--queue">
           <h3>Сначала проверить</h3>
           {reviewQueue.length === 0 ? (

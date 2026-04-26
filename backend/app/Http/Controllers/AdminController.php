@@ -62,7 +62,7 @@ class AdminController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = User::with(['studentGroup:id,name', 'notificationSettings'])
+        $query = User::with(['studentGroup:id,name'])
             ->select([
                 'id',
                 'login',
@@ -241,12 +241,7 @@ class AdminController extends Controller
             'group_id' => $groupId,
             'is_active' => true,
             'must_change_password' => $isTemporaryPassword,
-            'theme' => 'system',
-        ]);
-        $this->syncNotificationSettings($user, [
-            'email' => true,
-            'push' => true,
-            'sms' => false,
+            'email_notifications_enabled' => true,
         ]);
         $user->unsetRelation('studentGroup');
 
@@ -256,7 +251,7 @@ class AdminController extends Controller
             $this->sendCredentialsEmail($user, $plainPassword, true);
         }
 
-        return response()->json(['success' => true, 'user' => $user->load(['studentGroup.teacher', 'notificationSettings'])], 201);
+        return response()->json(['success' => true, 'user' => $user->load(['studentGroup.teacher'])], 201);
     }
 
     public function updateUser(Request $request, User $user)
@@ -278,7 +273,6 @@ class AdminController extends Controller
                 'group_id' => ['nullable', 'exists:groups,id'],
                 'department' => ['nullable', 'string', 'max:100'],
                 'phone' => ['nullable', 'string', 'regex:/^(\+7\s?\(?\d{3}\)?\s?\d{3}[- ]?\d{2}[- ]?\d{2}|8\(\d{3}\)\d{3}-\d{2}-\d{2})$/'],
-                'bio' => ['nullable', 'string', 'max:500'],
                 'is_active' => ['sometimes', 'boolean'],
             ],
             [
@@ -342,7 +336,7 @@ class AdminController extends Controller
 
         $this->log($request, 'update_user', "Изменены данные пользователя {$user->full_name}");
 
-        return response()->json(['success' => true, 'user' => $user->fresh()->load(['studentGroup.teacher', 'notificationSettings'])]);
+        return response()->json(['success' => true, 'user' => $user->fresh()->load(['studentGroup.teacher'])]);
     }
 
     public function deleteUser(Request $request, User $user)
@@ -448,13 +442,7 @@ class AdminController extends Controller
                 'phone' => !empty($prepared['phone']) ? trim((string) $prepared['phone']) : null,
                 'is_active' => true,
                 'must_change_password' => $isTemporaryPassword,
-                'theme' => 'system',
-            ]);
-
-            $this->syncNotificationSettings($user, [
-                'email' => true,
-                'push' => true,
-                'sms' => false,
+                'email_notifications_enabled' => true,
             ]);
 
             if ($sendCredentials && !empty($user->email)) {
@@ -462,7 +450,7 @@ class AdminController extends Controller
             }
 
             $created++;
-            $createdUsers[] = $user->load(['studentGroup.teacher', 'notificationSettings']);
+            $createdUsers[] = $user->load(['studentGroup.teacher']);
         }
 
         $this->log($request, 'import_users', "Массовый импорт пользователей: создано {$created}");
@@ -711,13 +699,7 @@ class AdminController extends Controller
                     'phone' => !empty($studentData['phone']) ? trim((string) $studentData['phone']) : null,
                     'is_active' => true,
                     'must_change_password' => true,
-                    'theme' => 'system',
-                ]);
-
-                $this->syncNotificationSettings($student, [
-                    'email' => true,
-                    'push' => true,
-                    'sms' => false,
+                    'email_notifications_enabled' => true,
                 ]);
 
                 if ($sendCredentials && !empty($student->email)) {
@@ -788,12 +770,7 @@ class AdminController extends Controller
                     'phone' => !empty($studentData['phone']) ? trim((string) $studentData['phone']) : null,
                     'is_active' => true,
                     'must_change_password' => true,
-                    'theme' => 'system',
-                ]);
-                $this->syncNotificationSettings($student, [
-                    'email' => true,
-                    'push' => true,
-                    'sms' => false,
+                    'email_notifications_enabled' => true,
                 ]);
                 if ($sendCredentials && !empty($student->email)) {
                     $this->sendCredentialsEmail($student, $plainPassword, true);
@@ -1202,17 +1179,6 @@ class AdminController extends Controller
             'action' => $action,
             'details' => $details,
         ]);
-    }
-
-    private function syncNotificationSettings(User $user, array $notifications): void
-    {
-        $channels = ['email', 'push', 'sms'];
-        foreach ($channels as $channel) {
-            $user->notificationSettings()->updateOrCreate(
-                ['channel' => $channel],
-                ['enabled' => (bool) ($notifications[$channel] ?? false)]
-            );
-        }
     }
 
     private function parseCsvRows(string $path): array

@@ -5,7 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Collection;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -24,10 +26,10 @@ class User extends Authenticatable
         'group_id',
         'department',
         'phone',
-        'theme',
         'is_active',
         'must_change_password',
         'last_login',
+        'email_notifications_enabled',
     ];
 
     protected $appends = [
@@ -46,6 +48,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'must_change_password' => 'boolean',
+            'email_notifications_enabled' => 'boolean',
             'last_login' => 'datetime',
         ];
     }
@@ -80,11 +83,6 @@ class User extends Authenticatable
         return $this->hasMany(SystemLog::class);
     }
 
-    public function notificationSettings(): HasMany
-    {
-        return $this->hasMany(UserNotificationSetting::class);
-    }
-
     public function getFullNameAttribute(): string
     {
         return trim(implode(' ', array_filter([
@@ -96,21 +94,84 @@ class User extends Authenticatable
 
     public function getNotificationsAttribute(): array
     {
-        $settings = $this->relationLoaded('notificationSettings')
-            ? $this->notificationSettings
-            : $this->notificationSettings()->get();
-
-        $notifications = [
-            'email' => true,
-            'push' => true,
-            'sms' => false,
+        return [
+            'email' => (bool) $this->email_notifications_enabled,
         ];
+    }
 
-        foreach ($settings as $setting) {
-            $notifications[$setting->channel] = (bool) $setting->enabled;
+    public function wantsEmailNotifications(): bool
+    {
+        return (bool) $this->email_notifications_enabled;
+    }
+
+    /**
+     * Группы преподавателя: закреплённые за ним (groups.teacher_id) и группы из его заданий — тот же набор, что в форме задания.
+     */
+    public function attachedTeachingGroupIds(): Collection
+    {
+        if ($this->role !== 'teacher') {
+            return collect();
         }
 
-        return $notifications;
+        return Group::query()
+            ->where('teacher_id', $this->id)
+            ->orWhereHas('assignments', fn (Builder $q) => $q->where('teacher_id', $this->id))
+            ->pluck('id')
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Студент связан с преподавателем: группа закреплена за преподом, есть его задание на группу студента или была сдача.
+     */
+    public function isLinkedToTeacher(User $teacher): bool
+    {
+        if ($teacher->role !== 'teacher' || $this->role !== 'student') {
+            return false;
+        }
+
+        if ($this->group_id) {
+            $group = $this->relationLoaded('studentGroup')
+                ? $this->studentGroup
+                : $this->studentGroup()->first();
+
+            if ($group && (int) $group->teacher_id === (int) $teacher->id) {
+                return true;
+            }
+
+            $hasAssignment = Assignment::query()
+                ->where('teacher_id', $teacher->id)
+                ->whereHas('groups', fn (Builder $q) => $q->where('groups.id', $this->group_id))
+                ->exists();
+
+            if ($hasAssignment) {
+                return true;
+            }
+        }
+
+        return Submission::query()
+            ->where('student_id', $this->id)
+            ->whereHas('assignment', fn (Builder $q) => $q->where('teacher_id', $teacher->id))
+            ->exists();
+    }
+
+    public function canCommunicateWith(User $other): bool
+    {
+        if ((int) $this->id === (int) $other->id) {
+            return false;
+        }
+
+        $roles = [$this->role, $other->role];
+        sort($roles);
+
+        if ($roles !== ['student', 'teacher']) {
+            return false;
+        }
+
+        $student = $this->role === 'student' ? $this : $other;
+        $teacher = $this->role === 'teacher' ? $this : $other;
+
+        return $student->isLinkedToTeacher($teacher);
     }
 
 }

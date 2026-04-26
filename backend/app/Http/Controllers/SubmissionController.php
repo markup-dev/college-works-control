@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Submission;
 use App\Models\Assignment;
 use App\Models\User;
+use App\Notifications\NewSubmissionTeacherNotification;
+use App\Notifications\SubmissionGradedStudentNotification;
+use App\Notifications\SubmissionReturnedStudentNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +27,7 @@ class SubmissionController extends Controller
             'assignment_id' => ['nullable', 'integer', 'exists:assignments,id'],
             'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
             'group_id' => ['nullable', 'integer', 'exists:groups,id'],
+            'student_id' => ['nullable', 'integer', 'exists:users,id'],
             'group' => ['nullable', 'string', 'max:100'],
             'sort' => ['nullable', 'in:newest,oldest,student_asc,student_desc,score_desc,score_asc'],
             'page' => ['nullable', 'integer', 'min:1'],
@@ -65,6 +69,20 @@ class SubmissionController extends Controller
 
         if (!empty($validated['group_id'])) {
             $query->whereHas('student', fn ($studentQuery) => $studentQuery->where('group_id', (int) $validated['group_id']));
+        }
+        if (!empty($validated['student_id'])) {
+            $sid = (int) $validated['student_id'];
+            if ($user->role === 'teacher') {
+                $stu = User::query()->where('id', $sid)->where('role', 'student')->first();
+                if (! $stu || ! $stu->group_id) {
+                    throw ValidationException::withMessages(['student_id' => 'Студент не найден.']);
+                }
+                $allowed = $user->attachedTeachingGroupIds()->map(fn ($id) => (int) $id)->all();
+                if (! in_array((int) $stu->group_id, $allowed, true)) {
+                    throw ValidationException::withMessages(['student_id' => 'Нет доступа к этому студенту.']);
+                }
+            }
+            $query->where('student_id', $sid);
         }
         if (!empty($validated['group'])) {
             $groupName = trim((string) $validated['group']);
@@ -243,11 +261,21 @@ class SubmissionController extends Controller
         $this->syncAssignmentCompletionStatus($assignment);
 
         $submission->load([
-            'assignment:id,title,subject_id,max_score',
+            'assignment:id,title,subject_id,max_score,teacher_id',
             'assignment.subjectRelation:id,name',
+            'assignment.teacher:id,is_active',
             'student:id,login,group_id,last_name,first_name,middle_name',
             'student.studentGroup:id,name',
         ]);
+
+        $teacher = $submission->assignment?->teacher;
+        if ($teacher && $teacher->is_active) {
+            try {
+                $teacher->notify(new NewSubmissionTeacherNotification($submission));
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -318,9 +346,18 @@ class SubmissionController extends Controller
         $submission->load([
             'assignment:id,title,subject_id,max_score',
             'assignment.subjectRelation:id,name',
-            'student:id,login,group_id,last_name,first_name,middle_name',
+            'student:id,login,group_id,last_name,first_name,middle_name,is_active',
             'student.studentGroup:id,name',
         ]);
+
+        $student = $submission->student;
+        if ($student && $student->is_active) {
+            try {
+                $student->notify(new SubmissionGradedStudentNotification($submission));
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -361,9 +398,18 @@ class SubmissionController extends Controller
         $submission->load([
             'assignment:id,title,subject_id,max_score',
             'assignment.subjectRelation:id,name',
-            'student:id,login,group_id,last_name,first_name,middle_name',
+            'student:id,login,group_id,last_name,first_name,middle_name,is_active',
             'student.studentGroup:id,name',
         ]);
+
+        $student = $submission->student;
+        if ($student && $student->is_active) {
+            try {
+                $student->notify(new SubmissionReturnedStudentNotification($submission));
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         return response()->json([
             'success' => true,

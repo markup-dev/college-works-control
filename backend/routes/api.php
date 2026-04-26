@@ -4,6 +4,10 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AssignmentController;
 use App\Http\Controllers\SubmissionController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\TeacherBroadcastMessageController;
+use App\Http\Controllers\TeacherStudentController;
 use Illuminate\Support\Facades\Route;
 
 // Публичные маршруты
@@ -26,6 +30,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Задания — только для преподавателей
     Route::middleware('role:teacher')->group(function () {
+        Route::get('/teacher/students', [TeacherStudentController::class, 'index']);
+        Route::get('/teacher/students/{user}', [TeacherStudentController::class, 'show']);
+        Route::post('/teacher/messages/broadcast', [TeacherBroadcastMessageController::class, 'store']);
+
         Route::post('/assignments', [AssignmentController::class, 'store']);
         Route::put('/assignments/{assignment}', [AssignmentController::class, 'update']);
         Route::post('/assignments/{assignment}/materials', [AssignmentController::class, 'uploadMaterials']);
@@ -45,6 +53,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:teacher')->group(function () {
         Route::put('/submissions/{submission}/grade', [SubmissionController::class, 'grade']);
         Route::put('/submissions/{submission}/return', [SubmissionController::class, 'returnSubmission']);
+    });
+
+    // Переписка студент ↔ преподаватель
+    Route::middleware('role:student,teacher')->group(function () {
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+        Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+
+        Route::get('/message-partners', [ConversationController::class, 'partners']);
+        Route::get('/conversations', [ConversationController::class, 'index']);
+        Route::post('/conversations', [ConversationController::class, 'store']);
+        Route::get('/conversations/{conversation}/messages', [ConversationController::class, 'messages']);
+        Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'sendMessage']);
     });
 
     // Админ-панель — только для администраторов

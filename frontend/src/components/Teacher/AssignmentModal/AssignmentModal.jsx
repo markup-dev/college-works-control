@@ -87,6 +87,7 @@ const AssignmentModal = ({
   const { showError } = useNotification();
   const [acceptAllFormats, setAcceptAllFormats] = useState(true);
   const [formData, setFormData] = useState(() => buildEmptyFormData());
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGroupsDropdownOpen, setIsGroupsDropdownOpen] = useState(false);
   const wasOpenRef = useRef(false);
   const groupsDropdownRef = useRef(null);
@@ -161,6 +162,7 @@ const AssignmentModal = ({
     if (!isOpen) {
       wasOpenRef.current = false;
       setIsGroupsDropdownOpen(false);
+      setIsSubmitting(false);
       return;
     }
 
@@ -212,8 +214,11 @@ const AssignmentModal = ({
       ? selectedGroups.join(', ')
       : `Выбрано групп: ${selectedGroups.length}`;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) {
+      return;
+    }
 
     if (!isEdit && groupOptions.length === 0) {
       showError('Невозможно создать задание без назначенной учебной группы');
@@ -276,7 +281,15 @@ const AssignmentModal = ({
     };
 
     if (onSubmit) {
-      onSubmit(submissionData);
+      setIsSubmitting(true);
+      try {
+        const maybePromise = onSubmit(submissionData);
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          await maybePromise;
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
     } else {
       onClose();
     }
@@ -743,6 +756,7 @@ const AssignmentModal = ({
               <Button
                 type="button"
                 variant="outline"
+                disabled={isSubmitting}
                 onClick={() => onBack(formData)}
               >
                 <span className="back-btn-label">
@@ -751,11 +765,15 @@ const AssignmentModal = ({
                 </span>
               </Button>
             )}
-            <Button type="button" variant="secondary" onClick={onClose}>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
               Отмена
             </Button>
-            <Button type="submit" variant="primary" disabled={hasNoAssignableGroups || hasNoAssignableSubjects}>
-              {isEdit ? 'Сохранить изменения' : 'Создать задание'}
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={isSubmitting || hasNoAssignableGroups || hasNoAssignableSubjects}
+            >
+              {isSubmitting ? (isEdit ? 'Сохранение…' : 'Создание…') : (isEdit ? 'Сохранить изменения' : 'Создать задание')}
             </Button>
           </div>
         </form>

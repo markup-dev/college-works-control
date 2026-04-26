@@ -19,7 +19,7 @@ const NotFound = () => {
       </div>
 
       <div className="not-found-container">
-        <div className="not-found-content">
+        <div className="not-found-content app-reveal-stagger">
           <div className="error-code">
             <span className="digit">4</span>
             <span className="digit zero">0</span>

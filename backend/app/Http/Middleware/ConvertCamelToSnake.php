@@ -10,6 +10,11 @@ class ConvertCamelToSnake
 {
     public function handle(Request $request, Closure $next)
     {
+        // Query string уже в snake_case с фронта; для GET/HEAD не трогаем input — меньше сюрпризов и конфликтов.
+        if (in_array($request->getRealMethod(), ['GET', 'HEAD', 'OPTIONS'], true)) {
+            return $next($request);
+        }
+
         $input = $request->all();
         $request->replace($this->convertKeys($input));
 

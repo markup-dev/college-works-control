@@ -52,7 +52,7 @@ const StatisticsSection = ({ stats, users = [], groups = [], subjects = [], logs
         </div>
       </header>
 
-      <div className="overview-kpi-grid">
+      <div className="overview-kpi-grid app-reveal-stagger">
         <KpiCard
           title="Всего пользователей"
           value={stats.totalUsers ?? users.length}
@@ -83,7 +83,7 @@ const StatisticsSection = ({ stats, users = [], groups = [], subjects = [], logs
         />
       </div>
 
-      <div className="overview-content-grid">
+      <div className="overview-content-grid app-reveal-stagger">
         <Card className="overview-panel" padding="large" shadow="medium">
           <div className="overview-panel__head">
             <span className="overview-panel__icon-wrap overview-panel__icon-wrap--chart">
@@ -129,7 +129,7 @@ const StatisticsSection = ({ stats, users = [], groups = [], subjects = [], logs
               <p className="overview-panel__desc">Сводка по работам и справочникам</p>
             </div>
           </div>
-          <div className="attention-list">
+          <div className="attention-list app-reveal-stagger">
             <AttentionItem
               label="Работ на проверке"
               value={stats.pendingSubmissions || 0}

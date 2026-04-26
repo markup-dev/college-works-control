@@ -179,6 +179,44 @@
   }
 }
 
+.profile-notification-toggle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 18px;
+  border: 1px solid #dfe3eb;
+  border-radius: 12px;
+  background: #f8fafc;
+
+  &__copy {
+    min-width: 0;
+  }
+
+  &__title {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #3d4250;
+  }
+
+  &__hint {
+    margin: 8px 0 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #6b7280;
+  }
+
+  &__checkbox {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    accent-color: #2c5aa0;
+    cursor: pointer;
+  }
+}
+
 .field-error {
   font-size: 13px;
   color: #d93025;

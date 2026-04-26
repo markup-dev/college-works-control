@@ -62,13 +62,7 @@ const SubmissionModal = ({
         return;
       }
     }
-    
-    const deadline = new Date(assignment.deadline);
-    const now = new Date();
-    if (deadline < now && !isRetake) {
-      showWarning('Срок сдачи задания истек. Работа может быть не принята.');
-    }
-    
+
     onSubmit();
   };
 

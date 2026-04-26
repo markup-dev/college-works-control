@@ -6,6 +6,7 @@ use App\Models\Assignment;
 use App\Models\AssignmentMaterial;
 use App\Models\Group;
 use App\Models\Subject;
+use App\Services\AssignmentNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -31,8 +32,8 @@ class AssignmentController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $groupNames = Group::where('teacher_id', $user->id)
-            ->orWhereHas('assignments', fn($query) => $query->where('teacher_id', $user->id))
+        $groupNames = Group::query()
+            ->whereIn('id', $user->attachedTeachingGroupIds())
             ->orderBy('name')
             ->pluck('name');
 
@@ -478,10 +479,19 @@ class AssignmentController extends Controller
             'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
         ]);
 
-        return response()->json([
-            'success' => true,
-            'assignment' => $assignment,
-        ], 201);
+        try {
+            app(AssignmentNotificationService::class)->notifyNewAssignment($assignment);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return response()
+            ->json([
+                'success' => true,
+                'assignment_id' => $assignment->id,
+                'assignment' => $assignment,
+            ], 201)
+            ->header('X-Created-Assignment-Id', (string) $assignment->id);
     }
 
     public function show(Assignment $assignment)
@@ -565,16 +575,35 @@ class AssignmentController extends Controller
             $this->syncAllowedFormats($assignment, $newAllowedFormats);
         }
 
+        $fresh = $assignment->fresh()->load([
+            'teacher:id,login,last_name,first_name,middle_name',
+            'subjectRelation:id,name',
+            'groups:id,name,teacher_id',
+            'criteriaItems:id,assignment_id,position,text,max_points',
+            'allowedFormatItems:id,assignment_id,format',
+            'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
+        ]);
+
+        $shouldNotifyUpdate = $fresh->status !== 'archived'
+            && (
+                is_array($newGroupIds)
+                || isset($validated['deadline'])
+                || isset($validated['title'])
+                || isset($validated['description'])
+                || isset($validated['status'])
+            );
+
+        if ($shouldNotifyUpdate) {
+            try {
+                app(AssignmentNotificationService::class)->notifyAssignmentUpdated($fresh);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
         return response()->json([
             'success' => true,
-            'assignment' => $assignment->fresh()->load([
-                'teacher:id,login,last_name,first_name,middle_name',
-                'subjectRelation:id,name',
-                'groups:id,name,teacher_id',
-                'criteriaItems:id,assignment_id,position,text,max_points',
-                'allowedFormatItems:id,assignment_id,format',
-                'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
-            ]),
+            'assignment' => $fresh,
         ]);
     }
 

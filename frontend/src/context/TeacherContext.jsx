@@ -19,6 +19,56 @@ const normalizeSubmission = (submission) => ({
   submissionType: submission.submissionType || 'file',
 });
 
+const parsePositiveId = (raw) => {
+  if (raw == null || raw === '') {
+    return null;
+  }
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+const getCreatedAssignmentIdFromResponse = (response) => {
+  const headers = response?.headers;
+  const headerRaw =
+    (typeof headers?.get === 'function' ? headers.get('x-created-assignment-id') : null)
+    ?? headers?.['x-created-assignment-id']
+    ?? headers?.['X-Created-Assignment-Id'];
+  const fromHeader = parsePositiveId(headerRaw);
+  if (fromHeader) {
+    return fromHeader;
+  }
+
+  let data = response?.data;
+  if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
+  const topLevel = parsePositiveId(data.assignmentId ?? data.assignment_id);
+  if (topLevel) {
+    return topLevel;
+  }
+
+  const fromObject = (obj) => {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+      return null;
+    }
+    return parsePositiveId(obj.id ?? obj.assignmentId ?? obj.assignment_id);
+  };
+
+  return (
+    fromObject(data.assignment)
+    ?? fromObject(data.data)
+    ?? fromObject(data.data?.assignment)
+  );
+};
+
 const getApiErrorMessage = (error, fallback) => {
   const responseData = error?.response?.data;
   if (typeof responseData?.message === 'string' && responseData.message.trim()) {
@@ -40,7 +90,8 @@ const areQueriesEqual = (a = {}, b = {}) =>
   && (a.status || 'all') === (b.status || 'all')
   && (a.group || 'all') === (b.group || 'all')
   && (a.subjectId || 'all') === (b.subjectId || 'all')
-  && (a.assignmentId || 'all') === (b.assignmentId || 'all');
+  && (a.assignmentId || 'all') === (b.assignmentId || 'all')
+  && String(a.studentId || 'all') === String(b.studentId || 'all');
 
 const TeacherContext = createContext();
 
@@ -133,6 +184,10 @@ export const TeacherProvider = ({ children }) => {
       assignment_id: nextQuery.assignmentId && nextQuery.assignmentId !== 'all' ? nextQuery.assignmentId : undefined,
       subject_id: nextQuery.subjectId && nextQuery.subjectId !== 'all' ? nextQuery.subjectId : undefined,
       group: nextQuery.group && nextQuery.group !== 'all' ? nextQuery.group : undefined,
+      student_id:
+        nextQuery.studentId && nextQuery.studentId !== 'all'
+          ? Number(nextQuery.studentId)
+          : undefined,
     };
 
     setLoading(true);
@@ -275,10 +330,29 @@ export const TeacherProvider = ({ children }) => {
         maxFileSize: payload.maxFileSize || null,
       });
 
-      createdAssignmentId = response?.data?.assignment?.id;
-      await uploadAssignmentMaterials(createdAssignmentId, materialFiles, removedMaterialIds);
+      createdAssignmentId = getCreatedAssignmentIdFromResponse(response);
+      if (!createdAssignmentId) {
+        return {
+          success: false,
+          error: 'Сервер не вернул идентификатор созданного задания. Обновите страницу.',
+        };
+      }
 
-      await loadTeacherData();
+      try {
+        await uploadAssignmentMaterials(createdAssignmentId, materialFiles, removedMaterialIds);
+      } catch (matErr) {
+        try {
+          await api.delete(`/assignments/${createdAssignmentId}`);
+        } catch {
+          // ignore rollback errors
+        }
+        return {
+          success: false,
+          error: getApiErrorMessage(matErr, 'Ошибка при загрузке материалов к заданию'),
+        };
+      }
+
+      Promise.resolve(loadTeacherData()).catch(() => {});
       return { success: true };
     } catch (err) {
       if (createdAssignmentId) {
@@ -311,7 +385,7 @@ export const TeacherProvider = ({ children }) => {
       });
       await uploadAssignmentMaterials(assignmentId, materialFiles, removedMaterialIds);
 
-      await loadTeacherData();
+      Promise.resolve(loadTeacherData()).catch(() => {});
       return { success: true };
     } catch (err) {
       return { success: false, error: getApiErrorMessage(err, 'Ошибка при обновлении задания') };

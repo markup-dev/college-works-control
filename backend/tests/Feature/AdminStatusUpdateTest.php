@@ -73,7 +73,6 @@ class AdminStatusUpdateTest extends TestCase
             'group_id' => null,
             'department' => null,
             'phone' => '+7 (999) 123-45-67',
-            'theme' => 'system',
             'is_active' => true,
             'must_change_password' => false,
         ]);

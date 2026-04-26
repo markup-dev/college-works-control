@@ -3,7 +3,7 @@ import { useAuth } from './AuthContext';
 import api from '../services/api';
 import { getAllowedFormatsFromAssignment, PAGINATION_DEFAULTS } from '../utils';
 
-const normalizeAssignment = (assignment) => ({
+export const normalizeStudentAssignment = (assignment) => ({
   ...assignment,
   subject: assignment.subject || assignment.subjectRelation?.name || '',
   studentGroups: assignment.studentGroups || assignment.groups?.map((g) => g.name) || [],
@@ -13,6 +13,8 @@ const normalizeAssignment = (assignment) => ({
   canSubmitFirstAttempt: Boolean(assignment.canSubmitFirstAttempt ?? assignment.can_submit_first_attempt),
   canSubmitRetake: Boolean(assignment.canSubmitRetake ?? assignment.can_submit_retake),
 });
+
+const normalizeAssignment = normalizeStudentAssignment;
 
 const areQueriesEqual = (a = {}, b = {}) =>
   a.page === b.page

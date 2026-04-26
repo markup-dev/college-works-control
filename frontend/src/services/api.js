@@ -52,7 +52,11 @@ api.interceptors.response.use(
     }
 
     if (response.data) {
-      response.data = convertKeys(response.data, snakeToCamel);
+      try {
+        response.data = convertKeys(response.data, snakeToCamel);
+      } catch {
+        // Не роняем успешный HTTP-ответ из‑за нестандартного тела (создание сущности уже могло пройти на сервере).
+      }
     }
     return response;
   },

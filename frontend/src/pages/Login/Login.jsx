@@ -91,6 +91,7 @@ const Login = () => {
       const result = await login(formData.login, formData.password, formData.role);
       
       if (result.success) {
+        sessionStorage.setItem('inboxNotifyAfterLogin', '1');
       } else {
         setErrors((prev) => ({ 
           ...prev,
@@ -123,7 +124,7 @@ const Login = () => {
   return (
     <div className='login-page'>
       <div className='login-layout'>
-        <div className='login-container'>
+        <div className='login-container app-reveal'>
           <button className='back-button' onClick={handleBackToWelcome}>
             ← Назад к обзору
           </button>
