@@ -852,16 +852,20 @@
 .teacher-students-broadcast-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1250;
+  z-index: 5000;
   background: rgba(15, 23, 42, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .teacher-students-broadcast {
   width: min(560px, 100%);
+  margin: auto;
+  max-height: min(92vh, 100dvh - 2.5rem);
   background: #fff;
   border-radius: 14px;
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
@@ -936,17 +940,20 @@
 .student-progress-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: 5000;
   background: rgba(15, 23, 42, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .student-progress-modal {
   width: min(760px, 100%);
-  max-height: min(92vh, 760px);
+  max-height: min(92vh, 100dvh - 2.5rem);
+  margin: auto;
   display: flex;
   flex-direction: column;
   background: #fff;

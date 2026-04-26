@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
 import { formatDate, formatFileSize } from '../../../utils';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
@@ -26,9 +27,10 @@ const SubmissionDetailsModal = ({
     returned: { label: 'Возвращена', variant: 'danger' }
   }[submission.status] || { label: 'На проверке', variant: 'warning' };
 
-  return (
-    <div className="modal-overlay teacher-submission-details-modal" onClick={onClose}>
-      <div className="modal-content submission-details-modal" onClick={(e) => e.stopPropagation()}>
+  return createPortal(
+    (
+      <div className="modal-overlay teacher-submission-details-modal" onClick={onClose}>
+        <div className="modal-content submission-details-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-header__titles">
             <h3>Детали работы</h3>
@@ -223,6 +225,8 @@ const SubmissionDetailsModal = ({
         </div>
       </div>
     </div>
+    ),
+    document.body,
   );
 };
 

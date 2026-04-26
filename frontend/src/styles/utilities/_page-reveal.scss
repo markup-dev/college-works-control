@@ -7,7 +7,8 @@
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    /* none — иначе translateY(0) оставляет transform и ломает position:fixed у потомков */
+    transform: none;
   }
 }
 

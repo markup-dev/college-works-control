@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
 import { formatDate, validateScore, validateGradingComment } from '../../../utils';
 import { useNotification } from '../../../context/NotificationContext';
@@ -111,148 +112,151 @@ const GradingModal = ({
     };
   };
 
-  return (
-    <div className="modal-overlay teacher-grading-modal" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-header__titles">
-            <h3>Оценка работы</h3>
-            <p>{submission.studentName}{submission.group ? ` • ${submission.group}` : ''}</p>
+  return createPortal(
+    (
+      <div className="modal-overlay teacher-grading-modal" onClick={onClose}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <div className="modal-header__titles">
+              <h3>Оценка работы</h3>
+              <p>{submission.studentName}{submission.group ? ` • ${submission.group}` : ''}</p>
+            </div>
+            <button type="button" className="modal-close" onClick={onClose}>×</button>
           </div>
-          <button type="button" className="modal-close" onClick={onClose}>×</button>
-        </div>
-        
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body">
-            <SubmissionInfo submission={submission} assignment={assignment} maxScore={maxScore} />
-            
-            <div className="grading-form">
-              <div className="form-group">
-                <label htmlFor="score">
-                  Оценка (0-{maxScore} баллов): *
-                </label>
-                <div className="score-row">
-                  <input
-                    id="score"
-                    type="number"
-                    min="0"
-                    max={maxScore}
-                    step="1"
-                    value={gradeData.score}
-                    onChange={(e) => {
-                      onGradeDataChange({...gradeData, score: e.target.value});
-                      if (errors.score) setErrors({...errors, score: null});
-                    }}
-                    className={`score-input ${errors.score ? 'error' : ''}`}
-                    readOnly={useCriteriaScoring}
-                    required
-                  />
-                  <div className="score-preview">
-                    <div className="score-preview__value">
-                      {currentScore}/{maxScore}
-                    </div>
-                    <div className="score-preview__bar">
-                      <div className="score-preview__fill" style={getScoreFillStyle(scorePercent)}></div>
-                    </div>
-                  </div>
-                </div>
-                {errors.score && <div className="error-message">{errors.score}</div>}
-                <div className="score-hint">
-                  {useCriteriaScoring
-                    ? `Итог считается автоматически по критериям: ${criteriaTotal}/${maxScore}`
-                    : `Введите целое число от 0 до ${maxScore}`}
-                </div>
-              </div>
 
-              {hasCriteria && (
+          <form onSubmit={handleSubmit}>
+            <div className="modal-body">
+              <SubmissionInfo submission={submission} assignment={assignment} maxScore={maxScore} />
+
+              <div className="grading-form">
                 <div className="form-group">
-                  <label className="criteria-mode-toggle">
-                    <input
-                      type="checkbox"
-                      checked={useCriteriaScoring}
-                      onChange={(e) => handleCriteriaModeToggle(e.target.checked)}
-                    />
-                    <span>Оценивать по критериям</span>
+                  <label htmlFor="score">
+                    Оценка (0-{maxScore} баллов): *
                   </label>
-                </div>
-              )}
-
-              {useCriteriaScoring && (
-                <div className="form-group">
-                  <label>Баллы по критериям:</label>
-                  <div className="criteria-score-list">
-                    {gradeData.criterionScores.map((criterion, index) => (
-                      <div key={`${criterion.text}-${index}`} className="criteria-score-item">
-                        <div className="criteria-score-item__meta">
-                          <span className="criteria-score-item__title">{criterion.text}</span>
-                          <span className="criteria-score-item__max">Макс: {criterion.maxPoints}</span>
-                        </div>
-                        <input
-                          type="number"
-                          min="0"
-                          max={criterion.maxPoints}
-                          step="1"
-                          value={Number(criterion.receivedPoints || 0)}
-                          onChange={(e) => handleCriterionScoreChange(index, e.target.value, criterion.maxPoints)}
-                          className="criteria-score-item__input"
-                        />
+                  <div className="score-row">
+                    <input
+                      id="score"
+                      type="number"
+                      min="0"
+                      max={maxScore}
+                      step="1"
+                      value={gradeData.score}
+                      onChange={(e) => {
+                        onGradeDataChange({...gradeData, score: e.target.value});
+                        if (errors.score) setErrors({...errors, score: null});
+                      }}
+                      className={`score-input ${errors.score ? 'error' : ''}`}
+                      readOnly={useCriteriaScoring}
+                      required
+                    />
+                    <div className="score-preview">
+                      <div className="score-preview__value">
+                        {currentScore}/{maxScore}
                       </div>
-                    ))}
+                      <div className="score-preview__bar">
+                        <div className="score-preview__fill" style={getScoreFillStyle(scorePercent)}></div>
+                      </div>
+                    </div>
+                  </div>
+                  {errors.score && <div className="error-message">{errors.score}</div>}
+                  <div className="score-hint">
+                    {useCriteriaScoring
+                      ? `Итог считается автоматически по критериям: ${criteriaTotal}/${maxScore}`
+                      : `Введите целое число от 0 до ${maxScore}`}
                   </div>
                 </div>
-              )}
-              
-              <div className="form-group">
-                <label htmlFor="comment">Комментарий и рекомендации:</label>
-                <textarea
-                  id="comment"
-                  value={gradeData.comment || ''}
-                  onChange={(e) => {
-                    onGradeDataChange({...gradeData, comment: e.target.value});
-                    if (errors.comment) setErrors({...errors, comment: null});
-                  }}
-                  className={`comment-textarea ${errors.comment ? 'error' : ''}`}
-                  placeholder="Укажите сильные стороны работы, замечания и рекомендации по улучшению..."
-                  rows="6"
-                  maxLength={2000}
-                />
-                {errors.comment && <div className="error-message">{errors.comment}</div>}
-                <div className="comment-hint">
-                  Этот комментарий увидят студенты ({(gradeData.comment || '').length}/2000)
-                </div>
-              </div>
 
-              <div className="grading-tips">
-                <h4>Критерии оценки:</h4>
-                <ul>
-                  <li>Соответствие требованиям задания</li>
-                  <li>Качество выполнения работы</li>
-                  <li>Оригинальность и креативность</li>
-                  <li>Техническая реализация</li>
-                  <li>Документация и оформление</li>
-                </ul>
+                {hasCriteria && (
+                  <div className="form-group">
+                    <label className="criteria-mode-toggle">
+                      <input
+                        type="checkbox"
+                        checked={useCriteriaScoring}
+                        onChange={(e) => handleCriteriaModeToggle(e.target.checked)}
+                      />
+                      <span>Оценивать по критериям</span>
+                    </label>
+                  </div>
+                )}
+
+                {useCriteriaScoring && (
+                  <div className="form-group">
+                    <label>Баллы по критериям:</label>
+                    <div className="criteria-score-list">
+                      {gradeData.criterionScores.map((criterion, index) => (
+                        <div key={`${criterion.text}-${index}`} className="criteria-score-item">
+                          <div className="criteria-score-item__meta">
+                            <span className="criteria-score-item__title">{criterion.text}</span>
+                            <span className="criteria-score-item__max">Макс: {criterion.maxPoints}</span>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            max={criterion.maxPoints}
+                            step="1"
+                            value={Number(criterion.receivedPoints || 0)}
+                            onChange={(e) => handleCriterionScoreChange(index, e.target.value, criterion.maxPoints)}
+                            className="criteria-score-item__input"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label htmlFor="comment">Комментарий и рекомендации:</label>
+                  <textarea
+                    id="comment"
+                    value={gradeData.comment || ''}
+                    onChange={(e) => {
+                      onGradeDataChange({...gradeData, comment: e.target.value});
+                      if (errors.comment) setErrors({...errors, comment: null});
+                    }}
+                    className={`comment-textarea ${errors.comment ? 'error' : ''}`}
+                    placeholder="Укажите сильные стороны работы, замечания и рекомендации по улучшению..."
+                    rows="6"
+                    maxLength={2000}
+                  />
+                  {errors.comment && <div className="error-message">{errors.comment}</div>}
+                  <div className="comment-hint">
+                    Этот комментарий увидят студенты ({(gradeData.comment || '').length}/2000)
+                  </div>
+                </div>
+
+                <div className="grading-tips">
+                  <h4>Критерии оценки:</h4>
+                  <ul>
+                    <li>Соответствие требованиям задания</li>
+                    <li>Качество выполнения работы</li>
+                    <li>Оригинальность и креативность</li>
+                    <li>Техническая реализация</li>
+                    <li>Документация и оформление</li>
+                  </ul>
+                </div>
               </div>
             </div>
-          </div>
-          
-          <div className="modal-actions">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onBackToDetails}
-            >
-              ← Назад к деталям
-            </Button>
-            <Button type="button" variant="secondary" onClick={onClose}>
-              Отмена
-            </Button>
-            <Button type="submit" variant="primary">
-              Сохранить оценку
-            </Button>
-          </div>
-        </form>
+
+            <div className="modal-actions">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onBackToDetails}
+              >
+                ← Назад к деталям
+              </Button>
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Отмена
+              </Button>
+              <Button type="submit" variant="primary">
+                Сохранить оценку
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    ),
+    document.body,
   );
 };
 

@@ -59,10 +59,11 @@
     min-height: 100px;
     overflow: hidden;
 
-    > .messages-sidebar__heading {
+    > .messages-sidebar__section-head {
       margin-bottom: 12px;
     }
 
+    .messages-sidebar__section-head,
     .messages-sidebar__heading,
     .messages-sidebar__muted {
       flex-shrink: 0;
@@ -96,6 +97,13 @@
   padding-right: 4px;
 }
 
+.messages-sidebar__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .messages-sidebar__heading {
   margin: 0 0 10px;
   font-size: 12px;
@@ -103,6 +111,28 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #6b7280;
+}
+
+.messages-sidebar__section-head .messages-sidebar__heading {
+  margin-bottom: 0;
+}
+
+.messages-sidebar__action-link {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b91c1c;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover {
+    color: #991b1b;
+  }
 }
 
 .messages-sidebar__muted {
@@ -416,6 +446,31 @@
   padding: 16px 10px 16px 22px;
   border-bottom: 1px solid #e8eaed;
   background: linear-gradient(180deg, #fff 0%, #fafbfd 100%);
+}
+
+.messages-thread__header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.messages-thread__action-link {
+  flex-shrink: 0;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b91c1c;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover {
+    color: #991b1b;
+  }
 }
 
 .messages-thread__draft-hint {

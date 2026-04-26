@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import './Modal.scss';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
@@ -14,23 +15,26 @@ const Modal = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div 
-        className={`modal modal--${size} ${className}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal__header">
-          <h2 className="modal__title">{title}</h2>
-          <button className="modal__close" onClick={onClose}>
-            ×
-          </button>
-        </div>
-        <div className="modal__content">
-          {children}
+  return createPortal(
+    (
+      <div className="modal-overlay" onClick={onClose}>
+        <div 
+          className={`modal modal--${size} ${className}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="modal__header">
+            <h2 className="modal__title">{title}</h2>
+            <button type="button" className="modal__close" onClick={onClose}>
+              ×
+            </button>
+          </div>
+          <div className="modal__content">
+            {children}
+          </div>
         </div>
       </div>
-    </div>
+    ),
+    document.body,
   );
 };
 

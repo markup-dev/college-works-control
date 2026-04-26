@@ -24,6 +24,14 @@
   }
 }
 
+.notifications-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .notifications-page__hint {
   margin: 0;
   font-size: 0.9rem;

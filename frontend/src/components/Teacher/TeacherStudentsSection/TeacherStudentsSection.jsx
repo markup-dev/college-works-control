@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import Button from '../../UI/Button/Button';
 import { formatDate } from '../../../utils';
 import StudentProgressModal from '../StudentProgressModal/StudentProgressModal';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 const BROADCAST_DEFAULT_TEXT =
   'Здравствуйте! Напоминаю о несданных работах по нашим заданиям. Пожалуйста, постарайтесь сдать работы в срок. Если нужна помощь — ответьте на это сообщение.';
@@ -31,6 +33,8 @@ const TeacherStudentsSection = ({ students = [], loading = false, onReload }) =>
   const [broadcastBody, setBroadcastBody] = useState(BROADCAST_DEFAULT_TEXT);
   const [broadcastSending, setBroadcastSending] = useState(false);
   const headerCheckboxRef = useRef(null);
+
+  useBodyScrollLock(broadcastOpen);
 
   const groupOptions = useMemo(() => {
     const set = new Set();
@@ -343,59 +347,64 @@ const TeacherStudentsSection = ({ students = [], loading = false, onReload }) =>
         onClose={() => setModalStudent(null)}
       />
 
-      {broadcastOpen ? (
-        <div
-          className="teacher-students-broadcast-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="teacher-broadcast-title"
-          onClick={() => {
-            if (!broadcastSending) setBroadcastOpen(false);
-          }}
-        >
-          <div
-            className="teacher-students-broadcast"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="teacher-students-broadcast__head">
-              <h2 id="teacher-broadcast-title">Сообщение выбранным студентам</h2>
-              <button
-                type="button"
-                className="teacher-students-broadcast__close"
-                disabled={broadcastSending}
-                onClick={() => setBroadcastOpen(false)}
-                aria-label="Закрыть"
+      {broadcastOpen
+        ? createPortal(
+            (
+              <div
+                className="teacher-students-broadcast-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="teacher-broadcast-title"
+                onClick={() => {
+                  if (!broadcastSending) setBroadcastOpen(false);
+                }}
               >
-                ×
-              </button>
-            </div>
-            <p className="teacher-students-broadcast__meta">
-              Получателей в списке: {selectedIds.length} (за один раз — не больше {BROADCAST_MAX_RECIPIENTS}). Каждый
-              студент увидит текст в «Сообщениях» как обычное входящее.
-            </p>
-            <textarea
-              className="teacher-students-broadcast__textarea"
-              rows={6}
-              value={broadcastBody}
-              onChange={(e) => setBroadcastBody(e.target.value)}
-              disabled={broadcastSending}
-            />
-            <div className="teacher-students-broadcast__actions">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setBroadcastOpen(false)}
-                disabled={broadcastSending}
-              >
-                Отмена
-              </Button>
-              <Button type="button" variant="primary" onClick={sendBroadcast} disabled={broadcastSending}>
-                {broadcastSending ? 'Отправка…' : 'Отправить'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+                <div
+                  className="teacher-students-broadcast"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="teacher-students-broadcast__head">
+                    <h2 id="teacher-broadcast-title">Сообщение выбранным студентам</h2>
+                    <button
+                      type="button"
+                      className="teacher-students-broadcast__close"
+                      disabled={broadcastSending}
+                      onClick={() => setBroadcastOpen(false)}
+                      aria-label="Закрыть"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <p className="teacher-students-broadcast__meta">
+                    Получателей в списке: {selectedIds.length} (за один раз — не больше {BROADCAST_MAX_RECIPIENTS}). Каждый
+                    студент увидит текст в «Сообщениях» как обычное входящее.
+                  </p>
+                  <textarea
+                    className="teacher-students-broadcast__textarea"
+                    rows={6}
+                    value={broadcastBody}
+                    onChange={(e) => setBroadcastBody(e.target.value)}
+                    disabled={broadcastSending}
+                  />
+                  <div className="teacher-students-broadcast__actions">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setBroadcastOpen(false)}
+                      disabled={broadcastSending}
+                    >
+                      Отмена
+                    </Button>
+                    <Button type="button" variant="primary" onClick={sendBroadcast} disabled={broadcastSending}>
+                      {broadcastSending ? 'Отправка…' : 'Отправить'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ),
+            document.body,
+          )
+        : null}
     </div>
   );
 };

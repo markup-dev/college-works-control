@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import { useNotification } from '../../../context/NotificationContext';
@@ -66,9 +67,10 @@ const SubmissionModal = ({
     onSubmit();
   };
 
-  return (
-    <div className="modal-overlay student-submission-modal" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+  return createPortal(
+    (
+      <div className="modal-overlay student-submission-modal" onClick={onClose}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{isRetake ? 'Пересдача работы' : 'Сдача работы'}: {assignment.title}</h3>
           <button className="modal-close" onClick={onClose}>×</button>
@@ -110,6 +112,8 @@ const SubmissionModal = ({
         </div>
       </div>
     </div>
+    ),
+    document.body,
   );
 };
 

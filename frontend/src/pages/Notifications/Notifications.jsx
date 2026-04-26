@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 import { getNotificationNavigatePath } from '../../utils/notificationNavigation';
 import Button from '../../components/UI/Button/Button';
+import ConfirmModal from '../../components/UI/Modal/ConfirmModal';
 import Pagination from '../../components/UI/Pagination/Pagination';
 import './Notifications.scss';
 
@@ -31,6 +32,7 @@ const Notifications = () => {
   const [meta, setMeta] = useState({ currentPage: 1, lastPage: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
 
   const load = useCallback(async (p = 1) => {
     setLoading(true);
@@ -98,6 +100,19 @@ const Notifications = () => {
     }
   };
 
+  const executeClearAllNotifications = async () => {
+    try {
+      await api.delete('/notifications');
+      showSuccess('Список уведомлений очищен');
+      refreshUnreadGlobally();
+      setItems([]);
+      setMeta({ currentPage: 1, lastPage: 1, total: 0 });
+      setPage(1);
+    } catch {
+      showError('Не удалось очистить уведомления');
+    }
+  };
+
   return (
     <div className="notifications-page app-page">
       <div className="notifications-page__shell">
@@ -110,9 +125,19 @@ const Notifications = () => {
             </p>
           </div>
           {!loading && meta.total > 0 ? (
-            <Button type="button" variant="secondary" onClick={markAllRead}>
-              Отметить всё прочитанным
-            </Button>
+            <div className="notifications-page__actions">
+              <Button type="button" variant="secondary" size="small" onClick={markAllRead}>
+                Отметить всё прочитанным
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="small"
+                onClick={() => setShowClearAllConfirm(true)}
+              >
+                Очистить список
+              </Button>
+            </div>
           ) : null}
         </header>
 
@@ -169,6 +194,17 @@ const Notifications = () => {
           />
         ) : null}
       </div>
+
+      <ConfirmModal
+        isOpen={showClearAllConfirm}
+        onClose={() => setShowClearAllConfirm(false)}
+        onConfirm={executeClearAllNotifications}
+        title="Очистить уведомления?"
+        message="Все записи из списка будут удалены без возможности восстановления."
+        confirmText="Очистить"
+        cancelText="Отмена"
+        danger
+      />
     </div>
   );
 };

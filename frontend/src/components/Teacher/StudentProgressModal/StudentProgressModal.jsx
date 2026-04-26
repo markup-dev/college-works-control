@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import Button from '../../UI/Button/Button';
 import { formatDate } from '../../../utils';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 const getErrorMessage = (err, fallback) => {
   const msg = err?.response?.data?.message;
@@ -30,6 +32,8 @@ const StudentProgressModal = ({ isOpen, onClose, studentId, fallbackTitle = 'ะกั
   const navigate = useNavigate();
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  useBodyScrollLock(isOpen);
 
   useEffect(() => {
     if (!isOpen || !studentId) {
@@ -62,15 +66,16 @@ const StudentProgressModal = ({ isOpen, onClose, studentId, fallbackTitle = 'ะกั
   const title = payload?.student?.fullName || fallbackTitle;
   const avg = payload?.averageScore;
 
-  return (
-    <div
-      className="student-progress-modal-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="student-progress-title"
-      onClick={onClose}
-    >
-      <div className="student-progress-modal" onClick={(e) => e.stopPropagation()}>
+  return createPortal(
+    (
+      <div
+        className="student-progress-modal-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="student-progress-title"
+        onClick={onClose}
+      >
+        <div className="student-progress-modal" onClick={(e) => e.stopPropagation()}>
         <div className="student-progress-modal__head">
           <div>
             <h2 id="student-progress-title">{title}</h2>
@@ -145,6 +150,8 @@ const StudentProgressModal = ({ isOpen, onClose, studentId, fallbackTitle = 'ะกั
         </div>
       </div>
     </div>
+    ),
+    document.body,
   );
 };
 

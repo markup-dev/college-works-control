@@ -261,6 +261,49 @@ class ConversationController extends Controller
         ], 201);
     }
 
+    /**
+     * Удалить все сообщения в диалоге и сам диалог (история пропадает у обоих участников).
+     */
+    public function destroyConversationMessages(Request $request, Conversation $conversation)
+    {
+        $user = $request->user();
+        if (! $conversation->involvesUser($user)) {
+            return response()->json(['message' => 'Доступ запрещён'], 403);
+        }
+
+        DB::transaction(function () use ($conversation) {
+            Message::query()->where('conversation_id', $conversation->id)->delete();
+            $conversation->delete();
+        });
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Удалить все диалоги текущего пользователя вместе с сообщениями.
+     */
+    public function destroyAllMessages(Request $request)
+    {
+        $user = $request->user();
+        $conversationIds = Conversation::query()
+            ->where(function ($q) use ($user) {
+                $q->where('user_one_id', $user->id)
+                    ->orWhere('user_two_id', $user->id);
+            })
+            ->pluck('id');
+
+        if ($conversationIds->isEmpty()) {
+            return response()->json(['success' => true]);
+        }
+
+        DB::transaction(function () use ($conversationIds) {
+            Message::query()->whereIn('conversation_id', $conversationIds)->delete();
+            Conversation::query()->whereIn('id', $conversationIds)->delete();
+        });
+
+        return response()->json(['success' => true]);
+    }
+
     private function formatMessagePayload(Message $m): array
     {
         return [

@@ -62,4 +62,14 @@ class NotificationController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    /**
+     * Удалить все записи уведомлений пользователя из БД.
+     */
+    public function destroyAll(Request $request)
+    {
+        $request->user()->notifications()->delete();
+
+        return response()->json(['success' => true]);
+    }
 }

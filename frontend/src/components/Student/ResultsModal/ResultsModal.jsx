@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
 import { formatDate } from '../../../utils';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
@@ -37,15 +38,16 @@ const ResultsModal = ({
     return 'poor';
   };
 
-  return (
-    <div className="modal-overlay student-results-modal" onClick={onClose}>
-      <div className="modal-content results-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Результаты проверки работы</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
-        </div>
-        
-        <div className="modal-body">
+  return createPortal(
+    (
+      <div className="modal-overlay student-results-modal" onClick={onClose}>
+        <div className="modal-content results-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>Результаты проверки работы</h3>
+            <button className="modal-close" onClick={onClose}>×</button>
+          </div>
+          
+          <div className="modal-body">
           <div className={`result-overview result-overview--${resultStatus.variant}`}>
             <span className="result-overview__label">{resultStatus.label}</span>
             {assignment.submittedAt && (
@@ -146,6 +148,8 @@ const ResultsModal = ({
         </div>
       </div>
     </div>
+    ),
+    document.body,
   );
 };
 

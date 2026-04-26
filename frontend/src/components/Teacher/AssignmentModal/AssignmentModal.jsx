@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import { useNotification } from '../../../context/NotificationContext';
@@ -423,9 +424,10 @@ const AssignmentModal = ({
     }));
   };
 
-  return (
-    <div className="modal-overlay teacher-assignment-modal" onClick={onClose}>
-      <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
+  return createPortal(
+    (
+      <div className="modal-overlay teacher-assignment-modal" onClick={onClose}>
+        <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-header__titles">
             <h3>{isEdit ? 'Редактирование задания' : 'Создание нового задания'}</h3>
@@ -779,6 +781,8 @@ const AssignmentModal = ({
         </form>
       </div>
     </div>
+    ),
+    document.body,
   );
 };
 

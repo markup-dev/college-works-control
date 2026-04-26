@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 import checkReadIcon from '../../assets/messages/check-read.svg';
 import checkSentIcon from '../../assets/messages/check-sent.svg';
+import ConfirmModal from '../../components/UI/Modal/ConfirmModal';
 import './Messages.scss';
 
 const getErrorMessage = (err, fallback) => {
@@ -16,7 +17,7 @@ const COMPOSER_MAX_HEIGHT_PX = 160;
 
 const Messages = () => {
   const { user } = useAuth();
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
   const location = useLocation();
   const navigate = useNavigate();
   const [partners, setPartners] = useState([]);
@@ -31,6 +32,8 @@ const Messages = () => {
   const [threadSnapKey, setThreadSnapKey] = useState(0);
   const [partnerSearch, setPartnerSearch] = useState('');
   const [teacherGroupsMeta, setTeacherGroupsMeta] = useState([]);
+  /** null | { kind: 'thread'; conversationId: number } | { kind: 'all' } */
+  const [messagesClearConfirm, setMessagesClearConfirm] = useState(null);
   const threadBodyRef = useRef(null);
   const composerRef = useRef(null);
 
@@ -293,6 +296,48 @@ const Messages = () => {
     form.requestSubmit();
   };
 
+  const requestClearCurrentThread = () => {
+    if (!activeConversationId || draftRecipient) return;
+    setMessagesClearConfirm({ kind: 'thread', conversationId: activeConversationId });
+  };
+
+  const requestClearAllThreads = () => {
+    if (conversations.length === 0) return;
+    setMessagesClearConfirm({ kind: 'all' });
+  };
+
+  const closeMessagesClearConfirm = () => setMessagesClearConfirm(null);
+
+  const executeMessagesClear = useCallback(async () => {
+    const spec = messagesClearConfirm;
+    if (!spec) return;
+    if (spec.kind === 'thread') {
+      const convId = spec.conversationId;
+      try {
+        await api.delete(`/conversations/${convId}/messages`);
+        showSuccess('Переписка очищена');
+        setMessages([]);
+        setActiveConversationId(null);
+        await loadConversations();
+        window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
+      } catch (err) {
+        showError(getErrorMessage(err, 'Не удалось очистить переписку'));
+      }
+      return;
+    }
+    try {
+      await api.delete('/conversations/messages');
+      showSuccess('Все переписки очищены');
+      setConversations([]);
+      setActiveConversationId(null);
+      setDraftRecipient(null);
+      setMessages([]);
+      window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
+    } catch (err) {
+      showError(getErrorMessage(err, 'Не удалось очистить сообщения'));
+    }
+  }, [messagesClearConfirm, loadConversations, showSuccess, showError]);
+
   const handleSend = async (e) => {
     e.preventDefault();
     const text = messageBody.trim();
@@ -352,7 +397,18 @@ const Messages = () => {
           </p>
 
           <section className="messages-sidebar__section messages-sidebar__section--dialogs">
-            <h2 className="messages-sidebar__heading">Диалоги</h2>
+            <div className="messages-sidebar__section-head">
+              <h2 className="messages-sidebar__heading">Диалоги</h2>
+              {!loadingList && conversations.length > 0 ? (
+                <button
+                  type="button"
+                  className="messages-sidebar__action-link"
+                  onClick={requestClearAllThreads}
+                >
+                  Очистить все
+                </button>
+              ) : null}
+            </div>
             {!loadingList && conversations.length === 0 ? (
               <p className="messages-sidebar__muted">Пока нет переписки</p>
             ) : (
@@ -558,7 +614,17 @@ const Messages = () => {
           ) : (
             <>
               <header className="messages-thread__header">
-                <h2 className="messages-thread__title">{otherName}</h2>
+                <div className="messages-thread__header-top">
+                  <h2 className="messages-thread__title">{otherName}</h2>
+                  {activeConversationId && !draftRecipient && messages.length > 0 ? (
+                    <button
+                      type="button"
+                      className="messages-thread__action-link"
+                      onClick={requestClearCurrentThread}                    >
+                      Очистить переписку
+                    </button>
+                  ) : null}
+                </div>
                 {draftRecipient && (
                   <p className="messages-thread__draft-hint">
                     Диалог будет создан после отправки первого сообщения
@@ -683,6 +749,25 @@ const Messages = () => {
           )}
         </section>
       </div>
+
+      <ConfirmModal
+        isOpen={Boolean(messagesClearConfirm)}
+        onClose={closeMessagesClearConfirm}
+        onConfirm={executeMessagesClear}
+        title={
+          messagesClearConfirm?.kind === 'thread'
+            ? 'Очистить переписку?'
+            : 'Удалить все диалоги?'
+        }
+        message={
+          messagesClearConfirm?.kind === 'thread'
+            ? 'Все сообщения в этом диалоге будут удалены. У собеседника история тоже пропадёт. Восстановить нельзя.'
+            : 'Будут удалены все ваши диалоги и сообщения. У собеседников история тоже исчезнет. Восстановить нельзя.'
+        }
+        confirmText={messagesClearConfirm?.kind === 'thread' ? 'Очистить' : 'Удалить всё'}
+        cancelText="Отмена"
+        danger
+      />
     </div>
   );
 };

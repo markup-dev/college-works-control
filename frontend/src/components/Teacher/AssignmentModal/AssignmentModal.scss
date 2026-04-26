@@ -1,17 +1,16 @@
 .teacher-assignment-modal {
 &.modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(15, 23, 42, 0.48);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 5000;
   padding: 1.25rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-content {
@@ -20,7 +19,8 @@
   border-radius: 14px;
   width: 100%;
   max-width: 860px;
-  max-height: 92vh;
+  max-height: min(92vh, 100dvh - 2.5rem);
+  margin: auto;
   overflow: auto;
   box-shadow: 0 20px 45px rgba(15, 23, 42, 0.22);
   
