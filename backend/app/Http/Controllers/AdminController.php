@@ -301,10 +301,11 @@ class AdminController extends Controller
             } else {
                 $groupName = trim((string) ($validated['group'] ?? ''));
                 if ($groupName !== '') {
-                    $group = Group::firstOrCreate(
+                    $existing = Group::where('name', $groupName)->orderBy('id')->first();
+                    $group = $existing ?? Group::firstOrCreate(
                         [
                             'name' => $groupName,
-                            'teacher_id' => $user->studentGroup?->teacher_id,
+                            'teacher_id' => null,
                         ],
                         ['status' => 'active']
                     );

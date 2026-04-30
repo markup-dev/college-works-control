@@ -48,6 +48,7 @@ const GroupManagement = ({
   onDeleteGroup,
   onCreateGroupWithStudents,
   onBulkAttachStudents,
+  onSearchStudentsForTransfer,
 }) => {
   const { showSuccess, showError, showInfo } = useNotification();
   const [pendingGroupId, setPendingGroupId] = useState(null);
@@ -57,6 +58,10 @@ const GroupManagement = ({
   const [manageGroupStatus, setManageGroupStatus] = useState('active');
   const [manageStudentsInput, setManageStudentsInput] = useState('');
   const [manageStudentsFile, setManageStudentsFile] = useState(null);
+  const [moveStudentSearchQuery, setMoveStudentSearchQuery] = useState('');
+  const [moveStudentPicklist, setMoveStudentPicklist] = useState([]);
+  const [moveStudentSearchLoading, setMoveStudentSearchLoading] = useState(false);
+  const [selectedMoveStudentIds, setSelectedMoveStudentIds] = useState([]);
   const [filterState, setFilterState] = useState({
     search: '',
     status: 'all',
@@ -73,7 +78,6 @@ const GroupManagement = ({
   const [singleStudentsFile, setSingleStudentsFile] = useState(null);
   const [batchText, setBatchText] = useState('');
   const [batchFile, setBatchFile] = useState(null);
-  const [sendCredentials, setSendCredentials] = useState(true);
   const [wizardLoading, setWizardLoading] = useState(false);
   const [manageLoading, setManageLoading] = useState(false);
   const [batchPreview, setBatchPreview] = useState(null);
@@ -86,7 +90,6 @@ const GroupManagement = ({
     setBatchText('');
     setBatchFile(null);
     setBatchPreview(null);
-    setSendCredentials(true);
   };
 
   const closeCreateWizard = () => {
@@ -105,6 +108,10 @@ const GroupManagement = ({
     setManageGroupStatus('active');
     setManageStudentsInput('');
     setManageStudentsFile(null);
+    setMoveStudentSearchQuery('');
+    setMoveStudentPicklist([]);
+    setMoveStudentSearchLoading(false);
+    setSelectedMoveStudentIds([]);
   };
 
   const closeManageModal = () => {
@@ -130,6 +137,36 @@ const GroupManagement = ({
       perPage: filterState.perPage,
     });
   }, [filterState, onFetchGroups]);
+
+  useEffect(() => {
+    if (!showManageModal || !onSearchStudentsForTransfer || !activeGroup?.id) {
+      return undefined;
+    }
+    let cancelled = false;
+    const t = setTimeout(() => {
+      (async () => {
+        setMoveStudentSearchLoading(true);
+        try {
+          const list = await onSearchStudentsForTransfer(moveStudentSearchQuery);
+          if (!cancelled) {
+            setMoveStudentPicklist(Array.isArray(list) ? list : []);
+          }
+        } catch {
+          if (!cancelled) {
+            setMoveStudentPicklist([]);
+          }
+        } finally {
+          if (!cancelled) {
+            setMoveStudentSearchLoading(false);
+          }
+        }
+      })();
+    }, 320);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [moveStudentSearchQuery, showManageModal, activeGroup?.id, onSearchStudentsForTransfer]);
 
   const parseStudents = (text) => {
     const rows = parseCsvText(text);
@@ -224,7 +261,7 @@ const GroupManagement = ({
     const result = await onCreateGroupWithStudents?.({
       name: normalizedName,
       status: 'active',
-      sendCredentials,
+      send_credentials: true,
       students: parsed.students,
     });
     setWizardLoading(false);
@@ -294,7 +331,7 @@ const GroupManagement = ({
       const result = await onCreateGroupWithStudents?.({
         name: entry.name,
         status: 'active',
-        sendCredentials,
+        send_credentials: true,
         students: entry.students,
       });
 
@@ -325,7 +362,71 @@ const GroupManagement = ({
     setManageGroupStatus(group?.status || 'active');
     setManageStudentsInput('');
     setManageStudentsFile(null);
+    setMoveStudentSearchQuery('');
+    setMoveStudentPicklist([]);
+    setSelectedMoveStudentIds([]);
     setShowManageModal(true);
+  };
+
+  const toggleMoveStudentSelected = (studentId) => {
+    setSelectedMoveStudentIds((prev) =>
+      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
+    );
+  };
+
+  const selectAllMoveableInList = () => {
+    if (!activeGroup?.id) return;
+    const gid = Number(activeGroup.id);
+    const ids = moveStudentPicklist
+      .filter((stu) => Number(stu.groupId) !== gid)
+      .map((stu) => stu.id);
+    setSelectedMoveStudentIds(ids);
+  };
+
+  const handleMoveSelectedStudents = async () => {
+    if (!activeGroup) return;
+    const ids = [...new Set(selectedMoveStudentIds)];
+    if (ids.length === 0) {
+      showError('Отметьте хотя бы одного студента в списке.');
+      return;
+    }
+
+    setManageLoading(true);
+    const result = await onBulkAttachStudents?.(activeGroup.id, { studentIds: ids });
+    setManageLoading(false);
+
+    const isSuccess = handleAdminActionResult({
+      result,
+      showSuccess,
+      showError,
+      errorMessage: 'Не удалось перевести студентов.',
+    });
+    if (!isSuccess) {
+      return;
+    }
+
+    if (result?.data?.group && activeGroup?.id === result.data.group.id) {
+      setActiveGroup((prev) => ({
+        ...(prev || {}),
+        ...result.data.group,
+      }));
+    }
+
+    const moved = result?.data?.movedCount ?? result?.data?.moved_count ?? 0;
+    showSuccess(
+      typeof moved === 'number' && moved > 0
+        ? `Переведено студентов в группу: ${moved}.`
+        : 'Готово. Если переводов не было — возможно, выбранные студенты уже в этой группе.'
+    );
+    setSelectedMoveStudentIds([]);
+    if (onSearchStudentsForTransfer) {
+      try {
+        const refreshed = await onSearchStudentsForTransfer(moveStudentSearchQuery);
+        setMoveStudentPicklist(Array.isArray(refreshed) ? refreshed : []);
+      } catch {
+        setMoveStudentPicklist([]);
+      }
+    }
   };
 
   const handleUpdateGroupSettings = async () => {
@@ -461,15 +562,11 @@ const GroupManagement = ({
             </Button>
           </div>
 
-          <div className="group-wizard__checkbox">
-            <label>
-              <input
-                type="checkbox"
-                checked={sendCredentials}
-                onChange={(event) => setSendCredentials(event.target.checked)}
-              />
-              Отправлять студентам логин и временный пароль на email
-            </label>
+          <div className="group-wizard__credentials-note">
+            <p>
+              На email каждого студента <strong>автоматически</strong> уходит письмо с логином и временным паролем — без
+              этого войти в систему нельзя. Указывайте в CSV корректный адрес почты.
+            </p>
           </div>
 
           {createMode === 'single' ? (
@@ -731,6 +828,93 @@ const GroupManagement = ({
           <div className="group-management__metric" aria-label="Всего студентов">
             <span className="group-management__metric-label">Всего студентов</span>
             <strong className="group-management__metric-value">{String(activeGroup?.studentsCount || 0)}</strong>
+          </div>
+          <div className="group-management__create-field group-management__create-field--move">
+            <label>Перевести сюда студентов из других групп</label>
+            <p className="group-management__field-hint">
+              Введите фамилию, имя или логин — список обновится автоматически. Отметьте нужных людей; те, кто уже в этой
+              группе, недоступны для выбора.
+            </p>
+            <div className="group-management__move-toolbar">
+              <input
+                type="search"
+                className="group-management__move-search"
+                value={moveStudentSearchQuery}
+                onChange={(event) => setMoveStudentSearchQuery(event.target.value)}
+                placeholder="Поиск по ФИО или логину…"
+                autoComplete="off"
+              />
+              {moveStudentPicklist.some((stu) => Number(stu.groupId) !== Number(activeGroup?.id)) && (
+                <Button type="button" variant="outline" size="small" onClick={selectAllMoveableInList}>
+                  Выбрать всех в списке
+                </Button>
+              )}
+            </div>
+            <div className="group-management__move-list" role="list">
+              {moveStudentSearchLoading && <p className="group-management__move-status">Загрузка списка…</p>}
+              {!moveStudentSearchLoading && moveStudentPicklist.length === 0 && (
+                <p className="group-management__move-status">Студентов не найдено. Измените поиск.</p>
+              )}
+              {!moveStudentSearchLoading &&
+                moveStudentPicklist.map((stu) => {
+                  const targetId = Number(activeGroup?.id);
+                  const inThisGroup = stu.groupId != null && Number(stu.groupId) === targetId;
+                  const groupLabel = stu.group || stu.studentGroup?.name || (stu.groupId ? 'Группа' : 'Без группы');
+                  const title = [stu.lastName, stu.firstName, stu.middleName].filter(Boolean).join(' ').trim();
+                  const displayName = stu.fullName || title || stu.login;
+                  const checked = selectedMoveStudentIds.includes(stu.id);
+                  return (
+                    <label
+                      key={stu.id}
+                      className={`group-management__move-row${inThisGroup ? ' group-management__move-row--disabled' : ''}`}
+                    >
+                      <span className="group-management__move-row-main">
+                        <span className="group-management__move-name">{displayName}</span>
+                        <span className="group-management__move-meta">
+                          {stu.login}
+                          {inThisGroup ? (
+                            <>
+                              {' · '}
+                              <strong>{activeGroup?.name || 'эта группа'}</strong>
+                              {' · уже здесь'}
+                            </>
+                          ) : (
+                            <>
+                              {' · сейчас: '}
+                              <strong>{groupLabel}</strong>
+                            </>
+                          )}
+                        </span>
+                      </span>
+                      <span className="group-management__move-check">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={inThisGroup}
+                          onChange={() => !inThisGroup && toggleMoveStudentSelected(stu.id)}
+                        />
+                      </span>
+                    </label>
+                  );
+                })}
+            </div>
+            <div className="group-management__row-actions group-management__row-actions--move">
+              <Button
+                type="button"
+                variant="secondary"
+                loading={manageLoading}
+                disabled={selectedMoveStudentIds.length === 0}
+                onClick={handleMoveSelectedStudents}
+              >
+                Перевести выбранных
+                {selectedMoveStudentIds.length > 0 ? ` (${selectedMoveStudentIds.length})` : ''}
+              </Button>
+              {selectedMoveStudentIds.length > 0 && (
+                <Button type="button" variant="outline" size="small" onClick={() => setSelectedMoveStudentIds([])}>
+                  Снять выбор
+                </Button>
+              )}
+            </div>
           </div>
           <div className="group-management__create-field">
             <label>Добавить студентов (login,email,last_name,first_name,middle_name,phone)</label>

@@ -1,5 +1,4 @@
 import {
-  GROUP_REGEX,
   validateEmailValue,
   validateLoginValue,
   validateNameField,
@@ -29,14 +28,11 @@ export const validateUserData = (userData, isEdit = false) => {
     errors.role = 'Роль обязательна';
   }
 
-  const trimmedGroup = userData.group?.trim() || '';
   if (userData.role === 'student') {
-    if (!trimmedGroup) {
-      errors.group = 'Группа обязательна для студента';
-    } else if (!GROUP_REGEX.test(trimmedGroup)) {
-      errors.group = 'Группа должна содержать только буквы, цифры и дефис';
-    } else if (trimmedGroup.length > 20) {
-      errors.group = 'Группа не должна превышать 20 символов';
+    const rawId = userData.groupId;
+    const gid = typeof rawId === 'number' ? rawId : parseInt(String(rawId ?? '').trim(), 10);
+    if (!rawId || rawId === '' || Number.isNaN(gid) || gid < 1) {
+      errors.group = 'Выберите группу для студента';
     }
   }
 

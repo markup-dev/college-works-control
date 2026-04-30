@@ -27,7 +27,7 @@ const createDefaultUserFormData = () => ({
   phone: '',
   password: '',
   role: 'student',
-  group: '',
+  groupId: '',
   department: '',
   status: 'active',
 });
@@ -41,7 +41,7 @@ const createUserFormDataFromUser = (user) => ({
   phone: user?.phone || '',
   password: '',
   role: user?.role || 'student',
-  group: user?.group || '',
+  groupId: user?.studentGroup?.id ?? '',
   department: user?.department || '',
   status: user?.status || (user?.isActive === false ? 'inactive' : 'active'),
 });
@@ -132,6 +132,14 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
         department: formData.role === 'teacher' ? (formData.department?.trim() || '') : '',
       };
 
+      if (submitData.role === 'student') {
+        const gid = typeof submitData.groupId === 'number' ? submitData.groupId : parseInt(String(submitData.groupId), 10);
+        submitData.groupId = Number.isFinite(gid) && gid > 0 ? gid : '';
+      } else {
+        delete submitData.groupId;
+      }
+      delete submitData.group;
+
       if (!editingUser) {
         submitData.password = '';
         submitData.generatePassword = true;
@@ -140,10 +148,6 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
         submitData.isActive = formData.status === 'active';
       }
 
-      if (submitData.group) {
-        submitData.group = submitData.group.trim();
-      }
-      
       const { validateUserData } = await import('../../../utils/adminHelpers');
       const validation = validateUserData(submitData, !!editingUser);
       
@@ -573,7 +577,7 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
                     setFormData(prev => ({
                       ...prev,
                       role: nextRole,
-                      group: nextRole === 'student' ? prev.group : '',
+                      groupId: nextRole === 'student' ? prev.groupId : '',
                       department: nextRole === 'teacher' ? prev.department : '',
                     }));
                   }}
@@ -587,15 +591,25 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
                 <div className="form-group">
                   <label>Группа *</label>
                   <select
-                    value={formData.group}
-                    onChange={(e) => setFormData(prev => ({ ...prev, group: e.target.value }))}
+                    value={
+                      formData.groupId === '' || formData.groupId === null ? '' : String(formData.groupId)
+                    }
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        groupId: e.target.value === '' ? '' : Number(e.target.value),
+                      }))
+                    }
                     required
                   >
                     <option value="">Выберите группу</option>
-                    {groups.map(group => (
-                      <option key={group.id} value={group.name}>{group.name}</option>
+                    {groups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                      </option>
                     ))}
                   </select>
+                  <small className="form-hint">Чтобы перевести студента в другую группу, выберите нужную здесь и сохраните.</small>
                 </div>
               ) : formData.role === 'teacher' ? (
                 <div className="form-group">

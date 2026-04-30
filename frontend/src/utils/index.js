@@ -7,4 +7,5 @@ export * from './adminImportHelpers.js';
 export * from './adminFilterHelpers.js';
 export * from './adminActionHelpers.js';
 export * from './paginationDefaults.js';
+export * from './submissionReviewQueue.js';
 export { validateUserData } from './adminHelpers.js';

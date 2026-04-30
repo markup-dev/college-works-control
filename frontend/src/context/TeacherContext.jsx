@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useMemo, useRe
 import api from '../services/api';
 import { DEFAULT_ALLOWED_FORMATS, getAllowedFormatsFromAssignment, normalizeGroupName, PAGINATION_DEFAULTS } from '../utils';
 
-const normalizeAssignment = (assignment) => ({
+export const normalizeAssignment = (assignment) => ({
   ...assignment,
   subject: assignment.subject || assignment.subjectRelation?.name || '',
   subjectId: assignment.subjectId || assignment.subject_id || assignment.subjectRelation?.id || null,
@@ -11,12 +11,13 @@ const normalizeAssignment = (assignment) => ({
   materialFiles: assignment.materialFiles || assignment.materialItems || [],
 });
 
-const normalizeSubmission = (submission) => ({
+export const normalizeSubmission = (submission) => ({
   ...submission,
   subject: submission.subject || submission.subjectName || '',
   group: normalizeGroupName(submission.group || submission.groupName || ''),
   teacherComment: submission.teacherComment || '',
   submissionType: submission.submissionType || 'file',
+  assignmentDeadline: submission.assignmentDeadline || submission.assignment_deadline || null,
 });
 
 const parsePositiveId = (raw) => {
@@ -88,7 +89,7 @@ const areQueriesEqual = (a = {}, b = {}) =>
   && a.sort === b.sort
   && (a.search || '') === (b.search || '')
   && (a.status || 'all') === (b.status || 'all')
-  && (a.group || 'all') === (b.group || 'all')
+  && (a.deadlineFilter || 'all') === (b.deadlineFilter || 'all')
   && (a.subjectId || 'all') === (b.subjectId || 'all')
   && (a.assignmentId || 'all') === (b.assignmentId || 'all')
   && String(a.studentId || 'all') === String(b.studentId || 'all');
@@ -116,7 +117,8 @@ export const TeacherProvider = ({ children }) => {
   const [submissionsQuery, setSubmissionsQuery] = useState({
     page: 1,
     perPage: PAGINATION_DEFAULTS.teacherSubmissions,
-    sort: 'newest',
+    sort: 'review_queue',
+    deadlineFilter: 'all',
   });
   const assignmentsQueryRef = useRef(assignmentsQuery);
   const submissionsQueryRef = useRef(submissionsQuery);
@@ -124,6 +126,8 @@ export const TeacherProvider = ({ children }) => {
   const [metaGroups, setMetaGroups] = useState([]);
   const [metaAssignments, setMetaAssignments] = useState([]);
   const [loading, setLoading] = useState(false);
+  /** Только загрузка списка сдач (вкладка «Работы»), без заданий и метаданных */
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const loadTeacherAssignments = useCallback(async (queryOverrides = {}) => {
@@ -166,12 +170,14 @@ export const TeacherProvider = ({ children }) => {
     }
   }, []);
 
-  const loadTeacherSubmissions = useCallback(async (queryOverrides = {}) => {
+  const loadTeacherSubmissions = useCallback(async (queryOverrides = {}, options = {}) => {
+    const trackLoading = options.trackLoading !== false;
     const currentQuery = submissionsQueryRef.current;
     const nextQuery = {
       page: 1,
       perPage: PAGINATION_DEFAULTS.teacherSubmissions,
-      sort: 'newest',
+      sort: 'review_queue',
+      deadlineFilter: 'all',
       ...currentQuery,
       ...queryOverrides,
     };
@@ -188,9 +194,15 @@ export const TeacherProvider = ({ children }) => {
         nextQuery.studentId && nextQuery.studentId !== 'all'
           ? Number(nextQuery.studentId)
           : undefined,
+      deadline_filter:
+        nextQuery.deadlineFilter && nextQuery.deadlineFilter !== 'all'
+          ? nextQuery.deadlineFilter
+          : undefined,
     };
 
-    setLoading(true);
+    if (trackLoading) {
+      setSubmissionsLoading(true);
+    }
     setError(null);
     try {
       const submissionsRes = await api.get('/submissions', { params });
@@ -207,7 +219,9 @@ export const TeacherProvider = ({ children }) => {
     } catch (err) {
       setError('Ошибка загрузки данных преподавателя');
     } finally {
-      setLoading(false);
+      if (trackLoading) {
+        setSubmissionsLoading(false);
+      }
     }
   }, []);
 
@@ -472,6 +486,7 @@ export const TeacherProvider = ({ children }) => {
     availableSubjects,
     assignmentFilterOptions,
     loading,
+    submissionsLoading,
     error,
     loadTeacherMeta,
     loadTeacherData,

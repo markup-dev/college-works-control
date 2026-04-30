@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
 // Защищённые маршруты (требуют авторизации)
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'throttle:api_user'])->group(function () {
 
     // Аутентификация
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -32,7 +32,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:teacher')->group(function () {
         Route::get('/teacher/students', [TeacherStudentController::class, 'index']);
         Route::get('/teacher/students/{user}', [TeacherStudentController::class, 'show']);
-        Route::post('/teacher/messages/broadcast', [TeacherBroadcastMessageController::class, 'store']);
+        Route::post('/teacher/messages/broadcast', [TeacherBroadcastMessageController::class, 'store'])
+            ->middleware('throttle:teacher_broadcast');
 
         Route::post('/assignments', [AssignmentController::class, 'store']);
         Route::put('/assignments/{assignment}', [AssignmentController::class, 'update']);
@@ -78,26 +79,29 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/users', [AdminController::class, 'users']);
         Route::post('/users', [AdminController::class, 'createUser']);
-        Route::post('/users/import/preview', [AdminController::class, 'previewUsersImport']);
-        Route::post('/users/import', [AdminController::class, 'importUsers']);
         Route::put('/users/{user}', [AdminController::class, 'updateUser']);
         Route::delete('/users/{user}', [AdminController::class, 'deleteUser']);
         Route::get('/groups', [AdminController::class, 'groups']);
         Route::post('/groups', [AdminController::class, 'createGroup']);
-        Route::post('/groups/create-with-students', [AdminController::class, 'createGroupWithStudents']);
-        Route::post('/groups/import/preview', [AdminController::class, 'previewGroupsImport']);
-        Route::post('/groups/import', [AdminController::class, 'importGroups']);
-        Route::post('/groups/{group}/students/bulk', [AdminController::class, 'bulkAttachStudentsToGroup']);
         Route::put('/groups/{group}', [AdminController::class, 'updateGroup']);
         Route::delete('/groups/{group}', [AdminController::class, 'deleteGroup']);
 
         Route::get('/subjects', [AdminController::class, 'subjects']);
         Route::post('/subjects', [AdminController::class, 'createSubject']);
-        Route::post('/subjects/import/preview', [AdminController::class, 'previewSubjectsImport']);
-        Route::post('/subjects/import', [AdminController::class, 'importSubjects']);
         Route::put('/subjects/{subject}', [AdminController::class, 'updateSubject']);
         Route::delete('/subjects/{subject}', [AdminController::class, 'deleteSubject']);
 
         Route::get('/logs', [AdminController::class, 'logs']);
+
+        Route::middleware('throttle:admin_bulk')->group(function () {
+            Route::post('/users/import/preview', [AdminController::class, 'previewUsersImport']);
+            Route::post('/users/import', [AdminController::class, 'importUsers']);
+            Route::post('/groups/create-with-students', [AdminController::class, 'createGroupWithStudents']);
+            Route::post('/groups/import/preview', [AdminController::class, 'previewGroupsImport']);
+            Route::post('/groups/import', [AdminController::class, 'importGroups']);
+            Route::post('/groups/{group}/students/bulk', [AdminController::class, 'bulkAttachStudentsToGroup']);
+            Route::post('/subjects/import/preview', [AdminController::class, 'previewSubjectsImport']);
+            Route::post('/subjects/import', [AdminController::class, 'importSubjects']);
+        });
     });
 });

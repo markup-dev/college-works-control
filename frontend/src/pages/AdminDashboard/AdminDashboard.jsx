@@ -33,6 +33,7 @@ const AdminDashboard = () => {
     fetchGroups,
     fetchSubjects,
     fetchLogs,
+    searchStudentsForTransfer,
     createUser,
     updateUser,
     deleteUser,
@@ -119,6 +120,7 @@ const AdminDashboard = () => {
             onDeleteGroup={deleteGroup}
             onCreateGroupWithStudents={createGroupWithStudents}
             onBulkAttachStudents={bulkAttachStudentsToGroup}
+            onSearchStudentsForTransfer={searchStudentsForTransfer}
           />
         );
       

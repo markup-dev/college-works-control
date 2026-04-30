@@ -183,6 +183,44 @@
   box-shadow: 0 2px 8px rgba(91, 33, 182, 0.14);
 }
 
+.submission-card__deadline-hint {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.submission-card__deadline-hint--overdue {
+  color: #b91c1c;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.submission-card__deadline-hint--today {
+  color: #c2410c;
+  background: #ffedd5;
+  border-color: #fdba74;
+}
+
+.submission-card__deadline-hint--soon {
+  color: #a16207;
+  background: #fef9c3;
+  border-color: #fde047;
+}
+
+.submission-card__deadline-hint--normal {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
 .submission-card__score {
   margin: 0;
   font-size: 0.84rem;

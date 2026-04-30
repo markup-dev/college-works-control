@@ -119,6 +119,19 @@ export const AdminProvider = ({ children }) => {
     return response.data;
   }, []);
 
+  const searchStudentsForTransfer = useCallback(async (searchTerm) => {
+    const response = await api.get('/admin/users', {
+      params: withApiPagination({
+        role: 'student',
+        search: searchTerm?.trim() || undefined,
+        sort: 'name_asc',
+        page: 1,
+        perPage: 60,
+      }),
+    });
+    return (response.data?.data || []).map(normalizeUser);
+  }, []);
+
   const fetchTeacherOptions = useCallback(async () => {
     const perPage = 100;
     let page = 1;
@@ -389,6 +402,7 @@ export const AdminProvider = ({ children }) => {
     loadAdminData,
     loadStats,
     fetchUsers,
+    searchStudentsForTransfer,
     fetchTeacherOptions,
     fetchGroups,
     fetchSubjects,

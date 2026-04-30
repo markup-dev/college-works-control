@@ -494,8 +494,21 @@ class AssignmentController extends Controller
             ->header('X-Created-Assignment-Id', (string) $assignment->id);
     }
 
-    public function show(Assignment $assignment)
+    public function show(Request $request, Assignment $assignment)
     {
+        $user = $request->user();
+
+        if ($user->role === 'teacher' && (int) $assignment->teacher_id !== (int) $user->id) {
+            return response()->json(['message' => 'Недостаточно прав для просмотра задания.'], 403);
+        }
+
+        if ($user->role === 'student') {
+            if (! $user->group_id
+                || ! $assignment->groups()->where('groups.id', $user->group_id)->exists()) {
+                return response()->json(['message' => 'Недостаточно прав для просмотра задания.'], 403);
+            }
+        }
+
         $assignment->load([
             'teacher:id,login,last_name,first_name,middle_name',
             'subjectRelation:id,name',

@@ -10,17 +10,19 @@ const Pagination = ({
   onPrev,
   onNext,
   className = '',
+  disabled = false,
 }) => {
   const safeCurrentPage = Math.max(1, Number(currentPage) || 1);
   const safeLastPage = Math.max(1, Number(lastPage) || 1);
   const safeTotal = Number(total) || Number(fallbackCount) || 0;
+  const navDisabled = disabled || safeTotal <= 0;
 
   return (
     <div className={`ui-pagination ${className}`}>
       <Button
         size="small"
         variant="outline"
-        disabled={safeCurrentPage <= 1}
+        disabled={navDisabled || safeCurrentPage <= 1}
         onClick={onPrev}
       >
         Назад
@@ -33,7 +35,7 @@ const Pagination = ({
       <Button
         size="small"
         variant="outline"
-        disabled={safeCurrentPage >= safeLastPage}
+        disabled={navDisabled || safeCurrentPage >= safeLastPage}
         onClick={onNext}
       >
         Далее

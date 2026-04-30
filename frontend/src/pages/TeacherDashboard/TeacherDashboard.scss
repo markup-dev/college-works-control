@@ -26,7 +26,7 @@
 
 .teacher-dashboard .teacher-priority-block__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.6rem;
 
@@ -35,6 +35,18 @@
     font-size: 0.95rem;
     color: #1f2937;
   }
+}
+
+.teacher-dashboard .teacher-priority-block__title-wrap {
+  min-width: 0;
+}
+
+.teacher-dashboard .teacher-priority-block__subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.35;
+  max-width: 42rem;
 }
 
 .teacher-dashboard .teacher-priority-block__count {
@@ -89,6 +101,53 @@
 .teacher-dashboard .teacher-priority-block__meta {
   font-size: 0.75rem;
   color: #64748b;
+}
+
+.teacher-dashboard .teacher-priority-block__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  margin-top: 0.12rem;
+}
+
+.teacher-dashboard .teacher-priority-block__tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.12rem 0.42rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  line-height: 1.2;
+}
+
+.teacher-dashboard .teacher-priority-block__tag--resubmit {
+  color: #5b21b6;
+  background: #ede9fe;
+  border-color: #c4b5fd;
+}
+
+.teacher-dashboard .teacher-priority-block__tag--deadline.teacher-priority-block__tag--overdue {
+  color: #b91c1c;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.teacher-dashboard .teacher-priority-block__tag--deadline.teacher-priority-block__tag--today {
+  color: #c2410c;
+  background: #ffedd5;
+  border-color: #fdba74;
+}
+
+.teacher-dashboard .teacher-priority-block__tag--deadline.teacher-priority-block__tag--soon {
+  color: #a16207;
+  background: #fef9c3;
+  border-color: #fde047;
+}
+
+.teacher-dashboard .teacher-priority-block__tag--deadline.teacher-priority-block__tag--normal {
+  color: #475569;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
 .teacher-dashboard .section-header {
@@ -544,6 +603,10 @@
     border-left: 3px solid #f59e0b !important;
   }
 
+  .deadline-filter {
+    border-left: 3px solid #6366f1 !important;
+  }
+
   .subject-filter {
     border-left: 3px solid #8b5cf6 !important;
   }
@@ -697,6 +760,58 @@
     height: 42px;
     display: inline-flex;
     align-items: center;
+  }
+
+  .teacher-submissions-loading-note {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #285ea8;
+  }
+
+  .submissions-section__main {
+    position: relative;
+    margin-top: 1rem;
+    min-height: 140px;
+  }
+
+  .submissions-section__main--busy .teacher-priority-block,
+  .submissions-section__main--busy .submissions-cards,
+  .submissions-section__main--busy .ui-pagination {
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+  }
+
+  .submissions-section__loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    padding: 1.5rem;
+    background: rgba(248, 250, 253, 0.78);
+    backdrop-filter: blur(3px);
+    border-radius: 14px;
+    pointer-events: auto;
+
+    span {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #334155;
+      text-align: center;
+    }
+  }
+
+  .submissions-section__spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #e1e5e9;
+    border-top-color: #2c5aa0;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
   }
 
   .teacher-students-section {

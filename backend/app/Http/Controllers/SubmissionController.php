@@ -29,7 +29,8 @@ class SubmissionController extends Controller
             'group_id' => ['nullable', 'integer', 'exists:groups,id'],
             'student_id' => ['nullable', 'integer', 'exists:users,id'],
             'group' => ['nullable', 'string', 'max:100'],
-            'sort' => ['nullable', 'in:newest,oldest,student_asc,student_desc,score_desc,score_asc'],
+            'sort' => ['nullable', 'in:newest,oldest,student_asc,student_desc,score_desc,score_asc,review_queue'],
+            'deadline_filter' => ['nullable', 'in:all,overdue,due_3d,due_week'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -50,14 +51,15 @@ class SubmissionController extends Controller
         }
 
         $query->with([
-            'assignment:id,title,subject_id,max_score,submission_type',
+            'assignment:id,title,subject_id,max_score,submission_type,deadline,priority',
             'assignment.subjectRelation:id,name',
             'student:id,login,group_id,last_name,first_name,middle_name',
             'student.studentGroup:id,name',
         ]);
 
         if (!empty($validated['status'])) {
-            $query->where('status', $validated['status']);
+            // review_queue joins assignments, which also has status — qualify column for SQL.
+            $query->where('submissions.status', $validated['status']);
         }
 
         if (!empty($validated['assignment_id'])) {
@@ -105,8 +107,57 @@ class SubmissionController extends Controller
             });
         }
 
+        $deadlineFilter = $validated['deadline_filter'] ?? 'all';
+        if ($deadlineFilter !== 'all' && $deadlineFilter !== '') {
+            $todayStart = now()->startOfDay();
+            match ($deadlineFilter) {
+                // Просроченный дедлайн: дата сдачи задания уже прошла, но не показываем зачтённые
+                // работы, сданные в срок (дата сдачи ≤ дедлайна) — иначе список засоряется
+                // закрытыми задачами.
+                'overdue' => $query->whereExists(function ($sub) use ($todayStart) {
+                    $sub->from('assignments')
+                        ->whereColumn('assignments.id', 'submissions.assignment_id')
+                        ->whereNotNull('assignments.deadline')
+                        ->whereDate('assignments.deadline', '<', $todayStart)
+                        ->where(function ($inner) {
+                            $inner->where('submissions.status', '!=', 'graded')
+                                ->orWhereRaw(
+                                    'DATE(COALESCE(submissions.submitted_at, submissions.created_at)) > DATE(assignments.deadline)'
+                                );
+                        });
+                }),
+                'due_3d' => $query->whereHas('assignment', function ($assignmentQuery) use ($todayStart) {
+                    $end = $todayStart->copy()->addDays(3)->endOfDay();
+                    $assignmentQuery->whereNotNull('deadline')
+                        ->whereBetween('deadline', [$todayStart, $end]);
+                }),
+                'due_week' => $query->whereHas('assignment', function ($assignmentQuery) use ($todayStart) {
+                    $end = $todayStart->copy()->addDays(7)->endOfDay();
+                    $assignmentQuery->whereNotNull('deadline')
+                        ->whereBetween('deadline', [$todayStart, $end]);
+                }),
+                default => null,
+            };
+        }
+
         $sort = $validated['sort'] ?? 'newest';
         switch ($sort) {
+            case 'review_queue':
+                $todayDate = now()->toDateString();
+                $query->join('assignments as _rq_assignments', '_rq_assignments.id', '=', 'submissions.assignment_id');
+                $query->select('submissions.*');
+                $query->orderByRaw("CASE submissions.status WHEN 'submitted' THEN 0 WHEN 'returned' THEN 1 ELSE 2 END");
+                $query->orderByRaw(
+                    "CASE WHEN submissions.status = 'submitted' AND _rq_assignments.deadline IS NOT NULL AND DATE(_rq_assignments.deadline) < ? THEN 0 ELSE 1 END",
+                    [$todayDate]
+                );
+                $query->orderByRaw("CASE _rq_assignments.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END");
+                $query->orderByRaw('CASE WHEN _rq_assignments.deadline IS NULL THEN 1 ELSE 0 END');
+                $query->orderBy('_rq_assignments.deadline', 'asc');
+                $query->orderByDesc('submissions.is_resubmission');
+                $query->orderBy('submissions.submitted_at', 'asc');
+                $query->orderBy('submissions.id', 'asc');
+                break;
             case 'oldest':
                 $query->orderBy('submitted_at')->orderBy('created_at');
                 break;
@@ -144,6 +195,7 @@ class SubmissionController extends Controller
             'subject_name' => $sub->assignment?->subjectRelation?->name ?? '',
             'max_score' => $sub->assignment?->max_score ?? 100,
             'submission_type' => $sub->assignment?->submission_type ?? 'file',
+            'assignment_deadline' => $sub->assignment?->deadline?->format('Y-m-d'),
             'student_id' => $sub->student_id,
             'student_name' => $sub->student?->full_name ?? '',
             'student_login' => $sub->student?->login ?? '',
@@ -155,7 +207,6 @@ class SubmissionController extends Controller
             'teacher_comment' => $sub->teacher_comment,
             'criterion_scores' => $sub->criterion_scores,
             'file_name' => $sub->file_name,
-            'file_path' => $sub->file_path,
             'file_size' => $sub->file_size,
             'file_type' => $sub->file_type,
             'is_resubmission' => $sub->is_resubmission,
@@ -194,7 +245,26 @@ class SubmissionController extends Controller
             ]
         );
 
-        $assignment = Assignment::findOrFail($baseValidated['assignment_id']);
+        $assignment = Assignment::with('groups:id')->findOrFail($baseValidated['assignment_id']);
+
+        if (! in_array($assignment->status, ['active', 'inactive'], true)) {
+            return response()->json([
+                'message' => 'Сдача работ по этому заданию недоступна.',
+            ], 422);
+        }
+
+        if (! $student->group_id) {
+            return response()->json([
+                'message' => 'Чтобы сдать работу, у вашего аккаунта должна быть указана учебная группа.',
+            ], 422);
+        }
+
+        if (! $assignment->groups->contains(fn ($g) => (int) $g->id === (int) $student->group_id)) {
+            return response()->json([
+                'message' => 'Это задание не назначено вашей группе.',
+            ], 422);
+        }
+
         $isDemoSubmission = $assignment->submission_type === 'demo';
         $allowedFormats = $this->resolveAllowedFormats($assignment);
         $maxKilobytes = $this->resolveMaxFileSizeKilobytes($assignment);
@@ -285,6 +355,10 @@ class SubmissionController extends Controller
 
     public function grade(Request $request, Submission $submission)
     {
+        if ($deny = $this->denyIfNotAssignmentTeacher($request, $submission)) {
+            return $deny;
+        }
+
         $validated = $request->validate(
             [
                 'score' => ['required', 'integer', 'min:0'],
@@ -367,6 +441,10 @@ class SubmissionController extends Controller
 
     public function returnSubmission(Request $request, Submission $submission)
     {
+        if ($deny = $this->denyIfNotAssignmentTeacher($request, $submission)) {
+            return $deny;
+        }
+
         if ($submission->status !== 'submitted') {
             return response()->json([
                 'message' => 'На доработку можно вернуть только работу со статусом "На проверке".',
@@ -437,6 +515,22 @@ class SubmissionController extends Controller
             $submission->file_path,
             $submission->file_name ?: basename($submission->file_path)
         );
+    }
+
+    /**
+     * Защита от IDOR: оценивать и возвращать на доработку может только автор задания.
+     */
+    private function denyIfNotAssignmentTeacher(Request $request, Submission $submission): ?\Illuminate\Http\JsonResponse
+    {
+        $submission->loadMissing('assignment:id,teacher_id');
+        $teacherId = $submission->assignment?->teacher_id;
+        if ((int) $teacherId !== (int) $request->user()->id) {
+            return response()->json([
+                'message' => 'Недостаточно прав для этой работы.',
+            ], 403);
+        }
+
+        return null;
     }
 
     private function formatFileSize(int $bytes): string

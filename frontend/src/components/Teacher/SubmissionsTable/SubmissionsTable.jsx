@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import Button from '../../UI/Button/Button';
 import { formatDate, getSubmissionStatusInfo } from '../../../utils';
+import { getDeadlineReviewHint } from '../../../utils/submissionReviewQueue';
 import './SubmissionsTable.scss';
 
 const SubmissionsTable = ({
@@ -11,29 +12,66 @@ const SubmissionsTable = ({
   onViewDetails,
   className = "",
   loading = false,
-  showLatestOnly = true
+  showLatestOnly = true,
+  /** Серверная сортировка (порядок с API сохраняется) */
+  useServerSort = false,
+  serverSortKey = 'review_queue',
+  onServerSortChange,
 }) => {
-  const [sortBy, setSortBy] = useState('review_first');
+  const [clientSortBy, setClientSortBy] = useState('review_first');
+
+  const sortBy = useServerSort ? serverSortKey : clientSortBy;
+  const setSortBy = useServerSort ? (onServerSortChange ?? (() => {})) : setClientSortBy;
 
   const latestSubmissions = useMemo(() => {
     if (!showLatestOnly || submissions.length === 0) {
       return submissions;
     }
 
+    const rowKey = (submission) =>
+      `${submission.assignmentId}_${submission.studentLogin || submission.studentId || submission.studentName || 'unknown'}`;
+
+    const rowTime = (submission) => {
+      const t = new Date(submission?.submissionDate || submission?.submittedAt || submission?.createdAt || 0).getTime();
+      return Number.isNaN(t) ? 0 : t;
+    };
+
+    if (useServerSort) {
+      const bestByKey = new Map();
+      submissions.forEach((submission) => {
+        const key = rowKey(submission);
+        const prev = bestByKey.get(key);
+        if (!prev) {
+          bestByKey.set(key, submission);
+          return;
+        }
+        const t = rowTime(submission);
+        const pt = rowTime(prev);
+        if (t > pt || (t === pt && Number(submission.id) > Number(prev.id))) {
+          bestByKey.set(key, submission);
+        }
+      });
+      const keepIds = new Set(Array.from(bestByKey.values()).map((s) => s.id));
+      return submissions.filter((s) => keepIds.has(s.id));
+    }
+
     const unique = new Map();
     [...submissions]
-      .sort((a, b) => new Date(b?.submissionDate || 0) - new Date(a?.submissionDate || 0))
+      .sort((a, b) => rowTime(b) - rowTime(a))
       .forEach((submission) => {
-        const key = `${submission.assignmentId}_${submission.studentLogin}`;
+        const key = rowKey(submission);
         if (!unique.has(key)) {
           unique.set(key, submission);
         }
       });
 
     return Array.from(unique.values());
-  }, [submissions, showLatestOnly]);
+  }, [submissions, showLatestOnly, useServerSort]);
 
   const sortedSubmissions = useMemo(() => {
+    if (useServerSort) {
+      return latestSubmissions;
+    }
     const sorted = [...latestSubmissions];
     sorted.sort((a, b) => {
       const aDate = new Date(a?.submissionDate || 0);
@@ -68,7 +106,7 @@ const SubmissionsTable = ({
       }
     });
     return sorted;
-  }, [latestSubmissions, sortBy]);
+  }, [latestSubmissions, sortBy, useServerSort]);
 
   if (loading) {
     return <CardsSkeleton />;
@@ -97,12 +135,29 @@ const SubmissionsTable = ({
           className="submissions-cards__sort-select"
           value={sortBy}
           onChange={(event) => setSortBy(event.target.value)}
+          disabled={loading}
+          aria-disabled={loading}
+          aria-busy={loading}
         >
-          <option value="review_first">Сначала на проверке</option>
-          <option value="submissionDate_desc">Сначала новые сдачи</option>
-          <option value="submissionDate_asc">Сначала старые сдачи</option>
-          <option value="score_desc">Оценка по убыванию</option>
-          <option value="score_asc">Оценка по возрастанию</option>
+          {useServerSort ? (
+            <>
+              <option value="review_queue">Очередь проверки (срочность и ожидание)</option>
+              <option value="newest">Сначала новые сдачи</option>
+              <option value="oldest">Сначала старые сдачи</option>
+              <option value="student_asc">Студент А → Я</option>
+              <option value="student_desc">Студент Я → А</option>
+              <option value="score_desc">Оценка по убыванию</option>
+              <option value="score_asc">Оценка по возрастанию</option>
+            </>
+          ) : (
+            <>
+              <option value="review_first">Сначала на проверке</option>
+              <option value="submissionDate_desc">Сначала новые сдачи</option>
+              <option value="submissionDate_asc">Сначала старые сдачи</option>
+              <option value="score_desc">Оценка по убыванию</option>
+              <option value="score_asc">Оценка по возрастанию</option>
+            </>
+          )}
         </select>
       </div>
 
@@ -115,6 +170,7 @@ const SubmissionsTable = ({
             onGradeSubmission={onGradeSubmission}
             onDownloadFile={onDownloadFile}
             onViewDetails={onViewDetails}
+            showDeadlineHint
           />
         ))}
       </div>
@@ -127,12 +183,17 @@ const SubmissionCard = ({
   assignment,
   onGradeSubmission,
   onDownloadFile,
-  onViewDetails
+  onViewDetails,
+  showDeadlineHint = false,
 }) => {
   const statusInfo = getSubmissionStatusInfo(submission.status);
   const maxScore = assignment?.maxScore || submission.maxScore || 100;
   const effectiveSubmissionType = assignment?.submissionType || submission.submissionType || 'file';
   const isDemoSubmission = effectiveSubmissionType === 'demo';
+  const deadlineHint =
+    showDeadlineHint && submission.assignmentDeadline
+      ? getDeadlineReviewHint(submission.assignmentDeadline, submission.status)
+      : null;
 
   return (
     <article className="submission-card" onClick={() => onViewDetails?.(submission)}>
@@ -146,6 +207,13 @@ const SubmissionCard = ({
             {statusInfo.label}
           </span>
           {submission.isResubmission && <span className="submission-card__resubmission">Пересдача</span>}
+          {deadlineHint ? (
+            <span
+              className={`submission-card__deadline-hint submission-card__deadline-hint--${deadlineHint.tone}`}
+            >
+              {deadlineHint.label}
+            </span>
+          ) : null}
         </div>
       </div>
 

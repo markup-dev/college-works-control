@@ -14,7 +14,7 @@ import ConfirmModal from '../../components/UI/Modal/ConfirmModal';
 import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsModal/AssignmentDetailsModal';
 import TeacherStudentsSection from '../../components/Teacher/TeacherStudentsSection/TeacherStudentsSection';
 import { useAuth } from '../../context/AuthContext';
-import { useTeacher } from '../../context/TeacherContext';
+import { useTeacher, normalizeSubmission, normalizeAssignment } from '../../context/TeacherContext';
 import { useNotification } from '../../context/NotificationContext';
 import {
   calculateSubmissionStats,
@@ -22,6 +22,7 @@ import {
   buildNormalizedGroupOptions,
   buildSubmissionSubjectOptions,
   PAGINATION_DEFAULTS,
+  getDeadlineReviewHint,
 } from '../../utils';
 import api from '../../services/api';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
@@ -54,7 +55,8 @@ const TeacherDashboard = () => {
     submissionsMeta = {},
     availableGroups: teacherAvailableGroups,
     availableSubjects: teacherAvailableSubjects,
-    loading, 
+    loading,
+    submissionsLoading,
     loadTeacherMeta,
     loadTeacherAssignments, 
     loadTeacherSubmissions,
@@ -101,16 +103,41 @@ const TeacherDashboard = () => {
   const [assignmentFormDraft, setAssignmentFormDraft] = useState(null);
   const [assignmentPage, setAssignmentPage] = useState(1);
   const [submissionPage, setSubmissionPage] = useState(1);
-  const [submissionStudentFilter, setSubmissionStudentFilter] = useState(
-    storedFilters?.submissionStudentFilter || 'all'
+  const [submissionSort, setSubmissionSort] = useState(
+    storedFilters?.submissionSort || 'review_queue'
   );
+  const [deadlineFilter, setDeadlineFilter] = useState(storedFilters?.deadlineFilter || 'all');
+  const [priorityQueue, setPriorityQueue] = useState([]);
+  const [submissionsPanelLoading, setSubmissionsPanelLoading] = useState(false);
   const [teacherStudentDirectory, setTeacherStudentDirectory] = useState([]);
   const [teacherStudentsLoading, setTeacherStudentsLoading] = useState(false);
   const [analyticsAssignments, setAnalyticsAssignments] = useState([]);
   const [analyticsSubmissions, setAnalyticsSubmissions] = useState([]);
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
+  const submissionsTabBusy = submissionsPanelLoading || submissionsLoading;
+
   const debouncedAssignmentSearch = useDebouncedValue(assignmentSearchTerm, 350);
   const debouncedSubmissionsSearch = useDebouncedValue(searchTerm, 350);
+
+  const fetchPriorityQueueForFilters = useCallback(async () => {
+    const priorityParams = {
+      sort: 'review_queue',
+      status: 'submitted',
+      per_page: 12,
+      page: 1,
+      search: debouncedSubmissionsSearch || undefined,
+      subject_id: assignmentFilter !== 'all' ? assignmentFilter : undefined,
+      group: groupFilter !== 'all' ? groupFilter : undefined,
+      deadline_filter: deadlineFilter !== 'all' ? deadlineFilter : undefined,
+    };
+    try {
+      const { data } = await api.get('/submissions', { params: priorityParams });
+      const list = Array.isArray(data?.data) ? data.data : [];
+      setPriorityQueue(list.map(normalizeSubmission));
+    } catch {
+      setPriorityQueue([]);
+    }
+  }, [debouncedSubmissionsSearch, assignmentFilter, groupFilter, deadlineFilter]);
 
   const handleResetAssignmentFilters = () => {
     setAssignmentSearchTerm('');
@@ -124,7 +151,8 @@ const TeacherDashboard = () => {
     setAssignmentFilter('all');
     setGroupFilter('all');
     setStatusFilter('all');
-    setSubmissionStudentFilter('all');
+    setSubmissionSort('review_queue');
+    setDeadlineFilter('all');
     setSubmissionPage(1);
   };
 
@@ -171,16 +199,25 @@ const TeacherDashboard = () => {
     const { assignmentId, submissionId } = teacherNotificationNav;
     let cancelled = false;
     (async () => {
-      await loadTeacherSubmissions({
-        page: 1,
-        perPage: 80,
-        assignmentId,
-        subjectId: 'all',
-        group: 'all',
-        studentId: 'all',
-        status: 'all',
-        search: undefined,
-      });
+      setSubmissionsPanelLoading(true);
+      try {
+        await loadTeacherSubmissions({
+          page: 1,
+          perPage: 80,
+          assignmentId,
+          subjectId: 'all',
+          group: 'all',
+          studentId: 'all',
+          status: 'all',
+          search: undefined,
+          sort: 'review_queue',
+          deadlineFilter: 'all',
+        }, { trackLoading: false });
+      } finally {
+        if (!cancelled) {
+          setSubmissionsPanelLoading(false);
+        }
+      }
       if (cancelled) {
         return;
       }
@@ -188,8 +225,10 @@ const TeacherDashboard = () => {
         setTeacherNotificationNav(null);
       }
     })();
+
     return () => {
       cancelled = true;
+      setSubmissionsPanelLoading(false);
     };
   }, [teacherNotificationNav, activeTab, loadTeacherSubmissions]);
 
@@ -211,19 +250,6 @@ const TeacherDashboard = () => {
     showInfoRef.current('Сдача не найдена в списке. Обновите фильтры или откройте задание вручную.');
   }, [submissions, teacherNotificationNav, loading, assignments]);
 
-  useEffect(() => {
-    if (submissionStudentFilter === 'all') {
-      return;
-    }
-    const ok = teacherStudentDirectory.some(
-      (s) => String(s.id) === String(submissionStudentFilter)
-    );
-    if (teacherStudentDirectory.length > 0 && !ok) {
-      setSubmissionStudentFilter('all');
-      setSubmissionPage(1);
-    }
-  }, [submissionStudentFilter, teacherStudentDirectory]);
-
   const loadAnalyticsSnapshot = useCallback(async () => {
     if (!user) return;
 
@@ -233,15 +259,15 @@ const TeacherDashboard = () => {
         api.get('/submissions', { params: { sort: 'newest' } }),
       ]);
 
-      const analyticsAssignmentList = Array.isArray(assignmentsRes.data?.data)
+      const rawAssignments = Array.isArray(assignmentsRes.data?.data)
         ? assignmentsRes.data.data
         : (assignmentsRes.data || []);
-      const analyticsSubmissionList = Array.isArray(submissionsRes.data?.data)
+      const rawSubmissions = Array.isArray(submissionsRes.data?.data)
         ? submissionsRes.data.data
         : (submissionsRes.data || []);
 
-      setAnalyticsAssignments(analyticsAssignmentList);
-      setAnalyticsSubmissions(analyticsSubmissionList);
+      setAnalyticsAssignments(rawAssignments.map(normalizeAssignment));
+      setAnalyticsSubmissions(rawSubmissions.map(normalizeSubmission));
       setAnalyticsLoaded(true);
     } catch (error) {
       setAnalyticsLoaded(false);
@@ -283,22 +309,68 @@ const TeacherDashboard = () => {
 
   useEffect(() => {
     if (activeTab !== 'submissions') {
-      return;
+      return undefined;
     }
     if (teacherNotificationNav) {
-      return;
+      return undefined;
     }
 
-    loadTeacherSubmissions({
+    let cancelled = false;
+
+    const submissionParams = {
       page: submissionPage,
       perPage: PAGINATION_DEFAULTS.teacherSubmissions,
-      sort: 'newest',
+      sort: submissionSort,
       search: debouncedSubmissionsSearch || undefined,
       status: statusFilter !== 'all' ? statusFilter : undefined,
-      subjectId: assignmentFilter !== 'all' ? assignmentFilter : undefined,
+      subjectId: assignmentFilter !== 'all' ? assignmentFilter : 'all',
+      group: groupFilter !== 'all' ? groupFilter : 'all',
+      deadlineFilter: deadlineFilter !== 'all' ? deadlineFilter : 'all',
+      assignmentId: 'all',
+      studentId: 'all',
+    };
+
+    const priorityParams = {
+      sort: 'review_queue',
+      status: 'submitted',
+      per_page: 12,
+      page: 1,
+      search: debouncedSubmissionsSearch || undefined,
+      subject_id: assignmentFilter !== 'all' ? assignmentFilter : undefined,
       group: groupFilter !== 'all' ? groupFilter : undefined,
-      studentId: submissionStudentFilter !== 'all' ? submissionStudentFilter : undefined,
-    });
+      deadline_filter: deadlineFilter !== 'all' ? deadlineFilter : undefined,
+    };
+
+    (async () => {
+      setSubmissionsPanelLoading(true);
+      try {
+        await Promise.all([
+          loadTeacherSubmissions(submissionParams, { trackLoading: false }),
+          (async () => {
+            try {
+              const { data } = await api.get('/submissions', { params: priorityParams });
+              if (!cancelled) {
+                const list = Array.isArray(data?.data) ? data.data : [];
+                setPriorityQueue(list.map(normalizeSubmission));
+              }
+            } catch {
+              if (!cancelled) {
+                setPriorityQueue([]);
+              }
+            }
+          })(),
+        ]);
+      } finally {
+        if (!cancelled) {
+          setSubmissionsPanelLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      setSubmissionsPanelLoading(false);
+    };
   }, [
     activeTab,
     submissionPage,
@@ -306,7 +378,8 @@ const TeacherDashboard = () => {
     statusFilter,
     assignmentFilter,
     groupFilter,
-    submissionStudentFilter,
+    submissionSort,
+    deadlineFilter,
     teacherNotificationNav,
     loadTeacherSubmissions,
   ]);
@@ -323,7 +396,8 @@ const TeacherDashboard = () => {
         assignmentSearchTerm,
         assignmentGroupFilter,
         assignmentSortBy,
-        submissionStudentFilter,
+        submissionSort,
+        deadlineFilter,
       })
     );
   }, [
@@ -335,7 +409,8 @@ const TeacherDashboard = () => {
     assignmentSearchTerm,
     assignmentGroupFilter,
     assignmentSortBy,
-    submissionStudentFilter,
+    submissionSort,
+    deadlineFilter,
   ]);
 
   const {
@@ -421,13 +496,6 @@ const TeacherDashboard = () => {
       setSubmissionPage(1);
     }
   }, [groupFilter, submissionGroupOptions]);
-
-  const reviewQueue = useMemo(() => (
-    submissions
-      .filter((submission) => submission.status === 'submitted')
-      .sort((a, b) => new Date(a.submissionDate || 0) - new Date(b.submissionDate || 0))
-      .slice(0, 5)
-  ), [submissions]);
 
   const handleCreateAssignment = () => {
     setAssignmentFormDraft(null);
@@ -522,6 +590,9 @@ const TeacherDashboard = () => {
         setSelectedSubmission(null);
         setGradeData({ score: '', comment: '', criterionScores: [], draftSubmissionId: null, useCriteriaScoring: false });
         showSuccess(`Оценка для работы "${selectedSubmission.assignmentTitle}" сохранена!`);
+        if (activeTab === 'submissions') {
+          void fetchPriorityQueueForFilters();
+        }
       } else {
         showError(result.error || 'Ошибка при сохранении оценки');
       }
@@ -546,9 +617,12 @@ const TeacherDashboard = () => {
               loadAnalyticsSnapshot();
               loadTeacherStudentDirectory();
               showSuccess(`Работа "${submission.assignmentTitle}" возвращена студенту на доработку`);
+              if (activeTab === 'submissions') {
+                void fetchPriorityQueueForFilters();
+              }
             } else {
               showError(result.error || 'Ошибка при возврате работы');
-    }
+            }
           } catch (error) {
             showError('Ошибка при возврате работы');
           }
@@ -781,12 +855,6 @@ const TeacherDashboard = () => {
               setStatusFilter(value);
               setSubmissionPage(1);
             }}
-            submissionStudentFilter={submissionStudentFilter}
-            submissionStudentOptions={teacherStudentDirectory}
-            onSubmissionStudentFilterChange={(value) => {
-              setSubmissionStudentFilter(value);
-              setSubmissionPage(1);
-            }}
             onSearchChange={(value) => {
               setSearchTerm(value);
               setSubmissionPage(1);
@@ -813,10 +881,21 @@ const TeacherDashboard = () => {
             onReturnSubmission={handleReturnSubmission}
             onDownloadFile={handleDownloadFile}
             onViewDetails={handleViewDetails}
-            reviewQueue={reviewQueue}
+            reviewQueue={priorityQueue}
+            deadlineFilter={deadlineFilter}
+            onDeadlineFilterChange={(value) => {
+              setDeadlineFilter(value);
+              setSubmissionPage(1);
+            }}
+            submissionSort={submissionSort}
+            onSubmissionSortChange={(value) => {
+              setSubmissionSort(value);
+              setSubmissionPage(1);
+            }}
             teacherStudents={teacherStudentDirectory}
             teacherStudentsLoading={teacherStudentsLoading}
             onReloadTeacherStudents={loadTeacherStudentDirectory}
+            submissionsTabBusy={submissionsTabBusy}
           />
         </div>
       </main>
@@ -963,12 +1042,14 @@ const DashboardContent = ({
   onDownloadFile,
   onViewDetails,
   reviewQueue,
-  submissionStudentFilter,
-  submissionStudentOptions,
-  onSubmissionStudentFilterChange,
+  deadlineFilter,
+  onDeadlineFilterChange,
+  submissionSort,
+  onSubmissionSortChange,
   teacherStudents,
   teacherStudentsLoading,
-  onReloadTeacherStudents
+  onReloadTeacherStudents,
+  submissionsTabBusy = false,
 }) => {
   const renderSection = () => {
     switch (activeTab) {
@@ -1023,9 +1104,6 @@ const DashboardContent = ({
             assignmentFilter={assignmentFilter}
             groupFilter={groupFilter}
             statusFilter={statusFilter}
-            studentFilter={submissionStudentFilter}
-            studentOptions={submissionStudentOptions}
-            onStudentFilterChange={onSubmissionStudentFilterChange}
             searchTerm={searchTerm}
             availableGroups={submissionGroupOptions}
             onAssignmentFilterChange={onAssignmentFilterChange}
@@ -1041,6 +1119,11 @@ const DashboardContent = ({
             onDownloadFile={onDownloadFile}
             onViewDetails={onViewDetails}
             reviewQueue={reviewQueue}
+            deadlineFilter={deadlineFilter}
+            onDeadlineFilterChange={onDeadlineFilterChange}
+            submissionSort={submissionSort}
+            onSubmissionSortChange={onSubmissionSortChange}
+            submissionsBusy={submissionsTabBusy}
           />
         );
       
@@ -1072,28 +1155,55 @@ const TeacherPriorityBlock = ({ reviewQueue = [], onViewDetails }) => {
   return (
     <section className="teacher-priority-block">
       <div className="teacher-priority-block__header">
-        <h3>Сначала проверить</h3>
+        <div className="teacher-priority-block__title-wrap">
+          <h3>Сначала проверить</h3>
+          <p className="teacher-priority-block__subtitle">
+            По срочности дедлайна, приоритету задания и времени ожидания
+          </p>
+        </div>
         <span className="teacher-priority-block__count">{reviewQueue.length}</span>
       </div>
       <div className="teacher-priority-block__list">
-        {reviewQueue.map((submission) => (
-          <button
-            key={`queue-${submission.id}`}
-            type="button"
-            className="teacher-priority-block__item"
-            onClick={() => onViewDetails?.(submission)}
-          >
-            <span className="teacher-priority-block__student">{submission.studentName}</span>
-            <span className="teacher-priority-block__assignment" title={submission.assignmentTitle}>
-              {submission.assignmentTitle}
-            </span>
-            {submission.submissionDate && (
-              <span className="teacher-priority-block__meta">
-                Сдано: {formatDate(submission.submissionDate)}
+        {reviewQueue.map((submission) => {
+          const deadlineHint =
+            submission.assignmentDeadline && submission.status === 'submitted'
+              ? getDeadlineReviewHint(submission.assignmentDeadline, submission.status)
+              : null;
+          return (
+            <button
+              key={`queue-${submission.id}`}
+              type="button"
+              className="teacher-priority-block__item"
+              onClick={() => onViewDetails?.(submission)}
+            >
+              <span className="teacher-priority-block__student">{submission.studentName}</span>
+              <span className="teacher-priority-block__assignment" title={submission.assignmentTitle}>
+                {submission.assignmentTitle}
               </span>
-            )}
-          </button>
-        ))}
+              {(submission.isResubmission || deadlineHint) && (
+                <span className="teacher-priority-block__tags">
+                  {submission.isResubmission && (
+                    <span className="teacher-priority-block__tag teacher-priority-block__tag--resubmit">
+                      Пересдача
+                    </span>
+                  )}
+                  {deadlineHint ? (
+                    <span
+                      className={`teacher-priority-block__tag teacher-priority-block__tag--deadline teacher-priority-block__tag--${deadlineHint.tone}`}
+                    >
+                      {deadlineHint.label}
+                    </span>
+                  ) : null}
+                </span>
+              )}
+              {submission.submissionDate && (
+                <span className="teacher-priority-block__meta">
+                  Сдано: {formatDate(submission.submissionDate)}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -1303,9 +1413,6 @@ const SubmissionsSection = ({
   assignmentFilter,
   groupFilter,
   statusFilter,
-  studentFilter = 'all',
-  studentOptions = [],
-  onStudentFilterChange,
   searchTerm,
   availableGroups,
   onAssignmentFilterChange,
@@ -1320,12 +1427,17 @@ const SubmissionsSection = ({
   onReturnSubmission,
   onDownloadFile,
   onViewDetails,
-  reviewQueue
+  reviewQueue,
+  deadlineFilter = 'all',
+  onDeadlineFilterChange,
+  submissionSort = 'review_queue',
+  onSubmissionSortChange,
+  submissionsBusy = false,
 }) => (
   <div className="submissions-section">
     <div className="section-header teacher-submissions-header">
       <h2>Работы студентов</h2>
-      <div className="teacher-submissions-filters">
+      <div className="teacher-submissions-filters" aria-busy={submissionsBusy}>
         <div className="teacher-submissions-search-row">
           <div className="teacher-submissions-search-box">
             <input
@@ -1334,9 +1446,16 @@ const SubmissionsSection = ({
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
               className="teacher-submissions-search-input"
+              disabled={submissionsBusy}
+              aria-disabled={submissionsBusy}
             />
           </div>
-          <Button variant="secondary" className="teacher-submissions-reset-btn" onClick={onResetFilters}>
+          <Button
+            variant="secondary"
+            className="teacher-submissions-reset-btn"
+            onClick={onResetFilters}
+            disabled={submissionsBusy}
+          >
             Сбросить фильтры
           </Button>
         </div>
@@ -1346,6 +1465,8 @@ const SubmissionsSection = ({
             value={assignmentFilter}
             onChange={(e) => onAssignmentFilterChange(e.target.value)}
             className="teacher-submissions-select assignment-filter"
+            disabled={submissionsBusy}
+            aria-disabled={submissionsBusy}
           >
             <option value="all">Все предметы</option>
             {assignmentOptions.map(assignment => (
@@ -1358,6 +1479,8 @@ const SubmissionsSection = ({
             value={groupFilter}
             onChange={(e) => onGroupFilterChange(e.target.value)}
             className="teacher-submissions-select group-filter"
+            disabled={submissionsBusy}
+            aria-disabled={submissionsBusy}
           >
             <option value="all">Все группы</option>
             {availableGroups.map((group) => (
@@ -1367,53 +1490,78 @@ const SubmissionsSection = ({
             ))}
           </select>
           <select
-            value={studentFilter}
-            onChange={(e) => onStudentFilterChange?.(e.target.value)}
-            className="teacher-submissions-select student-filter"
-            title="Показать работы только выбранного студента"
-          >
-            <option value="all">Все студенты</option>
-            {studentOptions.map((s) => (
-              <option key={s.id} value={String(s.id)}>
-                {s.fullName}
-              </option>
-            ))}
-          </select>
-          <select
             value={statusFilter}
             onChange={(e) => onStatusFilterChange(e.target.value)}
             className="teacher-submissions-select status-filter"
+            disabled={submissionsBusy}
+            aria-disabled={submissionsBusy}
           >
             <option value="all">Все статусы</option>
             <option value="submitted">На проверке</option>
             <option value="returned">Возвращены на доработку</option>
             <option value="graded">Зачтены</option>
           </select>
+          <select
+            value={deadlineFilter}
+            onChange={(e) => onDeadlineFilterChange?.(e.target.value)}
+            className="teacher-submissions-select deadline-filter"
+            title="По календарному дедлайну задания. Просроченные: на проверке или возвращённые при истёкшем сроке, а также зачтённые, но сданные после дедлайна; зачтённые в срок скрываются."
+            disabled={submissionsBusy}
+            aria-disabled={submissionsBusy}
+          >
+            <option value="all">Все сроки заданий</option>
+            <option value="overdue">Просроченный дедлайн</option>
+            <option value="due_3d">Дедлайн в 3 дня</option>
+            <option value="due_week">Дедлайн на неделе</option>
+          </select>
         </div>
+        {submissionsBusy && (
+          <p className="teacher-submissions-loading-note" role="status" aria-live="polite">
+            Обновляем данные по фильтрам…
+          </p>
+        )}
       </div>
     </div>
 
-    <TeacherPriorityBlock
-      reviewQueue={reviewQueue}
-      onViewDetails={onViewDetails}
-    />
+    <div className={`submissions-section__main${submissionsBusy ? ' submissions-section__main--busy' : ''}`}>
+      <TeacherPriorityBlock
+        reviewQueue={reviewQueue}
+        onViewDetails={onViewDetails}
+      />
 
-    <SubmissionsTable
-      submissions={submissions}
-      assignments={assignmentOptions}
-      onGradeSubmission={onGradeSubmission}
-      onReturnSubmission={onReturnSubmission}
-      onDownloadFile={onDownloadFile}
-      onViewDetails={onViewDetails}
-    />
-    <Pagination
-      currentPage={paginationMeta.currentPage}
-      lastPage={paginationMeta.lastPage}
-      total={paginationMeta.total}
-      fallbackCount={submissions.length}
-      onPrev={onPrevPage}
-      onNext={onNextPage}
-    />
+      <SubmissionsTable
+        submissions={submissions}
+        assignments={assignmentOptions}
+        onGradeSubmission={onGradeSubmission}
+        onReturnSubmission={onReturnSubmission}
+        onDownloadFile={onDownloadFile}
+        onViewDetails={onViewDetails}
+        useServerSort
+        serverSortKey={submissionSort}
+        onServerSortChange={onSubmissionSortChange}
+        loading={submissionsBusy}
+      />
+      <Pagination
+        currentPage={paginationMeta.currentPage}
+        lastPage={paginationMeta.lastPage}
+        total={paginationMeta.total}
+        fallbackCount={submissions.length}
+        onPrev={onPrevPage}
+        onNext={onNextPage}
+        disabled={submissionsBusy}
+      />
+      {submissionsBusy && (
+        <div
+          className="submissions-section__loading-overlay"
+          role="status"
+          aria-live="polite"
+          aria-label="Загрузка списка работ"
+        >
+          <div className="submissions-section__spinner" />
+          <span>Обновляем список работ…</span>
+        </div>
+      )}
+    </div>
   </div>
 );
 

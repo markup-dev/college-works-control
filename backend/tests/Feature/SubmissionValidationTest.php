@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Assignment;
 use App\Models\AssignmentAllowedFormat;
+use App\Models\Group;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,8 +19,13 @@ class SubmissionValidationTest extends TestCase
     public function test_submission_rejects_file_with_disallowed_format_from_assignment_settings(): void
     {
         $teacher = $this->createUser('teacher');
-        $student = $this->createUser('student');
-        $assignment = $this->createAssignment($teacher->id, ['pdf'], 10);
+        $group = Group::create([
+            'name' => 'Тест-' . uniqid(),
+            'teacher_id' => $teacher->id,
+            'status' => 'active',
+        ]);
+        $student = $this->createUser('student', $group->id);
+        $assignment = $this->createAssignment($teacher->id, ['pdf'], 10, $group);
 
         Sanctum::actingAs($student);
 
@@ -36,8 +42,13 @@ class SubmissionValidationTest extends TestCase
     public function test_submission_rejects_file_over_assignment_max_file_size(): void
     {
         $teacher = $this->createUser('teacher');
-        $student = $this->createUser('student');
-        $assignment = $this->createAssignment($teacher->id, ['pdf'], 1);
+        $group = Group::create([
+            'name' => 'Тест-' . uniqid(),
+            'teacher_id' => $teacher->id,
+            'status' => 'active',
+        ]);
+        $student = $this->createUser('student', $group->id);
+        $assignment = $this->createAssignment($teacher->id, ['pdf'], 1, $group);
 
         Sanctum::actingAs($student);
 
@@ -51,7 +62,7 @@ class SubmissionValidationTest extends TestCase
             ->assertJsonValidationErrors('file');
     }
 
-    private function createAssignment(int $teacherId, array $formats, int $maxFileSizeMb): Assignment
+    private function createAssignment(int $teacherId, array $formats, int $maxFileSizeMb, ?Group $group = null): Assignment
     {
         $subject = Subject::create([
             'name' => 'Тестовый предмет ' . uniqid(),
@@ -79,10 +90,14 @@ class SubmissionValidationTest extends TestCase
             ]);
         }
 
+        if ($group) {
+            $assignment->groups()->attach($group->id);
+        }
+
         return $assignment;
     }
 
-    private function createUser(string $role): User
+    private function createUser(string $role, ?int $groupId = null): User
     {
         return User::create([
             'login' => $role . '_' . uniqid(),
@@ -92,7 +107,7 @@ class SubmissionValidationTest extends TestCase
             'first_name' => 'Иван',
             'middle_name' => 'Иванович',
             'role' => $role,
-            'group_id' => null,
+            'group_id' => $groupId,
             'department' => null,
             'phone' => '+7 (999) 123-45-67',
             'is_active' => true,
