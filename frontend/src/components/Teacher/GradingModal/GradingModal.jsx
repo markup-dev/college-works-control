@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
-import { formatDate, validateScore, validateGradingComment } from '../../../utils';
+import { formatDate, getGradeLabelForScore, validateScore, validateGradingComment } from '../../../utils';
+import { useAuth } from '../../../context/AuthContext';
 import { useNotification } from '../../../context/NotificationContext';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './GradingModal.scss';
@@ -16,11 +17,19 @@ const GradingModal = ({
   onGradeDataChange, 
   onSubmit 
 }) => {
+  const { user } = useAuth();
   const { showError } = useNotification();
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useBodyScrollLock(isOpen);
-  
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
+
   if (!isOpen || !submission) return null;
 
   const maxScore = submission.maxScore || assignment?.maxScore || 100;
@@ -28,15 +37,19 @@ const GradingModal = ({
   const useCriteriaScoring = !!gradeData.useCriteriaScoring && hasCriteria;
   const currentScore = Math.max(0, Math.min(Number(gradeData.score || 0), Number(maxScore || 0)));
   const scorePercent = maxScore > 0 ? Math.round((currentScore / maxScore) * 100) : 0;
+  const gradeLabel = gradeData.score === '' ? null : getGradeLabelForScore(currentScore, user?.gradeScale);
   const criteriaTotal = useCriteriaScoring
     ? gradeData.criterionScores.reduce((sum, criterion) => sum + (Number(criterion.receivedPoints) || 0), 0)
     : null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
+    if (isSubmitting) {
+      return;
+    }
+
     setErrors({});
-    
+
     const scoreValidation = validateScore(gradeData.score, maxScore);
     if (!scoreValidation.isValid) {
       setErrors({ score: scoreValidation.error });
@@ -50,15 +63,20 @@ const GradingModal = ({
       showError(mismatchError);
       return;
     }
-    
+
     const commentValidation = validateGradingComment(gradeData.comment);
     if (!commentValidation.isValid) {
       setErrors({ comment: commentValidation.error });
       showError(commentValidation.error);
       return;
     }
-    
-    onSubmit();
+
+    setIsSubmitting(true);
+    try {
+      await Promise.resolve(onSubmit?.());
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCriterionScoreChange = (index, value, criterionMaxPoints) => {
@@ -124,7 +142,7 @@ const GradingModal = ({
             <button type="button" className="modal-close" onClick={onClose}>×</button>
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} aria-busy={isSubmitting}>
             <div className="modal-body">
               <SubmissionInfo submission={submission} assignment={assignment} maxScore={maxScore} />
 
@@ -136,10 +154,9 @@ const GradingModal = ({
                   <div className="score-row">
                     <input
                       id="score"
-                      type="number"
-                      min="0"
-                      max={maxScore}
-                      step="1"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={gradeData.score}
                       onChange={(e) => {
                         onGradeDataChange({...gradeData, score: e.target.value});
@@ -152,6 +169,11 @@ const GradingModal = ({
                     <div className="score-preview">
                       <div className="score-preview__value">
                         {currentScore}/{maxScore}
+                        {gradeLabel && (
+                          <span className="score-preview__grade">
+                            оценка {gradeLabel}
+                          </span>
+                        )}
                       </div>
                       <div className="score-preview__bar">
                         <div className="score-preview__fill" style={getScoreFillStyle(scorePercent)}></div>
@@ -190,10 +212,9 @@ const GradingModal = ({
                             <span className="criteria-score-item__max">Макс: {criterion.maxPoints}</span>
                           </div>
                           <input
-                            type="number"
-                            min="0"
-                            max={criterion.maxPoints}
-                            step="1"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             value={Number(criterion.receivedPoints || 0)}
                             onChange={(e) => handleCriterionScoreChange(index, e.target.value, criterion.maxPoints)}
                             className="criteria-score-item__input"
@@ -248,7 +269,7 @@ const GradingModal = ({
               <Button type="button" variant="secondary" onClick={onClose}>
                 Отмена
               </Button>
-              <Button type="submit" variant="primary">
+              <Button type="submit" variant="primary" loading={isSubmitting} disabled={isSubmitting}>
                 Сохранить оценку
               </Button>
             </div>

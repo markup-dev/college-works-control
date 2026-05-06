@@ -15,7 +15,6 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->date('deadline');
             $table->enum('status', ['active', 'inactive', 'archived'])->default('active');
-            $table->enum('priority', ['low', 'medium', 'high'])->default('medium');
             $table->integer('max_score')->default(100);
             $table->string('submission_type')->default('file');
             $table->integer('max_file_size')->nullable();

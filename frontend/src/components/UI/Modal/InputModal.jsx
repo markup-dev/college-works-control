@@ -16,16 +16,26 @@ const InputModal = ({
   rows = 3
 }) => {
   const [value, setValue] = useState(defaultValue);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setValue(defaultValue);
+      setSubmitting(false);
     }
   }, [isOpen, defaultValue]);
 
-  const handleSubmit = () => {
-    if (onSubmit) {
-      onSubmit(value);
+  const handleSubmit = async () => {
+    if (submitting) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      if (onSubmit) {
+        await Promise.resolve(onSubmit(value));
+      }
+    } finally {
+      setSubmitting(false);
     }
     onClose();
   };
@@ -33,7 +43,9 @@ const InputModal = ({
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !multiline && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      if (!submitting) {
+        void handleSubmit();
+      }
     }
   };
 
@@ -63,10 +75,10 @@ const InputModal = ({
           )}
         </div>
         <div className="input-modal__actions">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>
             Отмена
           </Button>
-          <Button variant="primary" onClick={handleSubmit}>
+          <Button variant="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
             Подтвердить
           </Button>
         </div>

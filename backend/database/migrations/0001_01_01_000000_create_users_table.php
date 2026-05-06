@@ -21,6 +21,7 @@ return new class extends Migration
             $table->unsignedBigInteger('group_id')->nullable()->index();
             $table->string('department')->nullable();
             $table->string('phone')->nullable();
+            $table->json('grade_scale')->nullable();
             $table->boolean('is_active')->default(true);
             $table->boolean('must_change_password')->default(false);
             $table->timestamp('last_login')->nullable();

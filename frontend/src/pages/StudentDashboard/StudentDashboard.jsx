@@ -103,7 +103,6 @@ const StudentDashboard = () => {
 
   const storedFilters = getStoredStudentFilters();
   const [activeFilter, setActiveFilter] = useState(storedFilters?.activeFilter || 'all');
-  const [sortBy, setSortBy] = useState(storedFilters?.sortBy || 'priority');
   const [searchTerm, setSearchTerm] = useState(storedFilters?.searchTerm || '');
   const [subjectFilter, setSubjectFilter] = useState(storedFilters?.subjectFilter || 'all');
   const [teacherFilter, setTeacherFilter] = useState(storedFilters?.teacherFilter || 'all');
@@ -162,6 +161,11 @@ const StudentDashboard = () => {
   }, [teacherFilter, teacherOptions]);
 
   const handleSubmitWork = useCallback((assignment) => {
+    if (assignment?.is_completed) {
+      showError('Приём работ по этому заданию завершён: задание в архиве. Новые отправки не принимаются.');
+      return;
+    }
+
     const isRetake = assignment?.status === 'returned';
     const canSubmitRetake = assignment?.canSubmitRetake ?? isRetake;
     const canSubmitCurrentAttempt = isRetake ? canSubmitRetake : true;
@@ -173,7 +177,7 @@ const StudentDashboard = () => {
 
     setSelectedAssignment(assignment);
     setShowSubmissionModal(true);
-  }, [showWarning]);
+  }, [showWarning, showError]);
 
   const handleViewResults = useCallback((assignment) => {
     setSelectedAssignment(assignment);
@@ -214,11 +218,6 @@ const StudentDashboard = () => {
     setPage(1);
   }, []);
 
-  const handleSortChange = useCallback((value) => {
-    setSortBy(value);
-    setPage(1);
-  }, []);
-
   const handleFilterChange = useCallback((value) => {
     setActiveFilter(value);
     setPage(1);
@@ -237,7 +236,6 @@ const StudentDashboard = () => {
   const handleResetFilters = useCallback(() => {
     setSearchTerm('');
     setActiveFilter('all');
-    setSortBy('priority');
     setSubjectFilter('all');
     setTeacherFilter('all');
     setPage(1);
@@ -255,7 +253,6 @@ const StudentDashboard = () => {
           params: {
             page: 1,
             perPage: ATTENTION_BLOCK_LIMITS.retakes,
-            sort: 'deadline',
             status: 'returned',
           },
         }),
@@ -263,7 +260,6 @@ const StudentDashboard = () => {
           params: {
             page: 1,
             perPage: ATTENTION_BLOCK_LIMITS.notSubmittedPool,
-            sort: 'deadline',
             status: 'not_submitted',
           },
         }),
@@ -286,13 +282,12 @@ const StudentDashboard = () => {
     loadStudentAssignments({
       page,
       perPage: PAGINATION_DEFAULTS.studentAssignments,
-      sort: sortBy,
       status: activeFilter !== 'all' ? activeFilter : undefined,
       search: debouncedSearchTerm || undefined,
       subject: subjectFilter !== 'all' ? subjectFilter : undefined,
       teacherId: selectedTeacherId,
     });
-  }, [page, sortBy, activeFilter, debouncedSearchTerm, subjectFilter, selectedTeacherId, loadStudentAssignments]);
+  }, [page, activeFilter, debouncedSearchTerm, subjectFilter, selectedTeacherId, loadStudentAssignments]);
 
   useEffect(() => {
     loadAttentionAssignments();
@@ -303,13 +298,12 @@ const StudentDashboard = () => {
       STUDENT_DASHBOARD_FILTERS_KEY,
       JSON.stringify({
         activeFilter,
-        sortBy,
         searchTerm,
         subjectFilter,
         teacherFilter,
       })
     );
-  }, [activeFilter, sortBy, searchTerm, subjectFilter, teacherFilter]);
+  }, [activeFilter, searchTerm, subjectFilter, teacherFilter]);
 
   const filteredAssignments = useMemo(() => (
     Array.isArray(assignments) ? assignments : []
@@ -327,35 +321,30 @@ const StudentDashboard = () => {
       return;
     }
 
+    handleResetFilters();
+
     let cancelled = false;
 
     (async () => {
-      let assignment = filteredAssignments.find((a) => Number(a.id) === id);
-      if (!assignment) {
-        try {
-          const { data } = await api.get(`/assignments/${id}`);
-          if (cancelled) {
-            return;
-          }
-          assignment = normalizeStudentAssignment(data);
-        } catch {
-          if (!cancelled) {
-            showError('Задание не найдено или недоступно');
-            setSearchParams({}, { replace: true });
-          }
+      try {
+        const { data } = await api.get(`/assignments/${id}`);
+        if (cancelled) {
           return;
         }
-      }
-      if (cancelled) {
-        return;
-      }
-      setSearchParams({}, { replace: true });
-      if (focus === 'results') {
-        handleViewResults(assignment);
-      } else if (focus === 'submit') {
-        handleSubmitWork(assignment);
-      } else {
-        handleViewDetails(assignment);
+        const assignment = normalizeStudentAssignment(data);
+        setSearchParams({}, { replace: true });
+        if (focus === 'results') {
+          handleViewResults(assignment);
+        } else if (focus === 'submit') {
+          handleSubmitWork(assignment);
+        } else {
+          handleViewDetails(assignment);
+        }
+      } catch {
+        if (!cancelled) {
+          showError('Задание не найдено или недоступно');
+          setSearchParams({}, { replace: true });
+        }
       }
     })();
 
@@ -364,8 +353,8 @@ const StudentDashboard = () => {
     };
   }, [
     searchParams,
-    filteredAssignments,
     setSearchParams,
+    handleResetFilters,
     handleViewResults,
     handleSubmitWork,
     handleViewDetails,
@@ -535,8 +524,6 @@ const StudentDashboard = () => {
           <DashboardHeader
             searchTerm={searchTerm}
             onSearchChange={handleSearchChange}
-            sortBy={sortBy}
-            onSortChange={handleSortChange}
             activeFilter={activeFilter}
             filters={assignmentFilters}
             filterCounts={filterCounts}

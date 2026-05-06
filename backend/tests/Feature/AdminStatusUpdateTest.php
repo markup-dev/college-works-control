@@ -36,10 +36,8 @@ class AdminStatusUpdateTest extends TestCase
     public function test_admin_can_deactivate_subject(): void
     {
         $admin = $this->createUser('admin');
-        $teacher = $this->createUser('teacher');
         $subject = Subject::create([
             'name' => 'Математика',
-            'teacher_id' => $teacher->id,
             'status' => 'active',
         ]);
 

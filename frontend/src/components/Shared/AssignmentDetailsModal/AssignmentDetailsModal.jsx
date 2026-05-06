@@ -3,7 +3,6 @@ import Modal from '../../UI/Modal/Modal';
 import Button from '../../UI/Button/Button';
 import { 
   formatDate, 
-  getPriorityInfo, 
   getAssignmentStatusInfo, 
   getDaysUntilDeadline,
   getAllowedFormatsFromAssignment,
@@ -43,7 +42,6 @@ const AssignmentDetailsModal = ({
   }
 
   const statusInfo = getAssignmentStatusInfo(assignment);
-  const priorityInfo = getPriorityInfo(assignment.priority);
   const deadline = assignment.deadline ? formatDate(assignment.deadline) : '—';
   const createdAt = assignment.createdAt ? formatDate(assignment.createdAt) : '—';
   const updatedAtRaw = assignment.updatedAt || assignment.updated_at || null;
@@ -95,10 +93,6 @@ const AssignmentDetailsModal = ({
                 {retakeUsed ? 'Пересдача использована' : 'Пересдача'}
               </span>
             )}
-            <span className="priority-badge">
-              <span className="priority-dot" style={{ backgroundColor: priorityInfo.color }}></span>
-              {priorityInfo.label}
-            </span>
           </div>
         </header>
 
@@ -182,7 +176,7 @@ const AssignmentDetailsModal = ({
           <section className="assignment-details-modal__section">
             <h4>Статистика сдачи</h4>
             <div className="assignment-details-modal__stats">
-              <StatCard label="Всего сдач" value={stats.total} tone="total" />
+              <StatCard label="Сдали из группы" value={`${stats.submitted}/${stats.total}`} tone="total" />
               <StatCard label="Ожидают проверки" value={stats.pending} tone="pending" />
               <StatCard label="Проверено" value={stats.graded} tone="graded" />
             </div>
@@ -265,6 +259,13 @@ const renderStudentActions = ({
 }) => {
   switch (assignment?.status) {
     case 'not_submitted':
+      if (assignment?.is_completed) {
+        return (
+          <Button variant="secondary" disabled>
+            Приём работ завершён
+          </Button>
+        );
+      }
       return (
         <Button
           variant={isOverdue ? 'danger' : 'primary'}

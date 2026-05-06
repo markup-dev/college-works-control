@@ -9,6 +9,34 @@ import './AssignmentModal.scss';
 
 const MAX_MATERIAL_FILES = 10;
 
+const normalizeCriterionPointsInput = (value) => {
+  const digitsOnly = String(value || '').replace(/\D/g, '');
+
+  if (!digitsOnly) {
+    return '';
+  }
+
+  return String(Math.min(100, Math.max(1, Number(digitsOnly))));
+};
+
+const normalizeCriteriaForForm = (criteria = []) => {
+  if (!Array.isArray(criteria)) {
+    return [];
+  }
+
+  return criteria.map((criterion) => {
+    if (typeof criterion === 'string') {
+      return { text: criterion, maxPoints: '' };
+    }
+
+    return {
+      ...criterion,
+      text: criterion?.text || '',
+      maxPoints: Number(criterion?.maxPoints) > 0 ? criterion.maxPoints : '',
+    };
+  });
+};
+
 const normalizeMaterialFiles = (materials = []) => {
   if (!Array.isArray(materials)) {
     return [];
@@ -68,7 +96,6 @@ const buildEmptyFormData = () => ({
   maxScore: 100,
   submissionType: 'file',
   criteria: [],
-  priority: 'medium',
   allowedFormats: [...DEFAULT_ALLOWED_FORMATS],
   materialFiles: [],
   existingMaterials: [],
@@ -118,7 +145,7 @@ const AssignmentModal = ({
         subjectId: initialFormData.subjectId ?? null,
         subject: initialFormData.subject ?? '',
         studentGroups: normalizeGroupSelection(initialFormData.studentGroups ?? initialFormData.group),
-        criteria: Array.isArray(initialFormData.criteria) ? initialFormData.criteria : [],
+        criteria: normalizeCriteriaForForm(initialFormData.criteria),
         materialFiles: Array.isArray(initialFormData.materialFiles) ? initialFormData.materialFiles : [],
         existingMaterials: Array.isArray(initialFormData.existingMaterials) ? initialFormData.existingMaterials : [],
         removedMaterialIds: Array.isArray(initialFormData.removedMaterialIds) ? initialFormData.removedMaterialIds : [],
@@ -126,12 +153,7 @@ const AssignmentModal = ({
     }
 
     if (assignment) {
-      const criteria = (assignment.criteria || []).map((criterion) => {
-        if (typeof criterion === 'string') {
-          return { text: criterion, maxPoints: 0 };
-        }
-        return criterion;
-      });
+      const criteria = normalizeCriteriaForForm(assignment.criteria);
 
       return {
         ...buildEmptyFormData(),
@@ -148,7 +170,6 @@ const AssignmentModal = ({
         maxScore: assignment.maxScore || 100,
         submissionType: assignment.submissionType || 'file',
         criteria,
-        priority: assignment.priority || 'medium',
         allowedFormats: normalizeAllowedFormats(assignment.allowedFormats || assignment.allowedFormatItems?.map((item) => item?.format) || []),
         materialFiles: [],
         existingMaterials: normalizeMaterialFiles(assignment.materialFiles || assignment.materialItems || []),
@@ -204,6 +225,9 @@ const AssignmentModal = ({
 
   const isEdit = !!assignment;
   const criteriaCount = Array.isArray(formData.criteria) ? formData.criteria.length : 0;
+  const criteriaPointsTotal = Array.isArray(formData.criteria)
+    ? formData.criteria.reduce((sum, criterion) => sum + (Number(criterion?.maxPoints) || 0), 0)
+    : 0;
   const totalMaterialsCount = (formData.existingMaterials?.length || 0) + (formData.materialFiles?.length || 0);
   const materialSlotsLeft = Math.max(0, MAX_MATERIAL_FILES - totalMaterialsCount);
   const hasNoAssignableGroups = !isEdit && groupOptions.length === 0;
@@ -255,7 +279,7 @@ const AssignmentModal = ({
     const criteriaArray = formData.criteria
       .map(criterion => {
         if (typeof criterion === 'string') {
-          return { text: criterion.trim(), maxPoints: 0 };
+          return { text: criterion.trim(), maxPoints: 1 };
         }
         return {
           text: (criterion.text || '').trim(),
@@ -272,10 +296,9 @@ const AssignmentModal = ({
       ...trimmedFormData,
       subjectId: Number(formData.subjectId),
       deadline: `${trimmedFormData.deadline}T23:59:00`,
-      maxScore: parseInt(trimmedFormData.maxScore),
+      maxScore: 100,
       studentGroups: studentGroups,
       criteria: criteriaArray,
-      priority: trimmedFormData.priority || 'medium',
       allowedFormats,
       materialFiles: formData.materialFiles || [],
       removedMaterialIds: formData.removedMaterialIds || []
@@ -329,7 +352,7 @@ const AssignmentModal = ({
   const addCriterion = () => {
     setFormData(prev => ({
       ...prev,
-      criteria: [...prev.criteria, { text: '', maxPoints: 0 }]
+      criteria: [...prev.criteria, { text: '', maxPoints: 1 }]
     }));
   };
 
@@ -337,7 +360,9 @@ const AssignmentModal = ({
     setFormData(prev => ({
       ...prev,
       criteria: prev.criteria.map((criterion, i) => 
-        i === index ? { ...criterion, [field]: value } : criterion
+        i === index
+          ? { ...criterion, [field]: field === 'maxPoints' ? normalizeCriterionPointsInput(value) : value }
+          : criterion
       )
     }));
   };
@@ -438,7 +463,7 @@ const AssignmentModal = ({
           <button type="button" className="modal-close" onClick={onClose}>×</button>
         </div>
         
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} aria-busy={isSubmitting}>
           <div className="modal-body">
             <div className="assignment-quick-stats">
               <span className="assignment-quick-stats__item">
@@ -644,31 +669,9 @@ const AssignmentModal = ({
 
               <div className="form-section">
                 <h4>Параметры оценки</h4>
-                <div className="form-row">
-                  <FormGroup label="Максимальный балл:" required>
-                    <input
-                      type="number"
-                      value={formData.maxScore}
-                      onChange={(e) => handleInputChange('maxScore', parseInt(e.target.value) || 0)}
-                      min="1"
-                      max="100"
-                      className="form-input"
-                      required
-                    />
-                  </FormGroup>
-
-                  <FormGroup label="Приоритет задания:" required>
-                    <select
-                      value={formData.priority || 'medium'}
-                      onChange={(e) => handleInputChange('priority', e.target.value)}
-                      className="form-select"
-                    >
-                      <option value="low">Низкий</option>
-                      <option value="medium">Средний</option>
-                      <option value="high">Высокий</option>
-                    </select>
-                  </FormGroup>
-                </div>
+                <p className="form-section__hint">
+                  Максимальный балл за каждое задание фиксированный: 100. Перевод в пятибалльную оценку настраивается в профиле преподавателя.
+                </p>
 
                 <div className="form-row">
                   <FormGroup label="Формат сдачи:" required>
@@ -730,6 +733,11 @@ const AssignmentModal = ({
                     + Добавить критерий
                   </Button>
                 </div>
+                {criteriaCount > 0 && (
+                  <p className={`criteria-total ${criteriaPointsTotal === 100 ? 'criteria-total--valid' : 'criteria-total--invalid'}`}>
+                    Сумма критериев: {criteriaPointsTotal}/100
+                  </p>
+                )}
                 
                 <div className="criteria-list">
                   {formData.criteria.map((criterion, index) => (
@@ -773,6 +781,7 @@ const AssignmentModal = ({
             <Button
               type="submit"
               variant="primary"
+              loading={isSubmitting}
               disabled={isSubmitting || hasNoAssignableGroups || hasNoAssignableSubjects}
             >
               {isSubmitting ? (isEdit ? 'Сохранение…' : 'Создание…') : (isEdit ? 'Сохранить изменения' : 'Создать задание')}
@@ -807,12 +816,17 @@ const CriterionItem = ({ criterion, index, onUpdate, onRemove }) => (
         className="criterion-text"
       />
       <input
-        type="number"
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
         value={criterion.maxPoints}
         onChange={(e) => onUpdate(index, 'maxPoints', parseInt(e.target.value) || 0)}
-        placeholder="0"
-        min="0"
-        max="100"
+        onBlur={(e) => {
+          if (!String(e.target.value || '').trim()) {
+            onUpdate(index, 'maxPoints', 1);
+          }
+        }}
+        placeholder="1"
         className="criterion-points"
       />
       <span className="points-label">баллов</span>

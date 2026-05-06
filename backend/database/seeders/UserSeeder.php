@@ -33,14 +33,8 @@ class UserSeeder extends Seeder
             'phone' => '+7 (999) 555-77-88',
         ]);
 
-        $group029 = Group::updateOrCreate(['name' => 'ИСП-029'], [
-            'teacher_id' => $teacherJs->id,
-            'status' => 'active',
-        ]);
-        $group0029 = Group::updateOrCreate(['name' => 'ИСП-0029'], [
-            'teacher_id' => $teacherPhp->id,
-            'status' => 'active',
-        ]);
+        $group029 = Group::updateOrCreate(['name' => 'ИСП-029'], ['status' => 'active']);
+        $group0029 = Group::updateOrCreate(['name' => 'ИСП-0029'], ['status' => 'active']);
 
         $studentsGroup029 = [
             ['Беляков', 'Сергей', 'Александрович'],

@@ -7,7 +7,10 @@
   align-items: center;
   justify-content: center;
   z-index: 5000;
-  padding: 20px;
+  padding: max(20px, env(safe-area-inset-top, 0px) + 10px)
+    max(20px, env(safe-area-inset-right, 0px))
+    max(20px, env(safe-area-inset-bottom, 0px))
+    max(20px, env(safe-area-inset-left, 0px));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -19,8 +22,9 @@
   max-width: 560px;
   max-height: min(92vh, 100dvh - 2.5rem);
   margin: auto;
-  overflow: auto;
-  overflow-x: hidden;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   border: 1px solid #dbe3ef;
   box-shadow: 0 22px 44px rgba(15, 23, 42, 0.22);
 }
@@ -28,15 +32,25 @@
 .modal-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 10px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
   padding: 18px 20px;
   border-bottom: 1px solid #e1e5e9;
+  box-shadow: 0 1px 0 rgba(226, 232, 240, 0.9);
   
   h3 {
     margin: 0;
     font-size: 19px;
     color: #0f172a;
     line-height: 1.35;
+    min-width: 0;
+    flex: 1;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -65,6 +79,11 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .submission-status-note {
@@ -203,12 +222,16 @@
 }
 
 .modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   justify-content: flex-end;
   gap: 12px;
   padding: 16px 20px 18px;
   border-top: 1px solid #e1e5e9;
   background: #f8fafc;
+  flex-shrink: 0;
 
   .btn {
     min-width: 142px;
@@ -218,19 +241,62 @@
 // Адаптивность
 @media (max-width: 768px) {
   &.modal-overlay {
-    padding: 10px;
+    padding: max(10px, env(safe-area-inset-top, 0px))
+      max(10px, env(safe-area-inset-right, 0px))
+      max(10px, env(safe-area-inset-bottom, 0px))
+      max(10px, env(safe-area-inset-left, 0px));
   }
-  
+
   .modal-content {
     max-width: 100%;
+    max-height: min(
+      92vh,
+      100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1.25rem
+    );
   }
   
+  .modal-header {
+    padding: 14px 16px;
+
+    h3 {
+      font-size: 1.05rem;
+    }
+  }
+
+  .modal-body {
+    padding: 14px 16px;
+  }
+
   .modal-actions {
     flex-direction: column;
-    
+    padding: 14px 16px 16px;
+
     .btn {
       width: 100%;
+      min-width: 0;
     }
+  }
+}
+
+/* Телефоны: подпись над значением, без двухколоночной сетки */
+@media (max-width: 480px) {
+  .submission-info__row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 10px 0;
+  }
+
+  .submission-info__value {
+    padding-bottom: 2px;
+  }
+
+  .file-upload .file-input-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .modal-header h3 {
+    font-size: 1rem;
   }
 }
 }

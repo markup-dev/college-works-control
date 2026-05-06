@@ -8,4 +8,5 @@ export * from './adminFilterHelpers.js';
 export * from './adminActionHelpers.js';
 export * from './paginationDefaults.js';
 export * from './submissionReviewQueue.js';
+export * from './gradeScale.js';
 export { validateUserData } from './adminHelpers.js';

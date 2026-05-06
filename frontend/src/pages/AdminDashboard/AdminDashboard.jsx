@@ -3,6 +3,7 @@ import DashboardHeader from '../../components/Admin/DashboardHeader/DashboardHea
 import UserManagement from '../../components/Admin/UserManagement/UserManagement';
 import GroupManagement from '../../components/Admin/GroupManagement/GroupManagement';
 import SubjectManagement from '../../components/Admin/SubjectManagement/SubjectManagement';
+import TeachingLoadManagement from '../../components/Admin/TeachingLoadManagement/TeachingLoadManagement';
 import StatisticsSection from '../../components/Admin/StatisticsSection/StatisticsSection';
 import SystemLogs from '../../components/Admin/SystemLogs/SystemLogs';
 import SettingsSection from '../../components/Admin/SettingsSection/SettingsSection';
@@ -17,14 +18,17 @@ const AdminDashboard = () => {
     teacherOptions = [],
     groups = [],
     subjects = [],
+    teachingLoads = [],
     systemLogs = [],
     usersMeta = {},
     groupsMeta = {},
     subjectsMeta = {},
+    teachingLoadsMeta = {},
     logsMeta = {},
     usersQuery = {},
     groupsQuery = {},
     subjectsQuery = {},
+    teachingLoadsQuery = {},
     logsQuery = {},
     adminStats = {},
     loading,
@@ -32,6 +36,7 @@ const AdminDashboard = () => {
     fetchUsers,
     fetchGroups,
     fetchSubjects,
+    fetchTeachingLoads,
     fetchLogs,
     searchStudentsForTransfer,
     createUser,
@@ -48,6 +53,9 @@ const AdminDashboard = () => {
     bulkAttachStudentsToGroup,
     previewSubjectsImport,
     importSubjects,
+    createTeachingLoad,
+    updateTeachingLoad,
+    deleteTeachingLoad,
   } = useAdmin();
   
   const [activeTab, setActiveTab] = useState('overview');
@@ -97,7 +105,6 @@ const AdminDashboard = () => {
         return (
           <SubjectManagement
             subjects={subjects}
-            teachers={teacherOptions}
             paginationMeta={subjectsMeta}
             query={subjectsQuery}
             onFetchSubjects={fetchSubjects}
@@ -106,6 +113,22 @@ const AdminDashboard = () => {
             onDeleteSubject={deleteSubject}
             onPreviewSubjectsImport={previewSubjectsImport}
             onImportSubjects={importSubjects}
+          />
+        );
+
+      case 'teaching-loads':
+        return (
+          <TeachingLoadManagement
+            teachingLoads={teachingLoads}
+            teachers={teacherOptions}
+            subjects={subjects}
+            groups={groups}
+            paginationMeta={teachingLoadsMeta}
+            query={teachingLoadsQuery}
+            onFetchTeachingLoads={fetchTeachingLoads}
+            onCreateTeachingLoad={createTeachingLoad}
+            onUpdateTeachingLoad={updateTeachingLoad}
+            onDeleteTeachingLoad={deleteTeachingLoad}
           />
         );
 

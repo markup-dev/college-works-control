@@ -116,8 +116,9 @@ const Welcome = () => {
               <img src={logo} alt='Логотип' />
             </div>
           </Link>
-          <button className='nav-login-btn' onClick={handleGetStarted}>
-            Войти в систему
+          <button className='nav-login-btn' type='button' onClick={handleGetStarted}>
+            <span className='nav-login-btn__label nav-login-btn__label--full'>Войти в систему</span>
+            <span className='nav-login-btn__label nav-login-btn__label--compact'>Войти</span>
           </button>
         </div>
       </nav>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Button from '../../UI/Button/Button';
 import Badge from '../../UI/Badge/Badge';
 import Card from '../../UI/Card/Card';
@@ -18,28 +18,22 @@ import {
 } from '../../../utils';
 import './SubjectManagement.scss';
 
-const SUBJECT_IMPORT_TEMPLATE = `name,teacher,status
-Программирование,teacher_login,active
-Базы данных,teacher@mail.ru,active`;
-
-const getTeacherFullName = (teacher) =>
-  [teacher?.lastName, teacher?.firstName, teacher?.middleName].filter(Boolean).join(' ').trim();
+const SUBJECT_IMPORT_TEMPLATE = `name,status
+Программирование,active
+Базы данных,active`;
 
 const createDefaultSubjectFormData = () => ({
   name: '',
-  teacherId: '',
   status: 'active',
 });
 
 const createSubjectFormDataFromSubject = (subject) => ({
   name: subject?.name || '',
-  teacherId: subject?.teacherId || subject?.teacher?.id || '',
   status: subject?.status || 'active',
 });
 
 const SubjectManagement = ({
   subjects = [],
-  teachers = [],
   paginationMeta = {},
   query = {},
   onFetchSubjects,
@@ -63,10 +57,10 @@ const SubjectManagement = ({
   const [importPreview, setImportPreview] = useState(null);
   const [importMode, setImportMode] = useState('strict');
   const [importLoading, setImportLoading] = useState(false);
+  const [savingSubject, setSavingSubject] = useState(false);
   const [filterState, setFilterState] = useState({
     search: '',
     status: 'all',
-    teacherId: 'all',
     sort: query.sort || 'name_asc',
     page: query.page || 1,
     perPage: query.perPage || 18,
@@ -91,47 +85,11 @@ const SubjectManagement = ({
     onFetchSubjects?.({
       search: filterState.search || undefined,
       status: filterState.status !== 'all' ? filterState.status : undefined,
-      teacherId: filterState.teacherId !== 'all' ? Number(filterState.teacherId) : undefined,
       sort: filterState.sort,
       page: filterState.page,
       perPage: filterState.perPage,
     });
   }, [filterState, onFetchSubjects]);
-
-  const teacherMap = useMemo(() => {
-    const map = new Map();
-    teachers.forEach((teacher) => {
-      map.set(teacher.id, teacher.fullName || teacher.name || teacher.login);
-    });
-    return map;
-  }, [teachers]);
-
-  const teacherOptions = useMemo(() => {
-    const options = new Map();
-
-    teachers.forEach((teacher) => {
-      const teacherId = Number(teacher.id);
-      if (Number.isFinite(teacherId) && teacherId > 0) {
-        options.set(teacherId, {
-          id: teacherId,
-          label: teacher.fullName || teacher.name || teacher.login || `teacher_${teacherId}`,
-        });
-      }
-    });
-
-    const editingTeacherId = Number(editingSubject?.teacherId || editingSubject?.teacher?.id || formData.teacherId);
-    if (Number.isFinite(editingTeacherId) && editingTeacherId > 0 && !options.has(editingTeacherId)) {
-      const fallbackLabel = getTeacherFullName(editingSubject?.teacher)
-        || teacherMap.get(editingTeacherId)
-        || `ID ${editingTeacherId}`;
-      options.set(editingTeacherId, {
-        id: editingTeacherId,
-        label: fallbackLabel,
-      });
-    }
-
-    return Array.from(options.values()).sort((left, right) => left.label.localeCompare(right.label, 'ru'));
-  }, [teachers, editingSubject, formData.teacherId, teacherMap]);
 
   const handleCreate = () => {
     setFormData(createDefaultSubjectFormData());
@@ -180,9 +138,11 @@ const SubjectManagement = ({
 
   const handleSaveSubject = async (event) => {
     event.preventDefault();
+    if (savingSubject) {
+      return;
+    }
     const payload = {
       name: formData.name?.trim() || '',
-      teacherId: formData.teacherId ? Number(formData.teacherId) : null,
       status: formData.status,
     };
     setFormData((prev) => ({ ...prev, name: payload.name }));
@@ -191,19 +151,24 @@ const SubjectManagement = ({
       return;
     }
 
-    const result = await onUpdateSubject?.(editingSubject.id, payload);
-    const isSuccess = handleAdminActionResult({
-      result,
-      showSuccess,
-      showError,
-      errorMessage: 'Не удалось обновить предмет',
-    });
-    if (!isSuccess) {
-      return;
-    }
+    setSavingSubject(true);
+    try {
+      const result = await onUpdateSubject?.(editingSubject.id, payload);
+      const isSuccess = handleAdminActionResult({
+        result,
+        showSuccess,
+        showError,
+        errorMessage: 'Не удалось обновить предмет',
+      });
+      if (!isSuccess) {
+        return;
+      }
 
-    showSuccess('Изменения сохранены');
-    closeSubjectForm();
+      showSuccess('Изменения сохранены');
+      closeSubjectForm();
+    } finally {
+      setSavingSubject(false);
+    }
   };
 
   const handleCreateManual = async () => {
@@ -221,7 +186,6 @@ const SubjectManagement = ({
       // eslint-disable-next-line no-await-in-loop
       const result = await onCreateSubject?.({
         name,
-        teacherId: formData.teacherId ? Number(formData.teacherId) : null,
         status: formData.status,
       });
       if (result?.success) {
@@ -340,20 +304,6 @@ const SubjectManagement = ({
             </select>
           </div>
           <div className="subject-management__filter-field">
-            <label>Преподаватель</label>
-            <select
-              value={filterState.teacherId}
-              onChange={(event) => setFilterState((prev) => updateAdminFilterField(prev, 'teacherId', event.target.value))}
-            >
-              <option value="all">Любой преподаватель</option>
-              {teachers.map((teacher) => (
-                <option key={teacher.id} value={teacher.id}>
-                  {teacher.fullName || teacher.login}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="subject-management__filter-field">
             <label>Сортировка</label>
             <select
               value={filterState.sort}
@@ -374,7 +324,6 @@ const SubjectManagement = ({
                 setFilterState((prev) => resetAdminFilterState(prev, {
                   search: '',
                   status: 'all',
-                  teacherId: 'all',
                   sort: query.sort || 'name_asc',
                   page: 1,
                 }))
@@ -395,7 +344,7 @@ const SubjectManagement = ({
       >
         <div className="subject-form-card subject-form-card--modal">
           {editingSubject ? (
-            <form onSubmit={handleSaveSubject}>
+            <form onSubmit={handleSaveSubject} aria-busy={savingSubject}>
               <div className="form-grid">
                 <div className="form-group">
                   <label>Название предмета *</label>
@@ -410,20 +359,6 @@ const SubjectManagement = ({
                 </div>
 
                 <div className="form-group">
-                  <label>Преподаватель</label>
-                  <select
-                    value={formData.teacherId}
-                    onChange={(event) => setFormData((prev) => ({ ...prev, teacherId: event.target.value }))}
-                  >
-                    <option value="">Не назначен</option>
-                    {teacherOptions.map((teacher) => (
-                      <option key={teacher.id} value={teacher.id}>
-                        {teacher.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
                   <label>Статус</label>
                   <select
                     value={formData.status}
@@ -436,7 +371,7 @@ const SubjectManagement = ({
               </div>
 
               <div className="form-actions">
-                <Button type="submit" variant="primary">
+                <Button type="submit" variant="primary" loading={savingSubject} disabled={savingSubject}>
                   Сохранить изменения
                 </Button>
                 <Button
@@ -468,20 +403,6 @@ const SubjectManagement = ({
               </div>
 
               <div className="form-grid">
-                <div className="form-group">
-                  <label>Преподаватель (опционально)</label>
-                  <select
-                    value={formData.teacherId}
-                    onChange={(event) => setFormData((prev) => ({ ...prev, teacherId: event.target.value }))}
-                  >
-                    <option value="">Не назначен</option>
-                    {teacherOptions.map((teacher) => (
-                      <option key={teacher.id} value={teacher.id}>
-                        {teacher.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <div className="form-group">
                   <label>Статус по умолчанию</label>
                   <select
@@ -589,7 +510,9 @@ const SubjectManagement = ({
                   {subject.status === 'active' ? 'Активен' : 'Неактивен'}
                 </Badge>
               </div>
-              <p className="subject-card__meta">Преподаватель: {getTeacherFullName(subject.teacher) || teacherMap.get(subject.teacherId) || 'Не назначен'}</p>
+              <p className="subject-card__meta">
+                Назначений в нагрузке: {subject.teachingLoadsCount || 0}
+              </p>
               <div className="subject-actions">
                 <Button size="small" variant="secondary" onClick={() => handleEdit(subject)}>
                   Изменить

@@ -90,16 +90,8 @@ const SubmissionsTable = ({
           }
           return bDate - aDate;
         }
-        case 'submissionDate_asc':
-          return aDate - bDate;
         case 'student_asc':
           return (a?.studentName || '').localeCompare(b?.studentName || '');
-        case 'student_desc':
-          return (b?.studentName || '').localeCompare(a?.studentName || '');
-        case 'score_desc':
-          return (b?.score ?? -1) - (a?.score ?? -1);
-        case 'score_asc':
-          return (a?.score ?? -1) - (b?.score ?? -1);
         case 'submissionDate_desc':
         default:
           return bDate - aDate;
@@ -136,26 +128,22 @@ const SubmissionsTable = ({
           value={sortBy}
           onChange={(event) => setSortBy(event.target.value)}
           disabled={loading}
+          aria-label="Порядок отображения работ"
           aria-disabled={loading}
           aria-busy={loading}
+          title="Порядок отображения работ"
         >
           {useServerSort ? (
             <>
-              <option value="review_queue">Очередь проверки (срочность и ожидание)</option>
-              <option value="newest">Сначала новые сдачи</option>
-              <option value="oldest">Сначала старые сдачи</option>
-              <option value="student_asc">Студент А → Я</option>
-              <option value="student_desc">Студент Я → А</option>
-              <option value="score_desc">Оценка по убыванию</option>
-              <option value="score_asc">Оценка по возрастанию</option>
+              <option value="review_queue">Сначала важные</option>
+              <option value="newest">Сначала новые</option>
+              <option value="student_asc">По студенту</option>
             </>
           ) : (
             <>
-              <option value="review_first">Сначала на проверке</option>
-              <option value="submissionDate_desc">Сначала новые сдачи</option>
-              <option value="submissionDate_asc">Сначала старые сдачи</option>
-              <option value="score_desc">Оценка по убыванию</option>
-              <option value="score_asc">Оценка по возрастанию</option>
+              <option value="review_first">Сначала важные</option>
+              <option value="submissionDate_desc">Сначала новые</option>
+              <option value="student_asc">По студенту</option>
             </>
           )}
         </select>
@@ -227,7 +215,9 @@ const SubmissionCard = ({
 
         <div className="submission-card__footer">
           <p className="submission-card__meta-line">{formatSubmissionDate(submission.submissionDate)}</p>
-          <p className="submission-card__score"><span>Оценка:</span> {formatScore(submission.score, maxScore)}</p>
+          <p className="submission-card__score">
+            <span>Оценка:</span> {formatScore(submission.score, maxScore, submission.gradeLabel)}
+          </p>
         </div>
       </div>
 
@@ -303,11 +293,11 @@ const formatSubmissionDate = (date) => {
   }
 };
 
-const formatScore = (score, maxScore) => {
+const formatScore = (score, maxScore, gradeLabel) => {
   if (score === null || score === undefined) {
     return '—';
   }
-  return `${score}/${maxScore}`;
+  return gradeLabel ? `${score}/${maxScore} · ${gradeLabel}` : `${score}/${maxScore}`;
 };
 
 const CardsSkeleton = () => (

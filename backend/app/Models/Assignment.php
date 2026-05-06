@@ -18,7 +18,6 @@ class Assignment extends Model
         'description',
         'deadline',
         'status',
-        'priority',
         'max_score',
         'submission_type',
         'max_file_size',
@@ -115,11 +114,20 @@ class Assignment extends Model
         return $this->status === 'archived';
     }
 
+    public function getMaxScoreAttribute($value): int
+    {
+        return 100;
+    }
+
+    public function setMaxScoreAttribute($value): void
+    {
+        $this->attributes['max_score'] = 100;
+    }
+
     public function calculateCompletionMetrics(): array
     {
         $this->loadMissing([
             'groups.students:id,role,group_id',
-            'submissions:id,assignment_id,student_id,status,submitted_at,created_at',
         ]);
 
         $targetStudentIds = $this->groups
@@ -140,8 +148,10 @@ class Assignment extends Model
             ];
         }
 
-        $latestSubmissionsByStudent = $this->submissions
-            ->sortByDesc(fn($submission) => $submission->submitted_at ?? $submission->created_at)
+        $latestSubmissionsByStudent = $this->submissions()
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
+            ->get(['id', 'assignment_id', 'student_id', 'status', 'submitted_at', 'created_at'])
             ->unique('student_id')
             ->keyBy('student_id');
 
@@ -169,9 +179,17 @@ class Assignment extends Model
     {
         $metrics = $this->calculateCompletionMetrics();
         $totalStudents = (int) ($metrics['total_students'] ?? 0);
+        $submittedStudents = (int) ($metrics['submitted_students'] ?? 0);
         $gradedStudents = (int) ($metrics['graded_students'] ?? 0);
 
-        $nextStatus = ($totalStudents > 0 && $gradedStudents === $totalStudents) ? 'archived' : 'active';
+        // Архив только когда у каждого студента из целевых групп есть сдача и последняя версия оценена.
+        // Раньше при частичной eager-load связи submissions (например, только текущий студент) метрики
+        // искажались и задание ошибочно уходило в archived — студент с просроченным дедлайном терял сдачу.
+        $nextStatus = (
+            $totalStudents > 0
+            && $submittedStudents === $totalStudents
+            && $gradedStudents === $totalStudents
+        ) ? 'archived' : 'active';
 
         if ($this->status !== $nextStatus) {
             $this->update(['status' => $nextStatus]);

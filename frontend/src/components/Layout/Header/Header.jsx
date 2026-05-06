@@ -10,6 +10,9 @@ const Header = ({ user, onLogout }) => {
   const { showInfo } = useNotification();
   const [messagesUnreadTotal, setMessagesUnreadTotal] = useState(0);
   const [notificationsUnreadTotal, setNotificationsUnreadTotal] = useState(0);
+  const [navOpen, setNavOpen] = useState(false);
+
+  const closeNav = useCallback(() => setNavOpen(false), []);
 
   const refreshMessagesUnread = useCallback(async () => {
     if (user?.role !== 'student' && user?.role !== 'teacher') {
@@ -17,7 +20,7 @@ const Header = ({ user, onLogout }) => {
       return;
     }
     try {
-      const { data } = await api.get('/conversations');
+      const { data } = await api.get('/conversations', { params: { scope: 'active' } });
       const list = data.data ?? [];
       const total = list.reduce((sum, c) => sum + (Number(c.unreadCount) || 0), 0);
       setMessagesUnreadTotal(total);
@@ -100,6 +103,26 @@ const Header = ({ user, onLogout }) => {
     };
   }, [user?.role, location.pathname, refreshNotificationsUnread]);
 
+  useEffect(() => {
+    closeNav();
+  }, [location.pathname, closeNav]);
+
+  useEffect(() => {
+    if (!navOpen) {
+      return undefined;
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeNav();
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [navOpen, closeNav]);
+
   const handleLogout = () => {
     onLogout();
   };
@@ -108,7 +131,7 @@ const Header = ({ user, onLogout }) => {
     const roles = {
       student: 'Студент',
       teacher: 'Преподаватель',
-      admin: 'Администратор'
+      admin: 'Администратор',
     };
     return roles[role] || role;
   };
@@ -123,8 +146,17 @@ const Header = ({ user, onLogout }) => {
     return userData.login || '';
   };
 
+  const linkClassDesktop = ({ isActive }) =>
+    `header__link ${isActive ? 'header__link--active' : ''}`;
+  const linkClassPanel = ({ isActive }) =>
+    `header__link header__link--panel ${isActive ? 'header__link--active' : ''}`;
+
+  const isMessagesPage = /^\/messages\/?$/.test(location.pathname || '');
+
   return (
-    <header className="header">
+    <header
+      className={['header', isMessagesPage ? 'header--messages-narrow' : ''].filter(Boolean).join(' ')}
+    >
       <div className="header__content">
         <div className="header__left">
           <h1 className="header__title">
@@ -132,26 +164,16 @@ const Header = ({ user, onLogout }) => {
               <img src={logo} alt="Логотип" className="header__logo" />
             </Link>
           </h1>
-          <span className="header__role">
-            {getRoleLabel(user?.role)}
-          </span>
+          <span className="header__role">{getRoleLabel(user?.role)}</span>
         </div>
 
-        <nav className="header__nav">
-          <NavLink 
-            to={`/${user?.role || ''}`} 
-            className={({ isActive }) => `header__link ${isActive ? 'header__link--active' : ''}`}
-          >
+        <nav className="header__nav header__nav--desktop" aria-label="Основная навигация">
+          <NavLink to={`/${user?.role || ''}`} className={linkClassDesktop}>
             Дашборд
           </NavLink>
           {(user?.role === 'student' || user?.role === 'teacher') && (
             <>
-              <NavLink
-                to="/notifications"
-                className={({ isActive }) =>
-                  `header__link ${isActive ? 'header__link--active' : ''}`
-                }
-              >
+              <NavLink to="/notifications" className={linkClassDesktop}>
                 <span className="header__link-inner">
                   Уведомления
                   {notificationsUnreadTotal > 0 && (
@@ -164,12 +186,7 @@ const Header = ({ user, onLogout }) => {
                   )}
                 </span>
               </NavLink>
-              <NavLink
-                to="/messages"
-                className={({ isActive }) =>
-                  `header__link ${isActive ? 'header__link--active' : ''}`
-                }
-              >
+              <NavLink to="/messages" className={linkClassDesktop}>
                 <span className="header__link-inner">
                   Сообщения
                   {messagesUnreadTotal > 0 && (
@@ -184,20 +201,111 @@ const Header = ({ user, onLogout }) => {
               </NavLink>
             </>
           )}
-          <NavLink 
-            to="/profile" 
-            className={({ isActive }) => `header__link ${isActive ? 'header__link--active' : ''}`}
-          >
+          <NavLink to="/profile" className={linkClassDesktop}>
             Профиль
           </NavLink>
         </nav>
-        
-        <div className="header__right">
-          <span className="header__user">Привет, {getFirstName(user)}!</span>
-          <button className="header__logout" onClick={handleLogout}>
-            Выйти
+
+        <div className="header__trailing">
+          <div className="header__right header__right--desktop">
+            <span className="header__user">Привет, {getFirstName(user)}!</span>
+            <button type="button" className="header__logout" onClick={handleLogout}>
+              Выйти
+            </button>
+          </div>
+
+          <button
+            type="button"
+            className={`header__burger${navOpen ? ' header__burger--open' : ''}`}
+            onClick={() => setNavOpen((o) => !o)}
+            aria-expanded={navOpen}
+            aria-controls="header-mobile-panel"
+            aria-label={navOpen ? 'Закрыть меню' : 'Открыть меню'}
+          >
+            <span className="header__burger-bar" />
+            <span className="header__burger-bar" />
+            <span className="header__burger-bar" />
           </button>
         </div>
+      </div>
+
+      <div
+        className={`header__mobile-layer${navOpen ? ' is-open' : ''}`}
+        aria-hidden={!navOpen}
+      >
+        <button
+          type="button"
+          className="header__backdrop"
+          aria-label="Закрыть меню"
+          onClick={closeNav}
+        />
+        <aside
+          id="header-mobile-panel"
+          className="header__panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="header-mobile-panel-title"
+          {...(!navOpen ? { inert: '' } : {})}
+        >
+            <div className="header__panel-top">
+              <h2 className="header__panel-title" id="header-mobile-panel-title">
+                Меню
+              </h2>
+              <span className="header__panel-role">{getRoleLabel(user?.role)}</span>
+              <button
+                type="button"
+                className="header__panel-close"
+                onClick={closeNav}
+                aria-label="Закрыть"
+              >
+                ×
+              </button>
+            </div>
+            <p className="header__panel-user">Привет, {getFirstName(user)}!</p>
+            <nav className="header__nav header__nav--panel" aria-label="Разделы">
+              <NavLink to={`/${user?.role || ''}`} className={linkClassPanel} onClick={closeNav}>
+                Дашборд
+              </NavLink>
+              {(user?.role === 'student' || user?.role === 'teacher') && (
+                <>
+                  <NavLink to="/notifications" className={linkClassPanel} onClick={closeNav}>
+                    <span className="header__link-inner">
+                      Уведомления
+                      {notificationsUnreadTotal > 0 && (
+                        <span
+                          className="header__messages-badge header__messages-badge--panel"
+                          aria-label={`Непрочитанных уведомлений: ${notificationsUnreadTotal}`}
+                        >
+                          {notificationsUnreadTotal > 99 ? '99+' : notificationsUnreadTotal}
+                        </span>
+                      )}
+                    </span>
+                  </NavLink>
+                  <NavLink to="/messages" className={linkClassPanel} onClick={closeNav}>
+                    <span className="header__link-inner">
+                      Сообщения
+                      {messagesUnreadTotal > 0 && (
+                        <span
+                          className="header__messages-badge header__messages-badge--panel"
+                          aria-label={`Непрочитанных сообщений: ${messagesUnreadTotal}`}
+                        >
+                          {messagesUnreadTotal > 99 ? '99+' : messagesUnreadTotal}
+                        </span>
+                      )}
+                    </span>
+                  </NavLink>
+                </>
+              )}
+              <NavLink to="/profile" className={linkClassPanel} onClick={closeNav}>
+                Профиль
+              </NavLink>
+            </nav>
+            <div className="header__panel-actions">
+              <button type="button" className="header__logout header__logout--panel" onClick={handleLogout}>
+                Выйти
+              </button>
+            </div>
+          </aside>
       </div>
     </header>
   );

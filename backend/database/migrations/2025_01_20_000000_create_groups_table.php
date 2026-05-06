@@ -11,10 +11,9 @@ return new class extends Migration
         Schema::create('groups', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->foreignId('teacher_id')->nullable()->constrained('users')->nullOnDelete();
             $table->enum('status', ['active', 'inactive'])->default('active');
             $table->timestamps();
-            $table->unique(['name', 'teacher_id']);
+            $table->unique('name');
         });
 
         Schema::table('users', function (Blueprint $table) {

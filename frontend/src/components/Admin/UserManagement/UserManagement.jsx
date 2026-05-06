@@ -80,6 +80,7 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
     perPage: query.perPage || 24,
   });
   const [formData, setFormData] = useState(createDefaultUserFormData);
+  const [savingUser, setSavingUser] = useState(false);
 
   const closeUserForm = () => {
     setShowCreateForm(false);
@@ -120,6 +121,9 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (savingUser) {
+      return;
+    }
     try {
       const submitData = { 
         ...formData,
@@ -156,7 +160,9 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
         showError(firstError);
         return;
       }
-      
+
+      setSavingUser(true);
+
       if (editingUser) {
         const result = await onUpdateUser(editingUser.id, submitData);
         const isSuccess = handleAdminActionResult({
@@ -185,6 +191,8 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
       closeUserForm();
     } catch (error) {
       showError(error.message);
+    } finally {
+      setSavingUser(false);
     }
   };
 
@@ -486,7 +494,7 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
         className="admin-form-modal"
       >
         <div className="user-form user-form--modal">
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} aria-busy={savingUser}>
             <div className="form-row">
               <div className="form-group">
                 <label>Логин *</label>
@@ -623,7 +631,7 @@ ivanov01,ivanov@mail.ru,,Иванов,Иван,Иванович,student,ИСП-4
               ) : null}
             </div>
             <div className="form-actions">
-              <Button type="submit" variant="primary">
+              <Button type="submit" variant="primary" loading={savingUser} disabled={savingUser}>
                 {editingUser ? 'Сохранить' : 'Создать'}
               </Button>
               <Button 

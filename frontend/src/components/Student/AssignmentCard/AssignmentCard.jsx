@@ -1,9 +1,8 @@
 import React from 'react';
 import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
-import { getAssignmentStatusInfo, getPriorityInfo, getDaysUntilDeadline, formatDate } from '../../../utils';
+import { getAssignmentStatusInfo, getDaysUntilDeadline, formatDate } from '../../../utils';
 import iconDeadline from '../../../assets/assignment/assignment-deadline.svg';
-import iconPriority from '../../../assets/assignment/assignment-priority.svg';
 import iconMaxScore from '../../../assets/assignment/assignment-max-score.svg';
 import iconSubmissionFormat from '../../../assets/assignment/assignment-submission-format.svg';
 import iconSubmitted from '../../../assets/assignment/assignment-submitted.svg';
@@ -21,20 +20,27 @@ const AssignmentCard = ({
   className = "" 
 }) => {
   const statusInfo = getAssignmentStatusInfo(assignment);
-  const priorityInfo = getPriorityInfo(assignment.priority);
   const daysUntilDeadline = getDaysUntilDeadline(assignment.deadline);
   const isUrgent = daysUntilDeadline >= 0 && daysUntilDeadline <= 3 && assignment.status === 'not_submitted';
   const isOverdue = daysUntilDeadline < 0 && assignment.status === 'not_submitted';
   const canSubmitRetake = assignment.canSubmitRetake ?? (assignment.status === 'returned');
   const retakeUsed = Boolean(assignment.retakeUsed);
   const isRetakeAssignment = assignment.status === 'returned' || canSubmitRetake || retakeUsed;
+  const gradeLabel = assignment.gradeLabel || assignment.grade_label || null;
 
   const renderActions = () => {
     switch (assignment.status) {
-      case 'not_submitted':
+    case 'not_submitted':
+      if (assignment?.is_completed) {
         return (
-          <Button
-            variant={isOverdue ? "danger" : "primary"}
+          <Button variant="secondary" disabled fullWidth>
+            Приём работ завершён
+          </Button>
+        );
+      }
+      return (
+        <Button
+          variant={isOverdue ? "danger" : "primary"}
             size="medium"
             className={isUrgent && !isOverdue ? 'assignment-submit-btn--urgent' : ''}
             onClick={(e) => { e.stopPropagation(); onSubmitWork(assignment); }}
@@ -177,16 +183,6 @@ const AssignmentCard = ({
         />
         
         <DetailRow 
-          iconSrc={iconPriority}
-          label="Приоритет:" 
-          value={
-            <span className={`priority-info priority-info--${assignment.priority || 'medium'}`}>
-              {priorityInfo.label}
-            </span>
-          } 
-        />
-        
-        <DetailRow 
           iconSrc={iconMaxScore}
           label="Макс. балл:" 
           value={<span className="max-score">{assignment.maxScore}</span>} 
@@ -225,6 +221,11 @@ const AssignmentCard = ({
                 <span className="score-value">
                   {assignment.score}<span className="score-separator">/</span>{assignment.maxScore}
                 </span>
+                {gradeLabel && (
+                  <span className="score-grade-label">
+                    {gradeLabel}
+                  </span>
+                )}
                 <span className="score-percent">
                   {Math.round((Number(assignment.score) / Number(assignment.maxScore)) * 100)}%
                 </span>

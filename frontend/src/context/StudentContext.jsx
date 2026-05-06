@@ -3,9 +3,35 @@ import { useAuth } from './AuthContext';
 import api from '../services/api';
 import { getAllowedFormatsFromAssignment, PAGINATION_DEFAULTS } from '../utils';
 
+const formatAssignmentTeacherDisplay = (teacher) => {
+  if (teacher == null) {
+    return '';
+  }
+  if (typeof teacher === 'string') {
+    return teacher;
+  }
+  if (typeof teacher === 'object') {
+    const full =
+      teacher.fullName
+      ?? teacher.full_name
+      ?? [teacher.lastName ?? teacher.last_name, teacher.firstName ?? teacher.first_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+    if (full) {
+      return full;
+    }
+    if (teacher.login) {
+      return String(teacher.login);
+    }
+  }
+  return '';
+};
+
 export const normalizeStudentAssignment = (assignment) => ({
   ...assignment,
   subject: assignment.subject || assignment.subjectRelation?.name || '',
+  teacher: formatAssignmentTeacherDisplay(assignment.teacher),
   studentGroups: assignment.studentGroups || assignment.groups?.map((g) => g.name) || [],
   allowedFormats: getAllowedFormatsFromAssignment(assignment),
   materialFiles: assignment.materialFiles || assignment.materialItems || [],
@@ -19,7 +45,6 @@ const normalizeAssignment = normalizeStudentAssignment;
 const areQueriesEqual = (a = {}, b = {}) =>
   a.page === b.page
   && a.perPage === b.perPage
-  && a.sort === b.sort
   && (a.search || '') === (b.search || '')
   && (a.status || 'all') === (b.status || 'all')
   && (a.subjectId || 'all') === (b.subjectId || 'all')
@@ -44,7 +69,6 @@ export const StudentProvider = ({ children }) => {
   const [assignmentsQuery, setAssignmentsQuery] = useState({
     page: 1,
     perPage: PAGINATION_DEFAULTS.studentAssignments,
-    sort: 'priority',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -63,7 +87,6 @@ export const StudentProvider = ({ children }) => {
       assignmentsQueryRef.current = {
         page: 1,
         perPage: PAGINATION_DEFAULTS.studentAssignments,
-        sort: 'priority',
       };
       setAssignmentsQuery(assignmentsQueryRef.current);
       setAssignments([]);
@@ -75,11 +98,11 @@ export const StudentProvider = ({ children }) => {
 
   const loadStudentData = useCallback(async (queryOverrides = {}, options = {}) => {
     const includeSubmissions = Boolean(options.includeSubmissions);
+    const silent = Boolean(options.silent);
     const currentQuery = assignmentsQueryRef.current;
     const nextQuery = {
       page: 1,
       perPage: PAGINATION_DEFAULTS.studentAssignments,
-      sort: 'priority',
       ...currentQuery,
       ...queryOverrides,
     };
@@ -87,7 +110,6 @@ export const StudentProvider = ({ children }) => {
     const params = {
       page: nextQuery.page,
       per_page: nextQuery.perPage,
-      sort: nextQuery.sort,
       search: nextQuery.search || undefined,
       status: nextQuery.status && nextQuery.status !== 'all' ? nextQuery.status : undefined,
       subject_id: nextQuery.subjectId && nextQuery.subjectId !== 'all' ? nextQuery.subjectId : undefined,
@@ -121,7 +143,11 @@ export const StudentProvider = ({ children }) => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     inFlightQueryKeyRef.current = queryKey;
-    setLoading(true);
+    let toggledLoading = false;
+    if (!silent) {
+      setLoading(true);
+      toggledLoading = true;
+    }
     setError(null);
     try {
       const requests = [api.get('/assignments', { params })];
@@ -167,14 +193,14 @@ export const StudentProvider = ({ children }) => {
       if (requestId === requestIdRef.current) {
         inFlightQueryKeyRef.current = null;
       }
-      if (requestId === requestIdRef.current) {
+      if (toggledLoading && requestId === requestIdRef.current) {
         setLoading(false);
       }
     }
   }, []);
 
-  const loadStudentAssignments = useCallback(async (queryOverrides = {}) => {
-    return loadStudentData(queryOverrides);
+  const loadStudentAssignments = useCallback(async (queryOverrides = {}, fetchOptions = {}) => {
+    return loadStudentData(queryOverrides, fetchOptions);
   }, [loadStudentData]);
 
   const submitWork = useCallback(async (assignmentId, file) => {

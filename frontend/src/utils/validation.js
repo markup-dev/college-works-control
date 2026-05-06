@@ -200,19 +200,33 @@ export const validateAssignmentForm = (formData) => {
     }
   }
 
-  const maxScore = Number(formData.maxScore);
-  if (!formData.maxScore || Number.isNaN(maxScore) || maxScore <= 0) {
-    errors.maxScore = 'Максимальный балл должен быть положительным числом';
-  } else if (!Number.isInteger(maxScore)) {
-    errors.maxScore = 'Максимальный балл должен быть целым числом';
-  } else if (maxScore > 1000) {
-    errors.maxScore = 'Максимальный балл не должен превышать 1000';
-  }
-
   if (!formData.studentGroups || !Array.isArray(formData.studentGroups) || formData.studentGroups.length === 0) {
     errors.studentGroups = 'Выберите хотя бы одну группу';
   } else if (formData.studentGroups.some((group) => !GROUP_REGEX.test((group || '').trim()))) {
     errors.studentGroups = 'Некорректное название группы в списке';
+  }
+
+  const criteria = Array.isArray(formData.criteria)
+    ? formData.criteria
+        .map((criterion) => ({
+          text: typeof criterion === 'string' ? criterion.trim() : (criterion?.text || '').trim(),
+          maxPoints: Number(typeof criterion === 'string' ? 0 : criterion?.maxPoints),
+        }))
+        .filter((criterion) => criterion.text)
+    : [];
+
+  if (criteria.length > 0) {
+    const hasInvalidPoints = criteria.some((criterion) => !Number.isInteger(criterion.maxPoints) || criterion.maxPoints < 1);
+
+    if (hasInvalidPoints) {
+      errors.criteria = 'У каждого критерия должно быть минимум 1 балл';
+    } else {
+      const criteriaTotal = criteria.reduce((sum, criterion) => sum + criterion.maxPoints, 0);
+
+      if (criteriaTotal !== 100) {
+        errors.criteria = `Сумма баллов по критериям должна быть 100, сейчас ${criteriaTotal}`;
+      }
+    }
   }
 
   return {

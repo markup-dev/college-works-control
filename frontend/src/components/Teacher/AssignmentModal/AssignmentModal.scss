@@ -30,6 +30,9 @@
 }
 
 .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -130,6 +133,13 @@
       color: #1e3a8a;
       font-weight: 700;
     }
+
+    &__hint {
+      margin: -0.25rem 0 0.85rem;
+      color: #64748b;
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
     
     .section-header {
       display: flex;
@@ -158,6 +168,20 @@
   font-size: 0.72rem;
   font-weight: 700;
   padding: 0 0.35rem;
+}
+
+.criteria-total {
+  margin: -0.25rem 0 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+
+  &--valid {
+    color: #15803d;
+  }
+
+  &--invalid {
+    color: #b45309;
+  }
 }
 
 .form-row {
@@ -199,7 +223,7 @@
   }
   
   .form-textarea {
-    resize: vertical;
+    resize: none;
     min-height: 92px;
     
     &::placeholder {

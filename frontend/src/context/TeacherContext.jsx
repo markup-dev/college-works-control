@@ -89,6 +89,8 @@ const areQueriesEqual = (a = {}, b = {}) =>
   && a.sort === b.sort
   && (a.search || '') === (b.search || '')
   && (a.status || 'all') === (b.status || 'all')
+  && (a.workFilter || 'all') === (b.workFilter || 'all')
+  && (a.assignmentDeadlineFilter || 'all') === (b.assignmentDeadlineFilter || 'all')
   && (a.deadlineFilter || 'all') === (b.deadlineFilter || 'all')
   && (a.subjectId || 'all') === (b.subjectId || 'all')
   && (a.assignmentId || 'all') === (b.assignmentId || 'all')
@@ -112,7 +114,7 @@ export const TeacherProvider = ({ children }) => {
   const [assignmentsQuery, setAssignmentsQuery] = useState({
     page: 1,
     perPage: PAGINATION_DEFAULTS.teacherAssignments,
-    sort: 'priority',
+    sort: 'deadline',
   });
   const [submissionsQuery, setSubmissionsQuery] = useState({
     page: 1,
@@ -135,7 +137,7 @@ export const TeacherProvider = ({ children }) => {
     const nextQuery = {
       page: 1,
       perPage: PAGINATION_DEFAULTS.teacherAssignments,
-      sort: 'priority',
+      sort: 'deadline',
       ...currentQuery,
       ...queryOverrides,
     };
@@ -147,6 +149,11 @@ export const TeacherProvider = ({ children }) => {
       group: nextQuery.group && nextQuery.group !== 'all' ? nextQuery.group : undefined,
       subject_id: nextQuery.subjectId && nextQuery.subjectId !== 'all' ? nextQuery.subjectId : undefined,
       status: nextQuery.status && nextQuery.status !== 'all' ? nextQuery.status : undefined,
+      work_filter: nextQuery.workFilter && nextQuery.workFilter !== 'all' ? nextQuery.workFilter : undefined,
+      deadline_filter:
+        nextQuery.assignmentDeadlineFilter && nextQuery.assignmentDeadlineFilter !== 'all'
+          ? nextQuery.assignmentDeadlineFilter
+          : undefined,
     };
 
     setLoading(true);
@@ -339,7 +346,6 @@ export const TeacherProvider = ({ children }) => {
         submissionType: payload.submissionType || 'file',
         criteria: payload.criteria || [],
         studentGroups: payload.studentGroups || [],
-        priority: payload.priority || 'medium',
         allowedFormats: payload.allowedFormats || DEFAULT_ALLOWED_FORMATS,
         maxFileSize: payload.maxFileSize || null,
       });

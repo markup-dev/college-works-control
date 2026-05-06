@@ -97,7 +97,12 @@ const FileDropzone = ({
         >
           {buttonText}
         </Button>
-        <span className="file-dropzone__text">или перетащите файл сюда</span>
+        <span className="file-dropzone__text file-dropzone__text--drag-hint">
+          или перетащите файл сюда
+        </span>
+        <span className="file-dropzone__text file-dropzone__text--tap-hint">
+          Нажмите кнопку или пунктирную область — откроется выбор файла.
+        </span>
       </div>
 
       {hint && <p className="file-dropzone__hint">{hint}</p>}

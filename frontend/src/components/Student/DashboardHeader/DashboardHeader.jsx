@@ -7,8 +7,6 @@ const DashboardHeader = ({
   subtitle = "Управление учебными работами",
   searchTerm = "",
   onSearchChange,
-  sortBy = "priority",
-  onSortChange,
   activeFilter = "all",
   filters = [],
   filterCounts = {},
@@ -24,7 +22,6 @@ const DashboardHeader = ({
   attentionAssignments = { retakes: [], deadlines: [] },
   onOpenAttentionAssignment,
   className = "",
-  loading = false
 }) => {
   return (
     <div className={`dashboard-header ${className}`}>
@@ -49,8 +46,6 @@ const DashboardHeader = ({
         onFilterChange={onFilterChange}
         searchTerm={searchTerm}
         onSearchChange={onSearchChange}
-        sortBy={sortBy}
-        onSortChange={onSortChange}
         subjectFilter={subjectFilter}
         onSubjectFilterChange={onSubjectFilterChange}
         availableSubjects={availableSubjects}
@@ -58,7 +53,6 @@ const DashboardHeader = ({
         onTeacherFilterChange={onTeacherFilterChange}
         availableTeachers={availableTeachers}
         onResetFilters={onResetFilters}
-        loading={loading}
       />
     </div>
   );

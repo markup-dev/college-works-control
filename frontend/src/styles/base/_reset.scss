@@ -20,6 +20,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+textarea {
+  resize: none;
+}
+
 #root {
   height: 100%;
 }
@@ -27,11 +31,25 @@ body {
 .App {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
 }
 
+/* main: минимум на весь экран; футер идёт ниже — вне первого экрана, до него скролл */
 .main-content {
-  flex: 1 0 auto;
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.App:has(.header) .main-content {
+  min-height: calc(100vh - 70px);
+  min-height: calc(100dvh - 70px);
+}
+
+/* Корневой элемент маршрута заполняет main (скролл внутри страниц при необходимости) */
+.main-content > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
 }

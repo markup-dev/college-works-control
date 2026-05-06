@@ -3,7 +3,6 @@ import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
 import { 
   getAssignmentStatusInfo, 
-  getPriorityInfo, 
   formatDate,
   calculateSubmissionStats 
 } from '../../../utils';
@@ -20,7 +19,6 @@ const AssignmentCard = React.memo(({
     subject,
     description,
     status,
-    priority,
     deadline,
     createdAt,
     submissions = [],
@@ -29,7 +27,6 @@ const AssignmentCard = React.memo(({
 
   const stats = calculateSubmissionStats(submissions, assignment);
   const statusInfo = getAssignmentStatusInfo(status);
-  const priorityInfo = getPriorityInfo(priority);
   const canViewSubmissions = status !== 'inactive';
   const isDraft = status === 'draft';
 
@@ -121,12 +118,6 @@ const AssignmentCard = React.memo(({
               </span>
             )}
           </div>
-
-          <div className="assignment-meta-secondary">
-            <span className={`priority-info priority-info--${priority || 'medium'}`}>
-              {priorityInfo.label}
-            </span>
-          </div>
         </div>
         
         <div className="assignment-status">
@@ -167,33 +158,28 @@ const AssignmentCard = React.memo(({
 const SubmissionProgress = React.memo(({ stats }) => (
   <div className="submissions-progress">
     <div className="progress-header">
-      <span className="progress-title">Прогресс сдачи:</span>
-      <span className="completion-rate">{stats.completionRate}%</span>
+      <span>Прогресс сдачи</span>
+      <span className="progress-percentage">{stats.completionRate}%</span>
     </div>
-    
     <div className="progress-bar">
-      <div 
-        className="progress-fill" 
+      <div
+        className="progress-fill"
         style={{ width: `${stats.completionRate}%` }}
-      ></div>
+        aria-hidden="true"
+      />
     </div>
-    
-    <div className="progress-stats">
-      <div className="progress-numbers">
-        <span className="submitted-count">{stats.submitted}</span>
-        <span className="progress-separator">/</span>
-        <span className="total-count">{stats.total}</span>
-        <span className="progress-label">студентов</span>
-      </div>
-      
-      <div className="progress-details">
-        {stats.graded > 0 && (
-          <span className="graded-count">{stats.graded} проверено</span>
-        )}
-        {stats.pending > 0 && (
-          <span className="pending-count">{stats.pending} ожидают</span>
-        )}
-      </div>
+    <div className={`assignment-state-line${stats.pending > 0 ? ' has-pending' : ''}`}>
+      <span className="assignment-state-line__submitted">
+        <strong>{stats.submitted}/{stats.total}</strong> сдали
+      </span>
+      <span aria-hidden="true">·</span>
+      <span className="assignment-state-line__pending">
+        <strong>{stats.pending}</strong> ждут проверки
+      </span>
+      <span aria-hidden="true">·</span>
+      <span className="assignment-state-line__graded">
+        <strong>{stats.graded}</strong> проверено
+      </span>
     </div>
   </div>
 ));

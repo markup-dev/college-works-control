@@ -17,16 +17,6 @@ export const getAssignmentStatusInfo = (assignmentOrStatus) => {
   return statusMap[status] || statusMap['not_submitted'];
 };
 
-export const getPriorityInfo = (priority) => {
-  const priorityMap = {
-    'high': { label: 'Высокий', color: '#dc3545', icon: '' },
-    'medium': { label: 'Средний', color: '#ffc107', icon: '' },
-    'low': { label: 'Низкий', color: '#28a745', icon: '' }
-  };
-  
-  return priorityMap[priority] || priorityMap['medium'];
-};
-
 export const getDaysUntilDeadline = (deadline) => {
   if (!deadline) return null;
   

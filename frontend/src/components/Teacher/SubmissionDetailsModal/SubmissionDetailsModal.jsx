@@ -19,6 +19,7 @@ const SubmissionDetailsModal = ({
   if (!isOpen || !submission) return null;
 
   const maxScore = assignment?.maxScore || submission.maxScore || 100;
+  const gradeLabel = submission.gradeLabel || submission.grade_label || null;
   const effectiveSubmissionType = assignment?.submissionType || submission.submissionType || 'file';
   const isDemoSubmission = effectiveSubmissionType === 'demo';
   const statusInfo = {
@@ -151,6 +152,11 @@ const SubmissionDetailsModal = ({
                 <span className="score-value">{submission.score}</span>
                 <span className="score-separator">/</span>
                 <span className="score-max">{maxScore}</span>
+                {gradeLabel && (
+                  <span className="score-grade-label">
+                    оценка {gradeLabel}
+                  </span>
+                )}
               </div>
               {(submission.teacherComment || submission.comment) && (
                 <div className="comment-section">

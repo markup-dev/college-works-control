@@ -6,6 +6,7 @@ use App\Models\Assignment;
 use App\Models\AssignmentAllowedFormat;
 use App\Models\Group;
 use App\Models\Subject;
+use App\Models\TeachingLoad;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -21,7 +22,6 @@ class SubmissionValidationTest extends TestCase
         $teacher = $this->createUser('teacher');
         $group = Group::create([
             'name' => 'Тест-' . uniqid(),
-            'teacher_id' => $teacher->id,
             'status' => 'active',
         ]);
         $student = $this->createUser('student', $group->id);
@@ -44,7 +44,6 @@ class SubmissionValidationTest extends TestCase
         $teacher = $this->createUser('teacher');
         $group = Group::create([
             'name' => 'Тест-' . uniqid(),
-            'teacher_id' => $teacher->id,
             'status' => 'active',
         ]);
         $student = $this->createUser('student', $group->id);
@@ -66,9 +65,17 @@ class SubmissionValidationTest extends TestCase
     {
         $subject = Subject::create([
             'name' => 'Тестовый предмет ' . uniqid(),
-            'teacher_id' => $teacherId,
             'status' => 'active',
         ]);
+
+        if ($group) {
+            TeachingLoad::create([
+                'teacher_id' => $teacherId,
+                'subject_id' => $subject->id,
+                'group_id' => $group->id,
+                'status' => 'active',
+            ]);
+        }
 
         $assignment = Assignment::create([
             'title' => 'Тестовое задание',
@@ -76,7 +83,6 @@ class SubmissionValidationTest extends TestCase
             'description' => 'Описание тестового задания для проверки валидации файлов.',
             'deadline' => now()->addDays(7)->toDateString(),
             'status' => 'active',
-            'priority' => 'medium',
             'max_score' => 100,
             'submission_type' => 'file',
             'max_file_size' => $maxFileSizeMb,

@@ -105,10 +105,30 @@ class ConversationController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
+        $scope = $request->query('scope', 'active');
+        if (! in_array($scope, ['active', 'archived'], true)) {
+            $scope = 'active';
+        }
+
         $conversations = Conversation::query()
-            ->where(function ($q) use ($user) {
-                $q->where('user_one_id', $user->id)
-                    ->orWhere('user_two_id', $user->id);
+            ->where(function ($q) use ($user, $scope) {
+                if ($scope === 'active') {
+                    $q->where(function ($q2) use ($user) {
+                        $q2->where('user_one_id', $user->id)
+                            ->whereNull('user_one_archived_at');
+                    })->orWhere(function ($q2) use ($user) {
+                        $q2->where('user_two_id', $user->id)
+                            ->whereNull('user_two_archived_at');
+                    });
+                } else {
+                    $q->where(function ($q2) use ($user) {
+                        $q2->where('user_one_id', $user->id)
+                            ->whereNotNull('user_one_archived_at');
+                    })->orWhere(function ($q2) use ($user) {
+                        $q2->where('user_two_id', $user->id)
+                            ->whereNotNull('user_two_archived_at');
+                    });
+                }
             })
             ->whereHas('messages')
             ->with(['userOne', 'userTwo'])
@@ -187,6 +207,11 @@ class ConversationController extends Controller
             ]);
 
             $conversation->touch();
+            if ((int) $conversation->user_one_id === (int) $me->id) {
+                $conversation->forceFill(['user_one_archived_at' => null])->save();
+            } else {
+                $conversation->forceFill(['user_two_archived_at' => null])->save();
+            }
 
             return [$conversation, $message];
         });
@@ -253,6 +278,11 @@ class ConversationController extends Controller
         ]);
 
         $conversation->touch();
+        if ((int) $conversation->user_one_id === (int) $user->id) {
+            $conversation->forceFill(['user_one_archived_at' => null])->save();
+        } else {
+            $conversation->forceFill(['user_two_archived_at' => null])->save();
+        }
 
         $message->load('sender:id,first_name,last_name,middle_name,role');
 
@@ -261,45 +291,34 @@ class ConversationController extends Controller
         ], 201);
     }
 
-    /**
-     * Удалить все сообщения в диалоге и сам диалог (история пропадает у обоих участников).
-     */
-    public function destroyConversationMessages(Request $request, Conversation $conversation)
+    public function archive(Request $request, Conversation $conversation)
     {
         $user = $request->user();
         if (! $conversation->involvesUser($user)) {
             return response()->json(['message' => 'Доступ запрещён'], 403);
         }
 
-        DB::transaction(function () use ($conversation) {
-            Message::query()->where('conversation_id', $conversation->id)->delete();
-            $conversation->delete();
-        });
+        if ((int) $conversation->user_one_id === (int) $user->id) {
+            $conversation->forceFill(['user_one_archived_at' => now()])->save();
+        } else {
+            $conversation->forceFill(['user_two_archived_at' => now()])->save();
+        }
 
         return response()->json(['success' => true]);
     }
 
-    /**
-     * Удалить все диалоги текущего пользователя вместе с сообщениями.
-     */
-    public function destroyAllMessages(Request $request)
+    public function unarchive(Request $request, Conversation $conversation)
     {
         $user = $request->user();
-        $conversationIds = Conversation::query()
-            ->where(function ($q) use ($user) {
-                $q->where('user_one_id', $user->id)
-                    ->orWhere('user_two_id', $user->id);
-            })
-            ->pluck('id');
-
-        if ($conversationIds->isEmpty()) {
-            return response()->json(['success' => true]);
+        if (! $conversation->involvesUser($user)) {
+            return response()->json(['message' => 'Доступ запрещён'], 403);
         }
 
-        DB::transaction(function () use ($conversationIds) {
-            Message::query()->whereIn('conversation_id', $conversationIds)->delete();
-            Conversation::query()->whereIn('id', $conversationIds)->delete();
-        });
+        if ((int) $conversation->user_one_id === (int) $user->id) {
+            $conversation->forceFill(['user_one_archived_at' => null])->save();
+        } else {
+            $conversation->forceFill(['user_two_archived_at' => null])->save();
+        }
 
         return response()->json(['success' => true]);
     }

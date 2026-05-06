@@ -4,6 +4,7 @@ import Card from '../../components/UI/Card/Card';
 import Button from '../../components/UI/Button/Button';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { DEFAULT_GRADE_SCALE, getGradeLabelForScore, normalizeGradeScale } from '../../utils';
 import './Profile.scss';
 
 const roleConfig = {
@@ -41,6 +42,7 @@ const getInitialProfileState = (user) => ({
   login: user?.login || '',
   email: user?.email || '',
   phone: user?.phone || '',
+  gradeScale: normalizeGradeScale(user?.gradeScale),
   notifications: {
     email: user?.notifications?.email ?? true
   }
@@ -100,6 +102,48 @@ const Profile = () => {
     }
   };
 
+  const handleGradeScaleChange = (index, field, value) => {
+    setProfileData((prev) => ({
+      ...prev,
+      gradeScale: prev.gradeScale.map((item, itemIndex) => (
+        itemIndex === index
+          ? {
+            ...item,
+            [field]: field === 'minScore'
+              ? Number(String(value).replace(/[^\d]/g, '').slice(0, 3))
+              : value,
+          }
+          : item
+      )),
+    }));
+
+    if (profileErrors.gradeScale) {
+      setProfileErrors((prev) => ({ ...prev, gradeScale: '' }));
+    }
+  };
+
+  const addGradeScaleRow = () => {
+    setProfileData((prev) => ({
+      ...prev,
+      gradeScale: [...prev.gradeScale, { label: '4+', minScore: 80 }],
+    }));
+  };
+
+  const removeGradeScaleRow = (index) => {
+    setProfileData((prev) => ({
+      ...prev,
+      gradeScale: prev.gradeScale.filter((_, itemIndex) => itemIndex !== index),
+    }));
+  };
+
+  const resetGradeScale = () => {
+    setProfileData((prev) => ({
+      ...prev,
+      gradeScale: DEFAULT_GRADE_SCALE,
+    }));
+    setProfileErrors((prev) => ({ ...prev, gradeScale: '' }));
+  };
+
   const validateProfile = () => {
     const { validateProfileForm } = require('../../utils/validation');
     const trimmedProfileData = {
@@ -117,6 +161,24 @@ const Profile = () => {
     
     if (!trimmedProfileData.login.trim()) {
       errors.login = 'Логин обязателен';
+    }
+
+    if (user?.role === 'teacher') {
+      const scaleRows = Array.isArray(profileData.gradeScale) ? profileData.gradeScale : [];
+      const hasInvalidRow = scaleRows.some((item) => {
+        const label = String(item?.label || '').trim();
+        const minScore = Number(item?.minScore);
+        return !/^[1-5][+-]?$/.test(label) || !Number.isInteger(minScore) || minScore < 0 || minScore > 100;
+      });
+
+      if (scaleRows.length === 0) {
+        errors.gradeScale = 'Добавьте хотя бы один порог оценки';
+      } else if (hasInvalidRow) {
+        errors.gradeScale = 'Оценка должна быть от 1 до 5, можно с +/-. Порог — целое число от 0 до 100';
+      }
+      if (!scaleRows.some((item) => Number(item?.minScore) === 0)) {
+        errors.gradeScale = 'Добавьте нижний порог от 0 баллов';
+      }
     }
 
     return {
@@ -164,11 +226,18 @@ const Profile = () => {
       notifications: profileData.notifications
     };
 
+    if (user?.role === 'teacher') {
+      payload.gradeScale = normalizeGradeScale(profileData.gradeScale);
+    }
+
     return payload;
   };
 
   const handleProfileSubmit = async (event) => {
     event.preventDefault();
+    if (savingProfile) {
+      return;
+    }
     const validation = validateProfile();
     if (!validation.isValid) {
       setProfileErrors(validation.errors);
@@ -176,19 +245,25 @@ const Profile = () => {
     }
 
     setSavingProfile(true);
-    const result = await updateProfile(buildProfilePayload());
-    setSavingProfile(false);
+    try {
+      const result = await updateProfile(buildProfilePayload());
 
-    if (result?.success) {
-      showSuccess('Профиль успешно обновлён');
-      setProfileErrors({});
-    } else {
-      showError(result?.error || 'Не удалось сохранить профиль');
+      if (result?.success) {
+        showSuccess('Профиль успешно обновлён');
+        setProfileErrors({});
+      } else {
+        showError(result?.error || 'Не удалось сохранить профиль');
+      }
+    } finally {
+      setSavingProfile(false);
     }
   };
 
   const handlePasswordSubmit = async (event) => {
     event.preventDefault();
+    if (savingPassword) {
+      return;
+    }
     const validation = validatePassword();
     if (!validation.isValid) {
       setPasswordErrors(validation.errors);
@@ -196,19 +271,22 @@ const Profile = () => {
     }
 
     setSavingPassword(true);
-    const result = await changePassword(passwordData.currentPassword, passwordData.newPassword);
-    setSavingPassword(false);
+    try {
+      const result = await changePassword(passwordData.currentPassword, passwordData.newPassword);
 
-    if (result?.success) {
-      showSuccess('Пароль успешно изменён');
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      });
-      setPasswordErrors({});
-    } else {
-      showError(result?.error || 'Не удалось сменить пароль');
+      if (result?.success) {
+        showSuccess('Пароль успешно изменён');
+        setPasswordData({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        });
+        setPasswordErrors({});
+      } else {
+        showError(result?.error || 'Не удалось сменить пароль');
+      }
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -249,7 +327,10 @@ const Profile = () => {
   return (
     <div className="profile-page app-page">
       <div className="profile-page__container">
-        <section className="profile-hero" style={{ borderColor: currentRoleConfig.accent }}>
+        <section
+          className={`profile-hero profile-hero--${user?.role || 'student'}`}
+          style={{ borderColor: currentRoleConfig.accent }}
+        >
           <div className="profile-hero__info">
             <div className="profile-avatar" style={{ color: currentRoleConfig.accent }}>
               {initials}
@@ -269,7 +350,7 @@ const Profile = () => {
         </section>
 
         <div className="profile-grid app-reveal-stagger">
-          <Card className="profile-card profile-card--wide">
+          <Card className="profile-card profile-card--personal">
             <div className="profile-card__header">
               <div>
                 <p className="profile-card__eyebrow">Основные данные</p>
@@ -357,8 +438,8 @@ const Profile = () => {
                       className="profile-notification-toggle__hint"
                       id="profile-email-notif-hint"
                     >
-                      Отправлять письма о новых заданиях, сроках, сдаче работ и проверке на адрес выше.
-                      Внутри портала уведомления по-прежнему доступны в колокольчике.
+                      Письма о заданиях, сроках и проверках — на email выше. В портале колокольчик по-прежнему
+                      работает.
                     </p>
                   </div>
                   <input
@@ -390,7 +471,7 @@ const Profile = () => {
             </form>
           </Card>
 
-          <Card className="profile-card">
+          <Card className="profile-card profile-card--password">
             <div className="profile-card__header">
               <div>
                 <p className="profile-card__eyebrow">Безопасность</p>
@@ -456,6 +537,83 @@ const Profile = () => {
               </div>
             </form>
           </Card>
+
+          {user?.role === 'teacher' && (
+            <Card className="profile-card profile-card--wide profile-card--grade-scale">
+              <div className="profile-card__header">
+                <div>
+                  <p className="profile-card__eyebrow">Система оценивания</p>
+                  <h2>Шкала перевода 100 баллов</h2>
+                </div>
+                <p className="profile-card__hint">
+                  Укажите, с какого количества баллов начинается каждая оценка. Можно использовать плюс и минус: 5-, 4+, 3-.
+                </p>
+              </div>
+
+              <form className="profile-form profile-grade-scale-form" onSubmit={handleProfileSubmit}>
+                <div className="profile-grade-scale">
+                  <div className="profile-grade-scale__preview">
+                    <span>Пример:</span>
+                    <strong>86 баллов = {getGradeLabelForScore(86, profileData.gradeScale) || '—'}</strong>
+                  </div>
+
+                  <div className="profile-grade-scale__rows">
+                    {profileData.gradeScale.map((item, index) => (
+                      <div className="profile-grade-scale__row" key={`${item.label}-${index}`}>
+                        <label className="profile-grade-scale__field profile-grade-scale__field--label">
+                          <span>Оценка</span>
+                          <input
+                            className="profile-grade-scale__input profile-grade-scale__input--label"
+                            type="text"
+                            value={item.label}
+                            onChange={(e) => handleGradeScaleChange(index, 'label', e.target.value)}
+                            placeholder="4+"
+                            maxLength={3}
+                          />
+                        </label>
+                        <label className="profile-grade-scale__field profile-grade-scale__field--score">
+                          <span>От баллов</span>
+                          <input
+                            className="profile-grade-scale__input profile-grade-scale__input--score"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={item.minScore}
+                            onChange={(e) => handleGradeScaleChange(index, 'minScore', e.target.value)}
+                            placeholder="0-100"
+                          />
+                        </label>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="small"
+                          className="profile-grade-scale__remove"
+                          onClick={() => removeGradeScaleRow(index)}
+                          disabled={profileData.gradeScale.length <= 1}
+                        >
+                          Убрать
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {profileErrors.gradeScale && <span className="field-error">{profileErrors.gradeScale}</span>}
+
+                  <div className="profile-grade-scale__actions">
+                    <Button type="button" variant="secondary" onClick={addGradeScaleRow}>
+                      Добавить порог
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={resetGradeScale}>
+                      Вернуть стандартную шкалу
+                    </Button>
+                    <Button type="submit" variant="primary" loading={savingProfile}>
+                      Сохранить шкалу
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            </Card>
+          )}
         </div>
       </div>
     </div>

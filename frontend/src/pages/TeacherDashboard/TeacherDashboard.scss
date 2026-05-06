@@ -155,68 +155,89 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
-  
+
   h2 {
     font-size: 1.5rem;
     font-weight: 600;
     color: #333;
     margin: 0;
   }
-  
-  .filters {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-
-    .search-box {
-      flex: 1;
-      min-width: 250px;
-      
-      .search-input {
-        width: 100%;
-        padding: 0.75rem 1rem;
-        border: 2px solid #e1e5e9;
-        border-radius: 10px;
-        font-size: 0.95rem;
-        transition: all 0.3s ease;
-        background: white;
-        
-        &:focus {
-          outline: none;
-          border-color: #2c5aa0;
-          box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.1);
-        }
-        
-        &::placeholder {
-          color: #999;
-        }
-      }
-    }
-
-    .filter-select {
-      padding: 0.75rem 1rem;
-      border: 2px solid #e1e5e9;
-      border-radius: 10px;
-      font-size: 0.95rem;
-      background: white;
-      cursor: pointer;
-      min-width: 150px;
-      transition: all 0.3s ease;
-      flex-shrink: 0;
-      
-      &:focus {
-        outline: none;
-        border-color: #2c5aa0;
-        box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.1);
-      }
-    }
-  }
 }
 
 .teacher-dashboard .filters-section {
   margin-bottom: 2rem;
+}
+
+.teacher-dashboard .teacher-filter-toolbar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.teacher-dashboard .teacher-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0.68rem 1rem;
+  border: 1px solid #dbe3ee;
+  border-left: 3px solid #3b82f6;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+
+  &:hover:not(:disabled) {
+    border-color: #93b0da;
+    background: #f8fafc;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+
+  &--open {
+    border-color: #93b0da;
+    background: #eff6ff;
+  }
+}
+
+.teacher-dashboard .teacher-filter-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  min-width: min(340px, calc(100vw - 2.5rem));
+  padding: 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.teacher-dashboard .teacher-filter-field {
+  width: 100%;
+}
+
+.teacher-dashboard .teacher-filter-popover__label {
+  display: block;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.teacher-dashboard .teacher-filter-popover select {
+  width: 100%;
 }
 
 .teacher-dashboard .assignments-group {
@@ -232,6 +253,55 @@
 
 .teacher-dashboard .assignments-group--completed .assignments-group__title {
   color: #475569;
+}
+
+.teacher-dashboard .assignment-quick-filter-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.teacher-dashboard .assignment-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.teacher-dashboard .assignment-quick-filters__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  border: 1px solid #dbe3ee;
+  border-radius: 25px;
+  background: #ffffff;
+  color: #666;
+  padding: 0.62rem 1rem;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: #9db7dd;
+    color: #2f4f7d;
+    transform: none;
+    box-shadow: none;
+  }
+
+  &.is-active {
+    border-color: #3f6cab;
+    background: #3f6cab;
+    color: #ffffff;
+    transform: none;
+    box-shadow: 0 1px 4px rgba(44, 90, 160, 0.18);
+  }
 }
 
 .teacher-dashboard .assignments-grid {
@@ -317,274 +387,41 @@
   100% { transform: rotate(360deg); }
 }
 
-.teacher-dashboard .assignments-section,
-.teacher-dashboard .submissions-section {
-  .filters-section {
-    .controls-row {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      flex-wrap: wrap;
-      width: 100%;
-      
-      .search-box {
-        flex: 1;
-        min-width: 200px;
-        
-        .search-input {
-          width: 100%;
-          padding: 0.75rem 1rem;
-          border: 2px solid #e1e5e9;
-          border-radius: 10px;
-          font-size: 0.95rem;
-          transition: all 0.3s ease;
-          background: white;
-          
-          &:focus {
-            outline: none;
-            border-color: #2c5aa0;
-            box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.1);
-          }
-        }
-      }
-      
-      .sort-filter {
-        flex-shrink: 0;
-        
-        .filter-select,
-        .sort-select {
-          padding: 0.75rem 1rem;
-          border: 2px solid #e1e5e9;
-          border-radius: 10px;
-          font-size: 0.95rem;
-          background: white;
-          cursor: pointer;
-          min-width: 180px;
-          transition: all 0.3s ease;
-          
-          &:focus {
-            outline: none;
-            border-color: #2c5aa0;
-            box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.1);
-          }
-          
-          &.group-filter {
-            border-left: 3px solid #10b981;
-          }
-          
-          &.assignment-filter {
-            border-left: 3px solid #3b82f6;
-          }
-          
-          &.status-filter {
-            border-left: 3px solid #f59e0b;
-          }
-          
-          &.sort-filter {
-            border-left: 3px solid #8b5cf6;
-          }
-        }
-      }
-    }
-  }
-}
-
-.teacher-dashboard .submissions-section {
-  .section-header {
-    .filters:not(.filters--stacked) {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-      flex-wrap: wrap;
-      width: 80%;
-      
-      .search-box {
-        flex: 1;
-        min-width: 200px;
-      }
-      
-      .filter-select {
-        min-width: 150px;
-        border-left: 3px solid;
-        
-        &:nth-child(2) { // assignment filter
-          border-left-color: #3b82f6;
-        }
-        
-        &:nth-child(3) { // group filter  
-          border-left-color: #10b981;
-        }
-        
-        &:nth-child(4) { // status filter
-          border-left-color: #f59e0b;
-        }
-      }
-    }
-  }
-}
-
-@media (max-width: 1200px) {
-  .teacher-dashboard .stats-overview {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 1024px) {
-  .teacher-dashboard .section-header .filters {
-    gap: 0.75rem;
-    
-    .search-box {
-      min-width: 200px;
-    }
-    
-    .filter-select {
-      min-width: 140px;
-    }
-  }
-  
-  .teacher-dashboard .assignments-section,
-  .teacher-dashboard .submissions-section {
-    .filters-section .controls-row {
-      .search-box {
-        min-width: 180px;
-      }
-      
-      .sort-filter .filter-select,
-      .sort-filter .sort-select {
-        min-width: 160px;
-      }
-    }
-  }
-}
-
-@media (max-width: 768px) {
-  .teacher-dashboard .dashboard-content {
-    padding: 1rem;
-  }
-
-  .teacher-dashboard .error-state {
-    margin: 24px 0;
-    padding: 22px 16px;
-
-    h3 {
-      font-size: 1.35rem;
-    }
-  }
-  
-  .teacher-dashboard .section-header {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: stretch;
-    
-    .filters {
-      flex-direction: column;
-      gap: 1rem;
-      
-      .search-box {
-        min-width: auto;
-        order: 1;
-      }
-      
-      .filter-select {
-        min-width: auto;
-        width: 100%;
-        order: 2;
-      }
-    }
-  }
-  
-  .teacher-dashboard .assignments-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .teacher-dashboard .assignments-section,
-  .teacher-dashboard .submissions-section {
-    .filters-section .controls-row {
-      flex-direction: column;
-      gap: 1rem;
-      
-      .search-box {
-        min-width: auto;
-        width: 100%;
-        order: 1;
-      }
-      
-      .sort-filter {
-        width: 100%;
-        order: 2;
-        
-        .filter-select,
-        .sort-select {
-          min-width: auto;
-          width: 100%;
-        }
-      }
-    }
-  }
-  
-  .teacher-dashboard .submissions-section .section-header .filters {
-    flex-direction: column;
-    
-    .search-box,
-    .filter-select {
-      width: 100%;
-    }
-  }
-}
-
-@media (max-width: 640px) {
-  .teacher-dashboard .section-header .filters {
-    gap: 0.75rem;
-  }
-  
-  .teacher-dashboard .search-input,
-  .teacher-dashboard .filter-select,
-  .teacher-dashboard .sort-select {
-    padding: 0.625rem 0.875rem;
-    font-size: 0.9rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .teacher-dashboard .section-header h2 {
-    font-size: 1.25rem;
-  }
-}
-
 .teacher-dashboard {
   .search-input,
   .filter-select,
-  .sort-select {
-    font-family: inherit;
-    
+  .teacher-submissions-search-input,
+  .teacher-submissions-select {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid #d7dfeb;
+    border-radius: 10px;
+    padding: 0.62rem 0.8rem;
+    background: #fff;
+    color: #0f172a;
+    font: inherit;
+    font-size: 0.92rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+
     &:hover {
-      border-color: #cbd5e1;
+      border-color: #c8d4e5;
+    }
+
+    &:focus,
+    &:focus-visible {
+      border-color: #2c5aa0;
+      box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.12);
+      outline: none;
     }
   }
 
-  .search-input,
   .filter-select,
-  .sort-select {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    
-    &:hover {
-      transform: translateY(-1px);
-    }
-  }
-
-  .search-input:focus-visible,
-  .filter-select:focus-visible,
-  .sort-select:focus-visible {
-    outline: 2px solid #2c5aa0;
-    outline-offset: 2px;
-  }
-
-  .filter-select,
-  .sort-select {
+  .teacher-submissions-select {
+    cursor: pointer;
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    overflow: hidden;
-    
+
     option {
       padding: 0.5rem;
       font-size: 0.9rem;
@@ -592,35 +429,30 @@
   }
 
   .group-filter {
-    border-left: 3px solid #10b981 !important;
+    border-left: 3px solid #10b981;
   }
 
   .assignment-filter {
-    border-left: 3px solid #3b82f6 !important;
+    border-left: 3px solid #3b82f6;
   }
 
   .status-filter {
-    border-left: 3px solid #f59e0b !important;
+    border-left: 3px solid #f59e0b;
   }
 
   .deadline-filter {
-    border-left: 3px solid #6366f1 !important;
+    border-left: 3px solid #6366f1;
   }
 
   .subject-filter {
-    border-left: 3px solid #8b5cf6 !important;
-  }
-
-  .teacher-filter {
-    border-left: 3px solid #ec4899 !important;
+    border-left: 3px solid #8b5cf6;
   }
 }
 
-/* Teacher-only semi-flat filters (does not affect student) */
 .teacher-dashboard {
-  .filters-section .controls-row {
+  .teacher-dashboard-filter-row {
     display: grid;
-    grid-template-columns: minmax(260px, 1fr) auto auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 0.75rem;
     align-items: center;
     padding: 0.85rem;
@@ -629,42 +461,13 @@
     background: #f8fafd;
   }
 
-  .search-box {
-    flex: 1;
-    min-width: 220px;
+  .teacher-dashboard-filter-search {
+    min-width: 0;
   }
 
-  .search-input,
-  .filter-select,
-  .sort-select {
-    border: 1px solid #d7dfeb;
-    border-radius: 10px;
-    padding: 0.62rem 0.8rem;
-    font-size: 0.92rem;
-    background: #fff;
-    box-shadow: none;
-    transform: none;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
-
-    &:hover {
-      transform: none;
-      border-color: #c8d4e5;
-    }
-
-    &:focus {
-      border-color: #2c5aa0;
-      box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.12);
-      outline: none;
-    }
-  }
-
-  .filter-select,
-  .sort-select {
-    min-width: 180px;
-  }
-
-  .filters-section .btn,
-  .submissions-section .section-header .filters .btn {
+  .teacher-dashboard-filter-reset-btn {
+    min-height: 42px;
+    justify-content: center;
     padding: 0.62rem 0.95rem;
     border-radius: 10px;
   }
@@ -676,90 +479,26 @@
     gap: 0.85rem;
 
     h2 {
-      text-align: left;
       align-self: flex-start;
+      text-align: left;
     }
   }
 
   .teacher-submissions-filters {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 0.85rem;
-    border: 1px solid #e7edf6;
-    border-radius: 12px;
-    background: #f8fafd;
     width: 100%;
-    margin: 0;
   }
 
-  .teacher-submissions-search-row,
-  .teacher-submissions-selects-row {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  .teacher-submissions-search-box {
-    flex: 1;
-    min-width: 260px;
-  }
-
-  .teacher-submissions-search-input {
-    width: 100%;
-    height: 42px;
-    border: 1px solid #d7dfeb;
-    border-radius: 10px;
-    padding: 0.62rem 0.8rem;
-    font-size: 0.92rem;
-    background: #fff;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
-
-    &:hover {
-      border-color: #c8d4e5;
-    }
-
-    &:focus {
-      border-color: #2c5aa0;
-      box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.12);
-      outline: none;
-    }
-  }
-
-  .teacher-submissions-select {
-    min-width: 180px;
-    height: 42px;
-    border: 1px solid #d7dfeb;
-    border-radius: 10px;
-    padding: 0.62rem 0.8rem;
-    font-size: 0.92rem;
-    background: #fff;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
-
-    &:hover {
-      border-color: #c8d4e5;
-    }
-
-    &:focus {
-      border-color: #2c5aa0;
-      box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.12);
-      outline: none;
-    }
-  }
-
-  .teacher-submissions-divider {
-    height: 1px;
-    width: 100%;
-    margin: 0.1rem 0;
-    background: linear-gradient(90deg, rgba(148, 163, 184, 0.15) 0%, rgba(148, 163, 184, 0.6) 50%, rgba(148, 163, 184, 0.15) 100%);
+  .teacher-submissions-search-row {
+    position: relative;
   }
 
   .teacher-submissions-reset-btn {
-    height: 42px;
     display: inline-flex;
     align-items: center;
+  }
+
+  .teacher-filter-popover .teacher-submissions-select {
+    min-width: 0;
   }
 
   .teacher-submissions-loading-note {
@@ -792,9 +531,9 @@
     justify-content: center;
     gap: 0.65rem;
     padding: 1.5rem;
+    border-radius: 14px;
     background: rgba(248, 250, 253, 0.78);
     backdrop-filter: blur(3px);
-    border-radius: 14px;
     pointer-events: auto;
 
     span {
@@ -1035,7 +774,7 @@
     border-radius: 8px;
     font-size: 0.95rem;
     font-family: inherit;
-    resize: vertical;
+    resize: none;
     min-height: 120px;
     box-sizing: border-box;
 
@@ -1196,36 +935,74 @@
   }
 }
 
-@media (max-width: 960px) {
-  .teacher-dashboard .filters-section .controls-row {
-    grid-template-columns: 1fr 1fr;
+@media (max-width: 768px) {
+  .teacher-dashboard .dashboard-content {
+    padding: 1rem;
   }
 
-  .teacher-dashboard {
-    .teacher-submissions-select {
-      flex: 1;
-      min-width: 180px;
+  .teacher-dashboard .section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .teacher-dashboard .assignments-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-dashboard .teacher-dashboard-filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teacher-dashboard .teacher-dashboard-filter-search {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .teacher-dashboard .teacher-dashboard-filter-row > .teacher-filter-toolbar {
+    grid-column: 1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .teacher-dashboard .teacher-dashboard-filter-reset-btn {
+    grid-column: 2;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .teacher-dashboard .teacher-dashboard-filter-row .teacher-filter-trigger {
+    width: 100%;
+  }
+
+  .teacher-dashboard .error-state {
+    margin: 24px 0;
+    padding: 22px 16px;
+
+    h3 {
+      font-size: 1.35rem;
     }
   }
 }
 
-@media (max-width: 768px) {
-  .teacher-dashboard .filters-section .controls-row {
+@media (max-width: 480px) {
+  .teacher-dashboard .section-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .teacher-dashboard .assignment-quick-filters__chip {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-width: calc(50% - 0.25rem);
+    justify-content: center;
+  }
+
+  .teacher-dashboard .teacher-dashboard-filter-row {
     grid-template-columns: 1fr;
   }
 
-  .teacher-dashboard {
-    .teacher-submissions-search-row,
-    .teacher-submissions-selects-row {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .teacher-submissions-search-box,
-    .teacher-submissions-select,
-    .teacher-submissions-reset-btn {
-      width: 100%;
-      min-width: 0;
-    }
+  .teacher-dashboard .teacher-dashboard-filter-search,
+  .teacher-dashboard .teacher-dashboard-filter-row > .teacher-filter-toolbar,
+  .teacher-dashboard .teacher-dashboard-filter-reset-btn {
+    grid-column: 1;
   }
 }

@@ -77,6 +77,9 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (isLoading) {
+      return;
+    }
 
     setErrors((prev) => ({ ...prev, submit: '' }));
     const validation = validateLoginForm(formData);

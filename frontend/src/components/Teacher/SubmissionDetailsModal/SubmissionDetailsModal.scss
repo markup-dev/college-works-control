@@ -26,6 +26,9 @@
   }
 
   .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -237,6 +240,7 @@
   .score-display-large {
     display: inline-flex;
     align-items: baseline;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 12px;
     padding: 10px 12px;
@@ -258,6 +262,16 @@
     .score-max {
       font-size: 1.25rem;
       color: #334155;
+    }
+
+    .score-grade-label {
+      align-self: center;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #1e40af;
+      font-size: 0.9rem;
+      font-weight: 700;
     }
   }
 
@@ -323,6 +337,9 @@
   }
 
   .modal-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
     display: flex;
     justify-content: flex-end;
     gap: 10px;

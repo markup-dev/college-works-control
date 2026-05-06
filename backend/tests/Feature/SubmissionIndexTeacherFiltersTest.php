@@ -7,6 +7,7 @@ use App\Models\AssignmentAllowedFormat;
 use App\Models\Group;
 use App\Models\Subject;
 use App\Models\Submission;
+use App\Models\TeachingLoad;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -21,7 +22,6 @@ class SubmissionIndexTeacherFiltersTest extends TestCase
         $teacher = $this->createUser('teacher');
         $group = Group::create([
             'name' => 'Тест-' . uniqid(),
-            'teacher_id' => $teacher->id,
             'status' => 'active',
         ]);
         $student = $this->createUser('student', $group->id);
@@ -55,7 +55,6 @@ class SubmissionIndexTeacherFiltersTest extends TestCase
         $teacher = $this->createUser('teacher');
         $group = Group::create([
             'name' => 'Тест-' . uniqid(),
-            'teacher_id' => $teacher->id,
             'status' => 'active',
         ]);
         $student = $this->createUser('student', $group->id);
@@ -90,7 +89,6 @@ class SubmissionIndexTeacherFiltersTest extends TestCase
         $teacher = $this->createUser('teacher');
         $group = Group::create([
             'name' => 'Тест-' . uniqid(),
-            'teacher_id' => $teacher->id,
             'status' => 'active',
         ]);
         $student = $this->createUser('student', $group->id);
@@ -129,9 +127,17 @@ class SubmissionIndexTeacherFiltersTest extends TestCase
     ): Assignment {
         $subject = Subject::create([
             'name' => 'Тестовый предмет ' . uniqid(),
-            'teacher_id' => $teacherId,
             'status' => 'active',
         ]);
+
+        if ($group) {
+            TeachingLoad::create([
+                'teacher_id' => $teacherId,
+                'subject_id' => $subject->id,
+                'group_id' => $group->id,
+                'status' => 'active',
+            ]);
+        }
 
         $assignment = Assignment::create([
             'title' => 'Тестовое задание',
@@ -139,7 +145,6 @@ class SubmissionIndexTeacherFiltersTest extends TestCase
             'description' => 'Описание.',
             'deadline' => $deadline ?? now()->addDays(7)->toDateString(),
             'status' => 'active',
-            'priority' => 'medium',
             'max_score' => 100,
             'submission_type' => 'file',
             'max_file_size' => $maxFileSizeMb,

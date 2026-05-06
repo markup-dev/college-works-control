@@ -20,6 +20,7 @@ const DashboardHeader = ({
     { key: 'users', label: 'Пользователи', icon: '👥', badge: totalUsers },
     { key: 'groups', label: 'Группы', icon: '🏷️', badge: totalGroups },
     { key: 'subjects', label: 'Предметы', icon: '📚', badge: totalSubjects },
+    { key: 'teaching-loads', label: 'Нагрузка', icon: '🧩', badge: null },
     { key: 'logs', label: 'Логи системы', icon: '📋', badge: null },
     { key: 'settings', label: 'Настройки', icon: '⚙️', badge: null },
   ];

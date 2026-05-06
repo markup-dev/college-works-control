@@ -4,6 +4,10 @@ const useDebouncedValue = (value, delay = 350) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
 
   useEffect(() => {
+    if (value === '') {
+      setDebouncedValue('');
+      return undefined;
+    }
     const timer = window.setTimeout(() => {
       setDebouncedValue(value);
     }, delay);

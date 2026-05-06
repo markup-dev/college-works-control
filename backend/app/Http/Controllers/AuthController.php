@@ -68,7 +68,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'user' => $user->load(['studentGroup.teacher']),
+            'user' => $user->load(['studentGroup']),
             'token' => $token,
         ]);
     }
@@ -82,7 +82,7 @@ class AuthController extends Controller
 
     public function profile(Request $request)
     {
-        return response()->json($request->user()->load(['studentGroup.teacher']));
+        return response()->json($request->user()->load(['studentGroup']));
     }
 
     public function updateProfile(Request $request)
@@ -111,6 +111,9 @@ class AuthController extends Controller
                 'phone' => ['nullable', 'string', 'regex:/^(\+7\s?\(?\d{3}\)?\s?\d{3}[- ]?\d{2}[- ]?\d{2}|8\(\d{3}\)\d{3}-\d{2}-\d{2})$/'],
                 'notifications' => ['nullable', 'array'],
                 'notifications.email' => ['nullable', 'boolean'],
+                'grade_scale' => ['nullable', 'array', 'max:20'],
+                'grade_scale.*.label' => ['required_with:grade_scale', 'string', 'max:3', 'regex:/^[1-5][+-]?$/u'],
+                'grade_scale.*.min_score' => ['required_with:grade_scale', 'integer', 'min:0', 'max:100'],
                 'department' => ['nullable', 'string', 'max:100'],
             ],
             [
@@ -127,6 +130,9 @@ class AuthController extends Controller
                 'first_name.regex' => 'Имя может содержать только кириллические буквы и дефис.',
                 'middle_name.regex' => 'Отчество может содержать только кириллические буквы и дефис.',
                 'phone.regex' => 'Телефон должен быть в формате 8(XXX)XXX-XX-XX или +7 (XXX) XXX-XX-XX.',
+                'grade_scale.*.label.regex' => 'Оценка в шкале должна быть от 1 до 5, можно с плюсом или минусом.',
+                'grade_scale.*.min_score.min' => 'Порог оценки не может быть ниже 0.',
+                'grade_scale.*.min_score.max' => 'Порог оценки не может быть выше 100.',
                 'department.max' => 'Поле "Кафедра/отделение" не должно превышать 100 символов.',
             ]
         );
@@ -145,11 +151,18 @@ class AuthController extends Controller
         if (array_key_exists('middle_name', $validated)) {
             $validated['middle_name'] = !empty($validated['middle_name']) ? trim($validated['middle_name']) : null;
         }
+        if (array_key_exists('grade_scale', $validated)) {
+            if ($user->role !== 'teacher') {
+                unset($validated['grade_scale']);
+            } else {
+                $validated['grade_scale'] = User::normalizeGradeScale($validated['grade_scale']);
+            }
+        }
         $user->update($validated);
 
         return response()->json([
             'success' => true,
-            'user' => $user->fresh()->load(['studentGroup.teacher']),
+            'user' => $user->fresh()->load(['studentGroup']),
         ]);
     }
 
@@ -185,7 +198,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'user' => $user->fresh()->load(['studentGroup.teacher']),
+            'user' => $user->fresh()->load(['studentGroup']),
         ]);
     }
 }

@@ -36,8 +36,12 @@ class SubmissionReturnedStudentNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $this->submission->loadMissing('assignment:id,title');
+        $this->submission->loadMissing([
+            'assignment:id,title,teacher_id',
+            'assignment.teacher:id,login,last_name,first_name,middle_name',
+        ]);
         $title = $this->submission->assignment?->title ?? 'Задание';
+        $teacherName = $this->submission->assignment?->teacher?->full_name ?? 'Не указан';
 
         return [
             'title' => 'Возврат на доработку',
@@ -45,6 +49,7 @@ class SubmissionReturnedStudentNotification extends Notification
             'kind' => 'submission_returned',
             'assignment_id' => $this->submission->assignment_id,
             'submission_id' => $this->submission->id,
+            'teacher_name' => $teacherName,
         ];
     }
 }

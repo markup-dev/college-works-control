@@ -51,8 +51,9 @@ class SubmissionController extends Controller
         }
 
         $query->with([
-            'assignment:id,title,subject_id,max_score,submission_type,deadline,priority',
+            'assignment:id,title,subject_id,max_score,submission_type,deadline,teacher_id',
             'assignment.subjectRelation:id,name',
+            'assignment.teacher:id,grade_scale',
             'student:id,login,group_id,last_name,first_name,middle_name',
             'student.studentGroup:id,name',
         ]);
@@ -151,7 +152,6 @@ class SubmissionController extends Controller
                     "CASE WHEN submissions.status = 'submitted' AND _rq_assignments.deadline IS NOT NULL AND DATE(_rq_assignments.deadline) < ? THEN 0 ELSE 1 END",
                     [$todayDate]
                 );
-                $query->orderByRaw("CASE _rq_assignments.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END");
                 $query->orderByRaw('CASE WHEN _rq_assignments.deadline IS NULL THEN 1 ELSE 0 END');
                 $query->orderBy('_rq_assignments.deadline', 'asc');
                 $query->orderByDesc('submissions.is_resubmission');
@@ -203,6 +203,7 @@ class SubmissionController extends Controller
             'group_name' => $sub->student?->studentGroup?->name ?? '',
             'status' => $sub->status,
             'score' => $sub->score,
+            'grade_label' => $sub->gradeLabel(),
             'comment' => $sub->comment,
             'teacher_comment' => $sub->teacher_comment,
             'criterion_scores' => $sub->criterion_scores,
@@ -246,10 +247,15 @@ class SubmissionController extends Controller
         );
 
         $assignment = Assignment::with('groups:id')->findOrFail($baseValidated['assignment_id']);
+        $assignment->syncCompletionStatus();
 
         if (! in_array($assignment->status, ['active', 'inactive'], true)) {
+            $message = $assignment->status === 'archived'
+                ? 'Приём работ по этому заданию завершён: задание снято с активных (архив).'
+                : 'Сдача работ по этому заданию недоступна.';
+
             return response()->json([
-                'message' => 'Сдача работ по этому заданию недоступна.',
+                'message' => $message,
             ], 422);
         }
 
@@ -365,7 +371,7 @@ class SubmissionController extends Controller
                 'comment' => ['nullable', 'string', 'max:1000'],
                 'criterion_scores' => ['nullable', 'array', 'max:50'],
                 'criterion_scores.*.text' => ['required_with:criterion_scores', 'string', 'max:500'],
-                'criterion_scores.*.max_points' => ['required_with:criterion_scores', 'integer', 'min:0', 'max:1000'],
+                'criterion_scores.*.max_points' => ['required_with:criterion_scores', 'integer', 'min:1', 'max:100'],
                 'criterion_scores.*.received_points' => ['required_with:criterion_scores', 'integer', 'min:0', 'max:1000'],
             ],
             [
@@ -418,11 +424,13 @@ class SubmissionController extends Controller
         $this->syncAssignmentCompletionStatus($submission->assignment);
 
         $submission->load([
-            'assignment:id,title,subject_id,max_score',
+            'assignment:id,title,subject_id,max_score,teacher_id',
             'assignment.subjectRelation:id,name',
+            'assignment.teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'student:id,login,group_id,last_name,first_name,middle_name,is_active',
             'student.studentGroup:id,name',
         ]);
+        $submission->setAttribute('grade_label', $submission->gradeLabel());
 
         $student = $submission->student;
         if ($student && $student->is_active) {
@@ -474,11 +482,13 @@ class SubmissionController extends Controller
         $this->syncAssignmentCompletionStatus($submission->assignment);
 
         $submission->load([
-            'assignment:id,title,subject_id,max_score',
+            'assignment:id,title,subject_id,max_score,teacher_id',
             'assignment.subjectRelation:id,name',
+            'assignment.teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'student:id,login,group_id,last_name,first_name,middle_name,is_active',
             'student.studentGroup:id,name',
         ]);
+        $submission->setAttribute('grade_label', $submission->gradeLabel());
 
         $student = $submission->student;
         if ($student && $student->is_active) {

@@ -10,11 +10,28 @@
 
 .ui-pagination__meta {
   text-align: center;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 @media (max-width: 768px) {
   .ui-pagination {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .ui-pagination__meta {
+    font-size: 0.85rem;
+    order: -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .ui-pagination {
+    gap: 10px;
+  }
+
+  .ui-pagination__meta {
+    font-size: 0.8rem;
   }
 }

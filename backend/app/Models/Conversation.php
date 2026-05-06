@@ -11,7 +11,17 @@ class Conversation extends Model
     protected $fillable = [
         'user_one_id',
         'user_two_id',
+        'user_one_archived_at',
+        'user_two_archived_at',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'user_one_archived_at' => 'datetime',
+            'user_two_archived_at' => 'datetime',
+        ];
+    }
 
     public function userOne(): BelongsTo
     {

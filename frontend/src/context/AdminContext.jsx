@@ -12,6 +12,19 @@ const normalizeUser = (user) => ({
 const normalizeGroup = (group) => ({
   ...group,
   studentsCount: group.studentsCount ?? group.students_count ?? 0,
+  teachingLoadsCount: group.teachingLoadsCount ?? group.teaching_loads_count ?? 0,
+});
+
+const normalizeSubject = (subject) => ({
+  ...subject,
+  teachingLoadsCount: subject.teachingLoadsCount ?? subject.teaching_loads_count ?? 0,
+});
+
+const normalizeTeachingLoad = (load) => ({
+  ...load,
+  teacherId: load.teacherId ?? load.teacher_id ?? load.teacher?.id ?? null,
+  subjectId: load.subjectId ?? load.subject_id ?? load.subject?.id ?? null,
+  groupId: load.groupId ?? load.group_id ?? load.group?.id ?? null,
 });
 
 const normalizeMeta = (meta) => ({
@@ -53,20 +66,24 @@ export const AdminProvider = ({ children }) => {
   const [teacherOptions, setTeacherOptions] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [teachingLoads, setTeachingLoads] = useState([]);
   const [systemLogs, setSystemLogs] = useState([]);
 
   const [usersMeta, setUsersMeta] = useState(normalizeMeta());
   const [groupsMeta, setGroupsMeta] = useState(normalizeMeta());
   const [subjectsMeta, setSubjectsMeta] = useState(normalizeMeta());
+  const [teachingLoadsMeta, setTeachingLoadsMeta] = useState(normalizeMeta());
   const [logsMeta, setLogsMeta] = useState(normalizeMeta());
 
   const [usersQuery, setUsersQuery] = useState({ page: 1, perPage: PAGINATION_DEFAULTS.adminUsers, sort: 'newest' });
   const [groupsQuery, setGroupsQuery] = useState({ page: 1, perPage: PAGINATION_DEFAULTS.adminGroups, sort: 'name_asc' });
   const [subjectsQuery, setSubjectsQuery] = useState({ page: 1, perPage: PAGINATION_DEFAULTS.adminSubjects, sort: 'name_asc' });
+  const [teachingLoadsQuery, setTeachingLoadsQuery] = useState({ page: 1, perPage: PAGINATION_DEFAULTS.adminSubjects, sort: 'teacher_asc' });
   const [logsQuery, setLogsQuery] = useState({ page: 1, perPage: PAGINATION_DEFAULTS.adminLogs, sort: 'newest' });
   const usersQueryRef = useRef(usersQuery);
   const groupsQueryRef = useRef(groupsQuery);
   const subjectsQueryRef = useRef(subjectsQuery);
+  const teachingLoadsQueryRef = useRef(teachingLoadsQuery);
   const logsQueryRef = useRef(logsQuery);
 
   const [adminStats, setAdminStats] = useState({
@@ -96,6 +113,10 @@ export const AdminProvider = ({ children }) => {
   useEffect(() => {
     subjectsQueryRef.current = subjectsQuery;
   }, [subjectsQuery]);
+
+  useEffect(() => {
+    teachingLoadsQueryRef.current = teachingLoadsQuery;
+  }, [teachingLoadsQuery]);
 
   useEffect(() => {
     logsQueryRef.current = logsQuery;
@@ -178,9 +199,22 @@ export const AdminProvider = ({ children }) => {
       setSubjectsQuery(params);
     }
     const response = await api.get('/admin/subjects', { params: withApiPagination(params) });
-    const list = response.data?.data || [];
+    const list = (response.data?.data || []).map(normalizeSubject);
     setSubjects((prev) => (append ? [...prev, ...list] : list));
     setSubjectsMeta(normalizeMeta(response.data?.meta));
+    return response.data;
+  }, []);
+
+  const fetchTeachingLoads = useCallback(async (nextParams = {}, append = false) => {
+    const params = { ...teachingLoadsQueryRef.current, ...nextParams };
+    if (!areQueriesEqual(teachingLoadsQueryRef.current, params)) {
+      teachingLoadsQueryRef.current = params;
+      setTeachingLoadsQuery(params);
+    }
+    const response = await api.get('/admin/teaching-loads', { params: withApiPagination(params) });
+    const list = (response.data?.data || []).map(normalizeTeachingLoad);
+    setTeachingLoads((prev) => (append ? [...prev, ...list] : list));
+    setTeachingLoadsMeta(normalizeMeta(response.data?.meta));
     return response.data;
   }, []);
 
@@ -201,13 +235,13 @@ export const AdminProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([loadStats(), fetchUsers(), fetchGroups(), fetchSubjects(), fetchLogs(), fetchTeacherOptions()]);
+      await Promise.all([loadStats(), fetchUsers(), fetchGroups(), fetchSubjects(), fetchTeachingLoads(), fetchLogs(), fetchTeacherOptions()]);
     } catch (err) {
       setError('Ошибка загрузки данных администратора');
     } finally {
       setLoading(false);
     }
-  }, [fetchGroups, fetchLogs, fetchSubjects, fetchTeacherOptions, fetchUsers, loadStats]);
+  }, [fetchGroups, fetchLogs, fetchSubjects, fetchTeacherOptions, fetchTeachingLoads, fetchUsers, loadStats]);
 
   const wrapMutation = useCallback(async (request, onSuccess) => {
     try {
@@ -378,6 +412,33 @@ export const AdminProvider = ({ children }) => {
     );
   }, [fetchSubjects, loadStats, wrapMutation]);
 
+  const createTeachingLoad = useCallback(async (payload) => {
+    return wrapMutation(
+      () => api.post('/admin/teaching-loads', payload),
+      async () => {
+        await Promise.all([loadStats(), fetchTeachingLoads({ page: 1 }), fetchGroups(), fetchSubjects()]);
+      }
+    );
+  }, [fetchGroups, fetchSubjects, fetchTeachingLoads, loadStats, wrapMutation]);
+
+  const updateTeachingLoad = useCallback(async (loadId, payload) => {
+    return wrapMutation(
+      () => api.put(`/admin/teaching-loads/${loadId}`, payload),
+      async () => {
+        await Promise.all([loadStats(), fetchTeachingLoads(), fetchGroups(), fetchSubjects()]);
+      }
+    );
+  }, [fetchGroups, fetchSubjects, fetchTeachingLoads, loadStats, wrapMutation]);
+
+  const deleteTeachingLoad = useCallback(async (loadId) => {
+    return wrapMutation(
+      () => api.delete(`/admin/teaching-loads/${loadId}`),
+      async () => {
+        await Promise.all([loadStats(), fetchTeachingLoads(), fetchGroups(), fetchSubjects()]);
+      }
+    );
+  }, [fetchGroups, fetchSubjects, fetchTeachingLoads, loadStats, wrapMutation]);
+
   useEffect(() => {
     loadAdminData();
   }, [loadAdminData]);
@@ -387,14 +448,17 @@ export const AdminProvider = ({ children }) => {
     groups,
     teacherOptions,
     subjects,
+    teachingLoads,
     systemLogs,
     usersMeta,
     groupsMeta,
     subjectsMeta,
+    teachingLoadsMeta,
     logsMeta,
     usersQuery,
     groupsQuery,
     subjectsQuery,
+    teachingLoadsQuery,
     logsQuery,
     adminStats,
     loading,
@@ -406,6 +470,7 @@ export const AdminProvider = ({ children }) => {
     fetchTeacherOptions,
     fetchGroups,
     fetchSubjects,
+    fetchTeachingLoads,
     fetchLogs,
     createUser,
     updateUser,
@@ -424,6 +489,9 @@ export const AdminProvider = ({ children }) => {
     deleteSubject,
     previewSubjectsImport,
     importSubjects,
+    createTeachingLoad,
+    updateTeachingLoad,
+    deleteTeachingLoad,
   };
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;

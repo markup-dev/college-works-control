@@ -4,6 +4,13 @@
   gap: 1.5rem;
 
   &__header {
+    position: sticky;
+    top: -1.5rem;
+    z-index: 2;
+    margin: -1.5rem -1.5rem 0;
+    padding: 1.5rem 1.5rem 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: #ffffff;
     display: flex;
     justify-content: space-between;
     gap: 1rem;
@@ -127,7 +134,7 @@
 
   &__meta-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
     gap: 0.85rem;
   }
 
@@ -313,7 +320,7 @@
 
   &__stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
     gap: 0.75rem;
     margin-bottom: 1rem;
   }
@@ -459,6 +466,13 @@
   }
 
   &__actions {
+    position: sticky;
+    bottom: -1.5rem;
+    z-index: 2;
+    margin: 0 -1.5rem -1.5rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e5e7eb;
+    background: #ffffff;
     display: flex;
     justify-content: flex-end;
 
@@ -481,6 +495,79 @@
   .assignment-submit-btn--urgent.btn--primary:hover:not(:disabled) {
     background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
     box-shadow: 0 8px 20px rgba(234, 88, 12, 0.34);
+  }
+
+  @media (max-width: 768px) {
+    gap: 1.15rem;
+
+    &__header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    &__title {
+      font-size: 1.2rem;
+    }
+
+    &__section {
+      padding: 1rem;
+    }
+
+    &__meta-grid,
+    &__stats {
+      grid-template-columns: 1fr;
+    }
+
+    &__material {
+      flex-direction: column;
+      align-items: stretch;
+
+      .material-size {
+        align-self: flex-end;
+      }
+    }
+
+    &__actions {
+      justify-content: stretch;
+
+      .btn {
+        min-width: 0;
+        width: 100%;
+      }
+    }
+
+    &__actions-group {
+      width: 100%;
+      flex-direction: column;
+
+      .btn {
+        width: 100%;
+      }
+    }
+
+    .progress-header,
+    .progress-stats {
+      flex-wrap: wrap;
+    }
+
+    .progress-details {
+      flex-wrap: wrap;
+    }
+  }
+
+  @media (max-width: 480px) {
+    &__title {
+      font-size: 1.08rem;
+    }
+
+    &__badges {
+      width: 100%;
+    }
+
+    &__criteria li {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 }
 

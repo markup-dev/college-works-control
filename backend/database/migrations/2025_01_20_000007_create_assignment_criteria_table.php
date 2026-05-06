@@ -13,7 +13,7 @@ return new class extends Migration
             $table->foreignId('assignment_id')->constrained('assignments')->cascadeOnDelete();
             $table->unsignedInteger('position')->default(0);
             $table->string('text');
-            $table->unsignedInteger('max_points')->default(0);
+            $table->unsignedInteger('max_points')->default(1);
             $table->timestamps();
         });
     }

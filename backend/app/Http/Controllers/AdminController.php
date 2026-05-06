@@ -8,6 +8,7 @@ use App\Models\Group;
 use App\Models\Assignment;
 use App\Models\Submission;
 use App\Models\SystemLog;
+use App\Models\TeachingLoad;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -111,19 +112,17 @@ class AdminController extends Controller
                     ->where(function ($students) use ($subjectId) {
                         $students->where('role', 'student')
                             ->whereIn('group_id', function ($sub) use ($subjectId) {
-                                $sub->select('id')
-                                    ->from('groups')
-                                    ->whereIn('teacher_id', function ($subjectSub) use ($subjectId) {
-                                        $subjectSub->select('teacher_id')
-                                            ->from('subjects')
-                                            ->where('id', $subjectId)
-                                            ->whereNotNull('teacher_id');
-                                    });
+                                $sub->select('group_id')
+                                    ->from('teaching_loads')
+                                    ->where('subject_id', $subjectId)
+                                    ->where('status', 'active');
                             });
                     })
                     ->orWhere(function ($teachers) use ($subjectId) {
                         $teachers->where('role', 'teacher')
-                            ->whereHas('subjects', fn ($subjectQuery) => $subjectQuery->where('subjects.id', $subjectId));
+                            ->whereHas('teachingLoads', fn ($loadQuery) => $loadQuery
+                                ->where('subject_id', $subjectId)
+                                ->where('status', 'active'));
                     });
             });
         }
@@ -220,10 +219,7 @@ class AdminController extends Controller
             $groupId = (int) $validated['group_id'];
         } elseif ($validated['role'] === 'student' && !empty($validated['group'])) {
             $group = Group::firstOrCreate(
-                [
-                    'name' => trim($validated['group']),
-                    'teacher_id' => null,
-                ],
+                ['name' => trim($validated['group'])],
                 ['status' => 'active']
             );
             $groupId = $group->id;
@@ -251,7 +247,7 @@ class AdminController extends Controller
             $this->sendCredentialsEmail($user, $plainPassword, true);
         }
 
-        return response()->json(['success' => true, 'user' => $user->load(['studentGroup.teacher'])], 201);
+        return response()->json(['success' => true, 'user' => $user->load(['studentGroup'])], 201);
     }
 
     public function updateUser(Request $request, User $user)
@@ -303,10 +299,7 @@ class AdminController extends Controller
                 if ($groupName !== '') {
                     $existing = Group::where('name', $groupName)->orderBy('id')->first();
                     $group = $existing ?? Group::firstOrCreate(
-                        [
-                            'name' => $groupName,
-                            'teacher_id' => null,
-                        ],
+                        ['name' => $groupName],
                         ['status' => 'active']
                     );
                     $validated['group_id'] = $group->id;
@@ -337,7 +330,7 @@ class AdminController extends Controller
 
         $this->log($request, 'update_user', "Изменены данные пользователя {$user->full_name}");
 
-        return response()->json(['success' => true, 'user' => $user->fresh()->load(['studentGroup.teacher'])]);
+        return response()->json(['success' => true, 'user' => $user->fresh()->load(['studentGroup'])]);
     }
 
     public function deleteUser(Request $request, User $user)
@@ -423,7 +416,7 @@ class AdminController extends Controller
                     $groupId = (int) $prepared['group_id'];
                 } elseif (!empty($prepared['group'])) {
                     $group = Group::firstOrCreate(
-                        ['name' => trim($prepared['group']), 'teacher_id' => null],
+                        ['name' => trim($prepared['group'])],
                         ['status' => 'active']
                     );
                     $groupId = $group->id;
@@ -451,7 +444,7 @@ class AdminController extends Controller
             }
 
             $created++;
-            $createdUsers[] = $user->load(['studentGroup.teacher']);
+            $createdUsers[] = $user->load(['studentGroup']);
         }
 
         $this->log($request, 'import_users', "Массовый импорт пользователей: создано {$created}");
@@ -479,8 +472,7 @@ class AdminController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Group::with(['teacher:id,login,last_name,first_name,middle_name'])
-            ->withCount('students');
+        $query = Group::withCount(['students', 'teachingLoads']);
 
         if (!empty($validated['search'])) {
             $query->where('name', 'like', '%' . trim((string) $validated['search']) . '%');
@@ -531,11 +523,9 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:50', 'regex:/^[А-ЯЁA-Z0-9-]+$/iu'],
-            'teacher_id' => ['nullable', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
             'status' => ['nullable', 'in:active,inactive'],
         ], [
             'name.regex' => 'Группа может содержать только буквы, цифры и дефис.',
-            'teacher_id.exists' => 'Выбранный преподаватель не найден.',
             'status.in' => 'Некорректный статус группы.',
         ]);
 
@@ -554,15 +544,10 @@ class AdminController extends Controller
             }
         }
 
-        if (array_key_exists('teacher_id', $validated)) {
-            $validated['teacher_id'] = !empty($validated['teacher_id']) ? (int) $validated['teacher_id'] : null;
-        }
-
         $group->update($validated);
 
-        $freshGroup = $group->fresh(['teacher:id,login,last_name,first_name,middle_name'])->loadCount('students');
-        $teacherName = $freshGroup->teacher?->full_name ?: 'не назначен';
-        $this->log($request, 'update_group', "Группа {$group->name}: статус {$group->status}, преподаватель {$teacherName}");
+        $freshGroup = $group->fresh()->loadCount('students');
+        $this->log($request, 'update_group', "Группа {$group->name}: статус {$group->status}");
 
         return response()->json([
             'success' => true,
@@ -574,17 +559,14 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:50', 'regex:/^[А-ЯЁA-Z0-9-]+$/iu'],
-            'teacher_id' => ['nullable', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
             'status' => ['nullable', 'in:active,inactive'],
         ], [
             'name.required' => 'Введите название группы.',
             'name.regex' => 'Группа может содержать только буквы, цифры и дефис.',
-            'teacher_id.exists' => 'Выбранный преподаватель не найден.',
             'status.in' => 'Некорректный статус группы.',
         ]);
 
         $name = trim((string) $validated['name']);
-        $teacherId = !empty($validated['teacher_id']) ? (int) $validated['teacher_id'] : null;
         $status = $validated['status'] ?? 'active';
 
         $existingGroup = Group::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
@@ -597,7 +579,6 @@ class AdminController extends Controller
 
         $group = Group::create([
             'name' => $name,
-            'teacher_id' => $teacherId,
             'status' => $status,
         ]);
 
@@ -605,7 +586,7 @@ class AdminController extends Controller
 
         return response()->json([
             'success' => true,
-            'group' => $group->load(['teacher:id,login,last_name,first_name,middle_name'])->loadCount('students'),
+            'group' => $group->loadCount('students'),
         ], 201);
     }
 
@@ -682,7 +663,6 @@ class AdminController extends Controller
             $group = Group::create([
                 'name' => $name,
                 'status' => $status,
-                'teacher_id' => null,
             ]);
 
             foreach ($students as $studentData) {
@@ -843,10 +823,7 @@ class AdminController extends Controller
         foreach ($analysis['valid_rows'] as $row) {
             Group::firstOrCreate(
                 ['name' => trim((string) $row['name'])],
-                [
-                    'teacher_id' => null,
-                    'status' => $row['status'] ?? 'active',
-                ]
+                ['status' => $row['status'] ?? 'active']
             );
             $created++;
         }
@@ -897,13 +874,12 @@ class AdminController extends Controller
         $validated = request()->validate([
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:active,inactive'],
-            'teacher_id' => ['nullable', 'integer', 'exists:users,id'],
             'sort' => ['nullable', 'in:name_asc,name_desc,newest,oldest'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Subject::with('teacher:id,login,last_name,first_name,middle_name');
+        $query = Subject::withCount('teachingLoads');
 
         if (!empty($validated['search'])) {
             $query->where('name', 'like', '%' . trim((string) $validated['search']) . '%');
@@ -911,10 +887,6 @@ class AdminController extends Controller
 
         if (!empty($validated['status'])) {
             $query->where('status', $validated['status']);
-        }
-
-        if (!empty($validated['teacher_id'])) {
-            $query->where('teacher_id', (int) $validated['teacher_id']);
         }
 
         $sort = $validated['sort'] ?? 'name_asc';
@@ -953,13 +925,11 @@ class AdminController extends Controller
         $validated = $request->validate(
             [
                 'name' => ['required', 'string', 'min:2', 'max:255'],
-                'teacher_id' => ['nullable', 'exists:users,id'],
                 'status' => ['nullable', 'in:active,inactive'],
             ],
             [
                 'name.required' => 'Введите название предмета.',
                 'name.min' => 'Название предмета должно содержать минимум 2 символа.',
-                'teacher_id.exists' => 'Выбранный преподаватель не найден.',
             ]
         );
 
@@ -970,7 +940,7 @@ class AdminController extends Controller
 
         $this->log($request, 'create_subject', "Создан предмет {$subject->name}");
 
-        return response()->json(['success' => true, 'subject' => $subject->load('teacher:id,login,last_name,first_name,middle_name')], 201);
+        return response()->json(['success' => true, 'subject' => $subject->loadCount('teachingLoads')], 201);
     }
 
     public function updateSubject(Request $request, Subject $subject)
@@ -978,13 +948,11 @@ class AdminController extends Controller
         $validated = $request->validate(
             [
                 'name' => ['sometimes', 'required', 'string', 'min:2', 'max:255'],
-                'teacher_id' => ['nullable', 'exists:users,id'],
                 'status' => ['nullable', 'in:active,inactive'],
             ],
             [
                 'name.required' => 'Введите название предмета.',
                 'name.min' => 'Название предмета должно содержать минимум 2 символа.',
-                'teacher_id.exists' => 'Выбранный преподаватель не найден.',
             ]
         );
 
@@ -992,7 +960,7 @@ class AdminController extends Controller
 
         $this->log($request, 'update_subject', "Изменен предмет {$subject->name}");
 
-        return response()->json(['success' => true, 'subject' => $subject->fresh()->load('teacher:id,login,last_name,first_name,middle_name')]);
+        return response()->json(['success' => true, 'subject' => $subject->fresh()->loadCount('teachingLoads')]);
     }
 
     public function deleteSubject(Request $request, Subject $subject)
@@ -1001,6 +969,160 @@ class AdminController extends Controller
         $subject->delete();
 
         $this->log($request, 'delete_subject', "Удален предмет {$name}");
+
+        return response()->json(['success' => true]);
+    }
+
+    public function teachingLoads()
+    {
+        $validated = request()->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'teacher_id' => ['nullable', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
+            'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
+            'group_id' => ['nullable', 'integer', 'exists:groups,id'],
+            'status' => ['nullable', 'in:active,inactive'],
+            'sort' => ['nullable', 'in:newest,oldest,teacher_asc,subject_asc,group_asc'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $query = TeachingLoad::with([
+            'teacher:id,login,last_name,first_name,middle_name',
+            'subject:id,name,status',
+            'group:id,name,status',
+        ]);
+
+        if (!empty($validated['search'])) {
+            $term = trim((string) $validated['search']);
+            $query->where(function ($builder) use ($term) {
+                $builder
+                    ->whereHas('teacher', fn ($teacherQuery) => $teacherQuery
+                        ->where('login', 'like', "%{$term}%")
+                        ->orWhere('last_name', 'like', "%{$term}%")
+                        ->orWhere('first_name', 'like', "%{$term}%")
+                        ->orWhere('middle_name', 'like', "%{$term}%"))
+                    ->orWhereHas('subject', fn ($subjectQuery) => $subjectQuery->where('name', 'like', "%{$term}%"))
+                    ->orWhereHas('group', fn ($groupQuery) => $groupQuery->where('name', 'like', "%{$term}%"));
+            });
+        }
+
+        if (!empty($validated['teacher_id'])) {
+            $query->where('teacher_id', (int) $validated['teacher_id']);
+        }
+        if (!empty($validated['subject_id'])) {
+            $query->where('subject_id', (int) $validated['subject_id']);
+        }
+        if (!empty($validated['group_id'])) {
+            $query->where('group_id', (int) $validated['group_id']);
+        }
+        if (!empty($validated['status'])) {
+            $query->where('status', $validated['status']);
+        }
+
+        match ($validated['sort'] ?? 'teacher_asc') {
+            'oldest' => $query->oldest(),
+            'newest' => $query->latest(),
+            'subject_asc' => $query->orderBy(Subject::select('name')->whereColumn('subjects.id', 'teaching_loads.subject_id')),
+            'group_asc' => $query->orderBy(Group::select('name')->whereColumn('groups.id', 'teaching_loads.group_id')),
+            default => $query->orderBy(User::select('last_name')->whereColumn('users.id', 'teaching_loads.teacher_id'))
+                ->orderBy(User::select('first_name')->whereColumn('users.id', 'teaching_loads.teacher_id')),
+        };
+
+        $perPage = (int) ($validated['per_page'] ?? self::SUBJECTS_PER_PAGE);
+        $loads = $query->paginate($perPage)->withQueryString();
+
+        return response()->json([
+            'data' => $loads->items(),
+            'meta' => [
+                'current_page' => $loads->currentPage(),
+                'last_page' => $loads->lastPage(),
+                'per_page' => $loads->perPage(),
+                'total' => $loads->total(),
+            ],
+        ]);
+    }
+
+    public function createTeachingLoad(Request $request)
+    {
+        $validated = $request->validate([
+            'teacher_id' => ['required', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
+            'subject_id' => ['required', 'exists:subjects,id'],
+            'group_id' => ['required', 'exists:groups,id'],
+            'status' => ['nullable', 'in:active,inactive'],
+        ], [
+            'teacher_id.required' => 'Выберите преподавателя.',
+            'subject_id.required' => 'Выберите предмет.',
+            'group_id.required' => 'Выберите группу.',
+        ]);
+
+        $existing = TeachingLoad::where('teacher_id', (int) $validated['teacher_id'])
+            ->where('subject_id', (int) $validated['subject_id'])
+            ->where('group_id', (int) $validated['group_id'])
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Такая нагрузка уже назначена.',
+            ], 422);
+        }
+
+        $load = TeachingLoad::create([
+            'teacher_id' => (int) $validated['teacher_id'],
+            'subject_id' => (int) $validated['subject_id'],
+            'group_id' => (int) $validated['group_id'],
+            'status' => $validated['status'] ?? 'active',
+        ])->load(['teacher:id,login,last_name,first_name,middle_name', 'subject:id,name,status', 'group:id,name,status']);
+
+        $this->log($request, 'create_teaching_load', "Назначена нагрузка: {$load->teacher->full_name} · {$load->subject->name} · {$load->group->name}");
+
+        return response()->json(['success' => true, 'teaching_load' => $load], 201);
+    }
+
+    public function updateTeachingLoad(Request $request, TeachingLoad $teachingLoad)
+    {
+        $validated = $request->validate([
+            'teacher_id' => ['sometimes', 'required', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
+            'subject_id' => ['sometimes', 'required', 'exists:subjects,id'],
+            'group_id' => ['sometimes', 'required', 'exists:groups,id'],
+            'status' => ['nullable', 'in:active,inactive'],
+        ]);
+
+        $next = [
+            'teacher_id' => (int) ($validated['teacher_id'] ?? $teachingLoad->teacher_id),
+            'subject_id' => (int) ($validated['subject_id'] ?? $teachingLoad->subject_id),
+            'group_id' => (int) ($validated['group_id'] ?? $teachingLoad->group_id),
+            'status' => $validated['status'] ?? $teachingLoad->status,
+        ];
+
+        $duplicateExists = TeachingLoad::where('teacher_id', $next['teacher_id'])
+            ->where('subject_id', $next['subject_id'])
+            ->where('group_id', $next['group_id'])
+            ->where('id', '!=', $teachingLoad->id)
+            ->exists();
+
+        if ($duplicateExists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Такая нагрузка уже назначена.',
+            ], 422);
+        }
+
+        $teachingLoad->update($next);
+        $freshLoad = $teachingLoad->fresh(['teacher:id,login,last_name,first_name,middle_name', 'subject:id,name,status', 'group:id,name,status']);
+
+        $this->log($request, 'update_teaching_load', "Изменена нагрузка: {$freshLoad->teacher->full_name} · {$freshLoad->subject->name} · {$freshLoad->group->name}");
+
+        return response()->json(['success' => true, 'teaching_load' => $freshLoad]);
+    }
+
+    public function deleteTeachingLoad(Request $request, TeachingLoad $teachingLoad)
+    {
+        $teachingLoad->load(['teacher:id,last_name,first_name,middle_name', 'subject:id,name', 'group:id,name']);
+        $details = "{$teachingLoad->teacher?->full_name} · {$teachingLoad->subject?->name} · {$teachingLoad->group?->name}";
+        $teachingLoad->delete();
+
+        $this->log($request, 'delete_teaching_load', "Удалена нагрузка: {$details}");
 
         return response()->json(['success' => true]);
     }
@@ -1051,25 +1173,9 @@ class AdminController extends Controller
 
         $created = 0;
         foreach ($analysis['valid_rows'] as $row) {
-            $teacherId = null;
-            if (!empty($row['teacher_id'])) {
-                $teacherId = (int) $row['teacher_id'];
-            } elseif (!empty($row['teacher_login'])) {
-                $teacherId = User::where('role', 'teacher')
-                    ->whereRaw('LOWER(login) = ?', [mb_strtolower(trim((string) $row['teacher_login']))])
-                    ->value('id');
-            } elseif (!empty($row['teacher_email'])) {
-                $teacherId = User::where('role', 'teacher')
-                    ->whereRaw('LOWER(email) = ?', [mb_strtolower(trim((string) $row['teacher_email']))])
-                    ->value('id');
-            }
-
             Subject::firstOrCreate(
                 ['name' => trim((string) $row['name'])],
-                [
-                    'teacher_id' => $teacherId,
-                    'status' => $row['status'] ?? 'active',
-                ]
+                ['status' => $row['status'] ?? 'active']
             );
             $created++;
         }
@@ -1307,9 +1413,6 @@ class AdminController extends Controller
             $data = is_array($entry['data'] ?? null) ? $entry['data'] : (is_array($entry) ? $entry : []);
             $name = trim((string) ($data['name'] ?? ''));
             $status = trim((string) ($data['status'] ?? 'active'));
-            $teacherLogin = trim((string) ($data['teacher_login'] ?? ''));
-            $teacherEmail = trim((string) ($data['teacher_email'] ?? ''));
-            $teacherId = trim((string) ($data['teacher_id'] ?? ''));
             $rowErrors = [];
 
             if ($name === '') {
@@ -1335,37 +1438,9 @@ class AdminController extends Controller
                 }
             }
 
-            if ($teacherId !== '' && !ctype_digit($teacherId)) {
-                $rowErrors[] = 'teacher_id должен быть числом.';
-            }
-
-            if ($teacherId !== '') {
-                $teacherExists = User::where('role', 'teacher')->where('id', (int) $teacherId)->exists();
-                if (!$teacherExists) {
-                    $rowErrors[] = 'Преподаватель с таким teacher_id не найден.';
-                }
-            } elseif ($teacherLogin !== '') {
-                $teacherExists = User::where('role', 'teacher')
-                    ->whereRaw('LOWER(login) = ?', [mb_strtolower($teacherLogin)])
-                    ->exists();
-                if (!$teacherExists) {
-                    $rowErrors[] = 'Преподаватель с таким teacher_login не найден.';
-                }
-            } elseif ($teacherEmail !== '') {
-                $teacherExists = User::where('role', 'teacher')
-                    ->whereRaw('LOWER(email) = ?', [mb_strtolower($teacherEmail)])
-                    ->exists();
-                if (!$teacherExists) {
-                    $rowErrors[] = 'Преподаватель с таким teacher_email не найден.';
-                }
-            }
-
             $normalized = [
                 'name' => $name,
                 'status' => $status ?: 'active',
-                'teacher_id' => $teacherId !== '' ? (int) $teacherId : null,
-                'teacher_login' => $teacherLogin !== '' ? $teacherLogin : null,
-                'teacher_email' => $teacherEmail !== '' ? $teacherEmail : null,
             ];
 
             $preparedRows[] = [

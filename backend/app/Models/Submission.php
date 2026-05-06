@@ -51,4 +51,25 @@ class Submission extends Model
     {
         return $this->belongsTo(Submission::class, 'previous_submission_id');
     }
+
+    public function gradeLabel(): ?string
+    {
+        if ($this->score === null) {
+            return null;
+        }
+
+        $assignment = $this->relationLoaded('assignment')
+            ? $this->assignment
+            : $this->assignment()->with('teacher')->first();
+
+        if (! $assignment) {
+            return null;
+        }
+
+        $teacher = $assignment->relationLoaded('teacher')
+            ? $assignment->teacher
+            : $assignment->teacher()->first();
+
+        return $teacher?->gradeLabelForScore((int) $this->score);
+    }
 }

@@ -62,6 +62,7 @@ const DashboardTabs = ({ activeTab, onTabChange, totalAssignments, completedAssi
       badge={pendingSubmissions}
       loading={loading}
     />
+    <span className="dashboard-tabs__break" aria-hidden="true" />
     <TabButton
       active={activeTab === 'completed'}
       onClick={() => onTabChange('completed')}

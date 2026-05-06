@@ -1,15 +1,22 @@
 .student-dashboard {
   min-height: 100vh;
   background: #f8f9fa;
+  overflow-x: clip;
 }
 
 .dashboard-main {
   padding: 24px;
+  padding-inline: max(24px, env(safe-area-inset-left, 0px))
+    max(24px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
 }
 
 .dashboard-container {
   max-width: 1200px;
   margin: 0 auto;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .loading-state {
@@ -110,7 +117,10 @@
 
 .assignments-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, 380px), 1fr)
+  );
   gap: 24px;
 }
 
@@ -123,6 +133,8 @@
 @media (max-width: 768px) {
   .dashboard-main {
     padding: 16px;
+    padding-inline: max(16px, env(safe-area-inset-left, 0px))
+      max(16px, env(safe-area-inset-right, 0px));
   }
 
   .error-state {
@@ -138,5 +150,12 @@
     grid-template-columns: 1fr;
     gap: 16px;
   }
+}
 
+@media (max-width: 480px) {
+  .dashboard-main {
+    padding: 12px;
+    padding-inline: max(12px, env(safe-area-inset-left, 0px))
+      max(12px, env(safe-area-inset-right, 0px));
+  }
 }

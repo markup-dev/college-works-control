@@ -39,8 +39,10 @@ class AssignmentDeadlineReminderNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
+        $this->assignment->loadMissing('teacher:id,login,last_name,first_name,middle_name');
         $deadline = $this->assignment->deadline?->format('d.m.Y') ?? '—';
         $when = $this->daysRemaining === 1 ? 'завтра' : "через {$this->daysRemaining} дня";
+        $teacherName = $this->assignment->teacher?->full_name ?? 'Не указан';
 
         return [
             'title' => 'Срок сдачи',
@@ -48,6 +50,7 @@ class AssignmentDeadlineReminderNotification extends Notification
             'kind' => 'assignment_deadline_reminder',
             'assignment_id' => $this->assignment->id,
             'days_remaining' => $this->daysRemaining,
+            'teacher_name' => $teacherName,
         ];
     }
 }

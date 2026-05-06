@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
 import checkReadIcon from '../../assets/messages/check-read.svg';
 import checkSentIcon from '../../assets/messages/check-sent.svg';
-import ConfirmModal from '../../components/UI/Modal/ConfirmModal';
+import sendArrowIcon from '../../assets/messages/send-arrow.svg';
 import './Messages.scss';
 
 const getErrorMessage = (err, fallback) => {
@@ -32,8 +32,10 @@ const Messages = () => {
   const [threadSnapKey, setThreadSnapKey] = useState(0);
   const [partnerSearch, setPartnerSearch] = useState('');
   const [teacherGroupsMeta, setTeacherGroupsMeta] = useState([]);
-  /** null | { kind: 'thread'; conversationId: number } | { kind: 'all' } */
-  const [messagesClearConfirm, setMessagesClearConfirm] = useState(null);
+  const [listTab, setListTab] = useState('inbox');
+  const [activePartnerIds, setActivePartnerIds] = useState(() => new Set());
+  const [listDrawerOpen, setListDrawerOpen] = useState(false);
+
   const threadBodyRef = useRef(null);
   const composerRef = useRef(null);
 
@@ -56,6 +58,26 @@ const Messages = () => {
     adjustComposerHeight();
   }, [messageBody, threadOpen, adjustComposerHeight]);
 
+  useEffect(() => {
+    if (!listDrawerOpen) return undefined;
+    const mq = window.matchMedia('(max-width: 900px)');
+    const onMq = () => {
+      if (!mq.matches) setListDrawerOpen(false);
+    };
+    mq.addEventListener('change', onMq);
+    const onKey = (e) => {
+      if (e.key === 'Escape') setListDrawerOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      mq.removeEventListener('change', onMq);
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [listDrawerOpen]);
+
   const scrollThreadToEnd = useCallback(() => {
     const el = threadBodyRef.current;
     if (!el) return;
@@ -72,18 +94,11 @@ const Messages = () => {
     });
   }, [partners, partnerSearch]);
 
-  /** Уже есть переписка — не дублируем контакт в «Новое сообщение». */
-  const conversationPartnerIds = useMemo(
-    () => new Set(conversations.map((c) => c.otherUser?.id).filter(Boolean)),
-    [conversations]
-  );
-
   const composePartners = useMemo(
-    () => filteredPartners.filter((p) => !conversationPartnerIds.has(p.id)),
-    [filteredPartners, conversationPartnerIds]
+    () => filteredPartners.filter((p) => !activePartnerIds.has(p.id)),
+    [filteredPartners, activePartnerIds]
   );
 
-  /** Для преподавателя: все группы из БД + список «нового чата»; блок «по сдаче». */
   const teacherPartnerGroups = useMemo(() => {
     if (user?.role !== 'teacher') return null;
     const submissionOnly = composePartners.filter((p) => p.partnerSource === 'submission');
@@ -126,7 +141,6 @@ const Messages = () => {
     return { groupSections: groupSectionsVisible, submissionOnly };
   }, [user?.role, composePartners, teacherGroupsMeta, partnerSearch]);
 
-  /** Скрываем блок, если новых получателей нет (все уже в «Диалогах»), пока поиск пуст. */
   const showComposeSection = useMemo(
     () =>
       loadingList ||
@@ -146,11 +160,11 @@ const Messages = () => {
     }
   }, [showError]);
 
-  const loadConversations = useCallback(async () => {
+  const loadActivePartnerIds = useCallback(async () => {
     try {
-      const { data } = await api.get('/conversations');
-      setConversations(data.data ?? []);
-      window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
+      const { data } = await api.get('/conversations', { params: { scope: 'active' } });
+      const ids = (data.data ?? []).map((c) => c.otherUser?.id).filter(Boolean);
+      setActivePartnerIds(new Set(ids));
     } catch (err) {
       showError(getErrorMessage(err, 'Не удалось загрузить диалоги'));
     }
@@ -186,7 +200,6 @@ const Messages = () => {
     [showError, user?.id]
   );
 
-  /** Прокрутка вниз при входе в диалог / смене диалога (не при тихом polling). */
   useEffect(() => {
     if (!activeConversationId || loadingThread || draftRecipient) return;
     const id = requestAnimationFrame(() => {
@@ -199,13 +212,35 @@ const Messages = () => {
     let cancelled = false;
     (async () => {
       setLoadingList(true);
-      await Promise.all([loadPartners(), loadConversations()]);
+      await loadPartners();
+      if (cancelled) return;
+      await loadActivePartnerIds();
       if (!cancelled) setLoadingList(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [loadPartners, loadConversations]);
+  }, [loadPartners, loadActivePartnerIds]);
+
+  useEffect(() => {
+    if (loadingList) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const scope = listTab === 'archive' ? 'archived' : 'active';
+        const { data } = await api.get('/conversations', { params: { scope } });
+        if (!cancelled) {
+          setConversations(data.data ?? []);
+          window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
+        }
+      } catch (err) {
+        if (!cancelled) showError(getErrorMessage(err, 'Не удалось загрузить диалоги'));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listTab, loadingList, showError]);
 
   const focusStudentIdFromRoute = location.state?.focusStudentId;
 
@@ -215,34 +250,61 @@ const Messages = () => {
       return undefined;
     }
 
-    const fromPartners = partners.find((p) => Number(p.id) === focusId);
-    const fromConv = conversations.find((c) => Number(c.otherUser?.id) === focusId);
-    const partner = fromPartners
-      || (fromConv?.otherUser
-        ? { id: fromConv.otherUser.id, fullName: fromConv.otherUser.fullName }
-        : null);
+    let cancelled = false;
+    (async () => {
+      try {
+        const [activeRes, archRes] = await Promise.all([
+          api.get('/conversations', { params: { scope: 'active' } }),
+          api.get('/conversations', { params: { scope: 'archived' } }),
+        ]);
+        if (cancelled) return;
+        const activeList = activeRes.data?.data ?? [];
+        const archList = archRes.data?.data ?? [];
+        const fromActive = activeList.find((c) => Number(c.otherUser?.id) === focusId);
+        const fromArch = archList.find((c) => Number(c.otherUser?.id) === focusId);
 
-    if (partner) {
-      const existing = conversations.find((c) => Number(c.otherUser?.id) === focusId);
-      if (existing) {
-        setDraftRecipient(null);
-        setActiveConversationId(existing.id);
-      } else {
-        setDraftRecipient({ id: partner.id, fullName: partner.fullName });
-        setActiveConversationId(null);
-        setMessages([]);
+        if (fromActive) {
+          setListTab('inbox');
+          setConversations(activeList);
+          setDraftRecipient(null);
+          setActiveConversationId(fromActive.id);
+        } else if (fromArch) {
+          setListTab('archive');
+          setConversations(archList);
+          setDraftRecipient(null);
+          setActiveConversationId(fromArch.id);
+        } else {
+          const fromPartners = partners.find((p) => Number(p.id) === focusId);
+          if (fromPartners) {
+            setListTab('inbox');
+            const { data } = await api.get('/conversations', { params: { scope: 'active' } });
+            if (cancelled) return;
+            setConversations(data.data ?? []);
+            setDraftRecipient({
+              id: fromPartners.id,
+              fullName: fromPartners.fullName,
+            });
+            setActiveConversationId(null);
+            setMessages([]);
+          }
+        }
+        setThreadSnapKey((k) => k + 1);
+        navigate(location.pathname, { replace: true, state: {} });
+      } catch (err) {
+        if (!cancelled) showError(getErrorMessage(err, 'Не удалось открыть диалог'));
       }
-      setThreadSnapKey((k) => k + 1);
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-    return undefined;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     focusStudentIdFromRoute,
     loadingList,
     partners,
-    conversations,
     location.pathname,
     navigate,
+    showError,
   ]);
 
   useEffect(() => {
@@ -253,27 +315,86 @@ const Messages = () => {
     }
   }, [activeConversationId, loadMessages]);
 
+  const pendingFocusStudentId =
+    location.state?.focusStudentId != null ? Number(location.state.focusStudentId) : NaN;
+
+  useEffect(() => {
+    if (loadingList) return;
+    if (draftRecipient) return;
+    if (Number.isFinite(pendingFocusStudentId) && pendingFocusStudentId > 0) return;
+    if (conversations.length === 0) return;
+
+    const stillValid =
+      activeConversationId &&
+      conversations.some((c) => c.id === activeConversationId);
+    if (stillValid) return;
+
+    setDraftRecipient(null);
+    setActiveConversationId(conversations[0].id);
+    setThreadSnapKey((k) => k + 1);
+  }, [
+    loadingList,
+    conversations,
+    activeConversationId,
+    draftRecipient,
+    pendingFocusStudentId,
+  ]);
+
+  useEffect(() => {
+    if (!activeConversationId || draftRecipient) return undefined;
+    if (!conversations.some((c) => c.id === activeConversationId)) {
+      setActiveConversationId(null);
+      setMessages([]);
+    }
+    return undefined;
+  }, [conversations, activeConversationId, draftRecipient]);
+
   useEffect(() => {
     if (!activeConversationId) return undefined;
     const id = setInterval(() => {
       loadMessages(activeConversationId, { silent: true });
-      loadConversations();
+      (async () => {
+        try {
+          const scope = listTab === 'archive' ? 'archived' : 'active';
+          const { data } = await api.get('/conversations', { params: { scope } });
+          setConversations(data.data ?? []);
+        } catch {
+          /* ignore poll errors */
+        }
+        loadActivePartnerIds();
+      })();
     }, 12000);
     return () => clearInterval(id);
-  }, [activeConversationId, loadMessages, loadConversations]);
+  }, [activeConversationId, loadMessages, listTab, loadActivePartnerIds]);
 
   const selectPartnerDraft = (partner) => {
     setDraftRecipient({ id: partner.id, fullName: partner.fullName });
     setActiveConversationId(null);
     setMessages([]);
     setThreadSnapKey((k) => k + 1);
+    setListDrawerOpen(false);
   };
 
-  const openPartnerOrConversation = (partner) => {
+  const openPartnerOrConversation = async (partner) => {
     const existing = conversations.find((c) => c.otherUser?.id === partner.id);
     if (existing) {
       selectConversation(existing.id);
       return;
+    }
+    if (listTab === 'archive' && activePartnerIds.has(partner.id)) {
+      try {
+        const { data } = await api.get('/conversations', { params: { scope: 'active' } });
+        const list = data.data ?? [];
+        const found = list.find((c) => c.otherUser?.id === partner.id);
+        if (found) {
+          setListTab('inbox');
+          setConversations(list);
+          selectConversation(found.id);
+          return;
+        }
+      } catch (err) {
+        showError(getErrorMessage(err, 'Не удалось загрузить диалоги'));
+      }
     }
     selectPartnerDraft(partner);
   };
@@ -282,6 +403,7 @@ const Messages = () => {
     setDraftRecipient(null);
     setActiveConversationId(id);
     setThreadSnapKey((k) => k + 1);
+    setListDrawerOpen(false);
   };
 
   const handleComposerKeyDown = (e) => {
@@ -296,47 +418,41 @@ const Messages = () => {
     form.requestSubmit();
   };
 
-  const requestClearCurrentThread = () => {
+  const archiveCurrentConversation = async () => {
     if (!activeConversationId || draftRecipient) return;
-    setMessagesClearConfirm({ kind: 'thread', conversationId: activeConversationId });
-  };
-
-  const requestClearAllThreads = () => {
-    if (conversations.length === 0) return;
-    setMessagesClearConfirm({ kind: 'all' });
-  };
-
-  const closeMessagesClearConfirm = () => setMessagesClearConfirm(null);
-
-  const executeMessagesClear = useCallback(async () => {
-    const spec = messagesClearConfirm;
-    if (!spec) return;
-    if (spec.kind === 'thread') {
-      const convId = spec.conversationId;
-      try {
-        await api.delete(`/conversations/${convId}/messages`);
-        showSuccess('Переписка очищена');
-        setMessages([]);
-        setActiveConversationId(null);
-        await loadConversations();
-        window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
-      } catch (err) {
-        showError(getErrorMessage(err, 'Не удалось очистить переписку'));
-      }
-      return;
-    }
+    const id = activeConversationId;
     try {
-      await api.delete('/conversations/messages');
-      showSuccess('Все переписки очищены');
-      setConversations([]);
+      await api.post(`/conversations/${id}/archive`);
+      showSuccess('Диалог в архиве');
       setActiveConversationId(null);
-      setDraftRecipient(null);
       setMessages([]);
+      const scope = listTab === 'archive' ? 'archived' : 'active';
+      const { data } = await api.get('/conversations', { params: { scope } });
+      setConversations(data.data ?? []);
+      await loadActivePartnerIds();
       window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
     } catch (err) {
-      showError(getErrorMessage(err, 'Не удалось очистить сообщения'));
+      showError(getErrorMessage(err, 'Не удалось архивировать диалог'));
     }
-  }, [messagesClearConfirm, loadConversations, showSuccess, showError]);
+  };
+
+  const unarchiveCurrentConversation = async () => {
+    if (!activeConversationId || draftRecipient) return;
+    const id = activeConversationId;
+    try {
+      await api.post(`/conversations/${id}/unarchive`);
+      showSuccess('Диалог восстановлен');
+      setListTab('inbox');
+      const { data } = await api.get('/conversations', { params: { scope: 'active' } });
+      setConversations(data.data ?? []);
+      setActiveConversationId(id);
+      await loadActivePartnerIds();
+      await loadMessages(id);
+      window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
+    } catch (err) {
+      showError(getErrorMessage(err, 'Не удалось восстановить диалог'));
+    }
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -346,11 +462,11 @@ const Messages = () => {
     if (draftRecipient && !activeConversationId) {
       setSending(true);
       try {
-        const { data } = await api.post('/conversations', {
+        const { data: created } = await api.post('/conversations', {
           userId: draftRecipient.id,
           body: text,
         });
-        const newConvId = data.data?.conversationId;
+        const newConvId = created.data?.conversationId;
         if (!newConvId) {
           showError('Не удалось отправить сообщение');
           return;
@@ -358,9 +474,13 @@ const Messages = () => {
         setMessageBody('');
         setDraftRecipient(null);
         setActiveConversationId(newConvId);
-        await loadConversations();
+        setListTab('inbox');
+        await loadActivePartnerIds();
+        const { data: inboxPayload } = await api.get('/conversations', { params: { scope: 'active' } });
+        setConversations(inboxPayload.data ?? []);
         await loadMessages(newConvId);
         setThreadSnapKey((k) => k + 1);
+        window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
       } catch (err) {
         showError(getErrorMessage(err, 'Не удалось отправить'));
       } finally {
@@ -371,13 +491,21 @@ const Messages = () => {
 
     if (!activeConversationId) return;
 
+    const wasArchiveTab = listTab === 'archive';
     setSending(true);
     try {
       await api.post(`/conversations/${activeConversationId}/messages`, { body: text });
       setMessageBody('');
       await loadMessages(activeConversationId, { silent: true });
-      await loadConversations();
+      if (wasArchiveTab) {
+        setListTab('inbox');
+      }
+      await loadActivePartnerIds();
+      const scope = wasArchiveTab ? 'active' : listTab === 'archive' ? 'archived' : 'active';
+      const { data } = await api.get('/conversations', { params: { scope } });
+      setConversations(data.data ?? []);
       setThreadSnapKey((k) => k + 1);
+      window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
     } catch (err) {
       showError(getErrorMessage(err, 'Не удалось отправить'));
     } finally {
@@ -388,8 +516,67 @@ const Messages = () => {
   return (
     <div className="messages-page app-page">
       <div className="messages-page__shell app-reveal-stagger">
-        <aside className="messages-sidebar">
-          <h1 className="messages-page__title">Сообщения</h1>
+        <button
+          type="button"
+          className="messages-page__list-toggle"
+          onClick={() => setListDrawerOpen(true)}
+          aria-expanded={listDrawerOpen}
+          aria-controls="messages-list-drawer"
+        >
+          <span className="messages-page__list-toggle-icon" aria-hidden />
+          Сообщения
+        </button>
+        <button
+          type="button"
+          className={`messages-page__drawer-backdrop${listDrawerOpen ? ' is-visible' : ''}`}
+          aria-label="Закрыть список диалогов"
+          aria-hidden={!listDrawerOpen}
+          tabIndex={listDrawerOpen ? 0 : -1}
+          onClick={() => setListDrawerOpen(false)}
+        />
+        <aside
+          id="messages-list-drawer"
+          className={`messages-sidebar${listDrawerOpen ? ' is-open' : ''}`}
+        >
+          <button
+            type="button"
+            className="messages-sidebar__drawer-close"
+            onClick={() => setListDrawerOpen(false)}
+            aria-label="Закрыть список"
+          >
+            ×
+          </button>
+          <div className="messages-page__head">
+            <h1 className="messages-page__title">Сообщения</h1>
+            <div className="messages-page__tabs" role="tablist" aria-label="Разделы сообщений">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={listTab === 'inbox'}
+                className={
+                  listTab === 'inbox'
+                    ? 'messages-page__tab is-active'
+                    : 'messages-page__tab'
+                }
+                onClick={() => setListTab('inbox')}
+              >
+                Диалоги
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={listTab === 'archive'}
+                className={
+                  listTab === 'archive'
+                    ? 'messages-page__tab is-active'
+                    : 'messages-page__tab'
+                }
+                onClick={() => setListTab('archive')}
+              >
+                Архив
+              </button>
+            </div>
+          </div>
           <p className="messages-page__hint">
             {user?.role === 'student'
               ? 'Переписка с преподавателями вашей группы и по заданиям'
@@ -398,19 +585,14 @@ const Messages = () => {
 
           <section className="messages-sidebar__section messages-sidebar__section--dialogs">
             <div className="messages-sidebar__section-head">
-              <h2 className="messages-sidebar__heading">Диалоги</h2>
-              {!loadingList && conversations.length > 0 ? (
-                <button
-                  type="button"
-                  className="messages-sidebar__action-link"
-                  onClick={requestClearAllThreads}
-                >
-                  Очистить все
-                </button>
-              ) : null}
+              <h2 className="messages-sidebar__heading">
+                {listTab === 'archive' ? 'Архив' : 'Диалоги'}
+              </h2>
             </div>
             {!loadingList && conversations.length === 0 ? (
-              <p className="messages-sidebar__muted">Пока нет переписки</p>
+              <p className="messages-sidebar__muted">
+                {listTab === 'archive' ? 'Архив пуст' : 'Пока нет переписки'}
+              </p>
             ) : (
               <ul className="messages-conversations">
                 {conversations.map((c) => (
@@ -470,7 +652,7 @@ const Messages = () => {
                 <p className="messages-sidebar__muted">Никого не найдено по запросу</p>
               ) : composePartners.length === 0 ? (
                 <p className="messages-sidebar__muted">
-                  По запросу остались только собеседники из списка «Диалоги» — откройте чат там.
+                  По запросу остались только собеседники из списка слева — откройте чат там.
                 </p>
               ) : user?.role === 'teacher' && teacherPartnerGroups ? (
                 <div className="messages-partners-teacher">
@@ -608,20 +790,28 @@ const Messages = () => {
 
         <section className="messages-thread">
           {!threadOpen ? (
-            <div className="messages-thread__empty">
-              <p>Выберите диалог или контакт слева — новый чат появится после первого сообщения</p>
-            </div>
+            <div className="messages-thread__idle" aria-hidden />
           ) : (
             <>
               <header className="messages-thread__header">
                 <div className="messages-thread__header-top">
                   <h2 className="messages-thread__title">{otherName}</h2>
-                  {activeConversationId && !draftRecipient && messages.length > 0 ? (
+                  {activeConversationId && !draftRecipient && listTab === 'inbox' ? (
                     <button
                       type="button"
                       className="messages-thread__action-link"
-                      onClick={requestClearCurrentThread}                    >
-                      Очистить переписку
+                      onClick={archiveCurrentConversation}
+                    >
+                      В архив
+                    </button>
+                  ) : null}
+                  {activeConversationId && !draftRecipient && listTab === 'archive' ? (
+                    <button
+                      type="button"
+                      className="messages-thread__action-link"
+                      onClick={unarchiveCurrentConversation}
+                    >
+                      Вернуть из архива
                     </button>
                   ) : null}
                 </div>
@@ -736,38 +926,35 @@ const Messages = () => {
                     !messageBody.trim() ||
                     (!activeConversationId && !draftRecipient)
                   }
+                  aria-label={
+                    draftRecipient && !activeConversationId
+                      ? 'Начать диалог'
+                      : 'Отправить сообщение'
+                  }
                   title={
                     draftRecipient && !activeConversationId
                       ? 'Отправить первое сообщение и создать диалог'
-                      : undefined
+                      : 'Отправить'
                   }
                 >
-                  {draftRecipient && !activeConversationId ? 'Начать' : 'Отправить'}
+                  <span className="messages-thread__send-text">
+                    {draftRecipient && !activeConversationId ? 'Начать' : 'Отправить'}
+                  </span>
+                  <span className="messages-thread__send-icon" aria-hidden>
+                    <img
+                      src={sendArrowIcon}
+                      alt=""
+                      width={22}
+                      height={22}
+                      decoding="async"
+                    />
+                  </span>
                 </button>
               </form>
             </>
           )}
         </section>
       </div>
-
-      <ConfirmModal
-        isOpen={Boolean(messagesClearConfirm)}
-        onClose={closeMessagesClearConfirm}
-        onConfirm={executeMessagesClear}
-        title={
-          messagesClearConfirm?.kind === 'thread'
-            ? 'Очистить переписку?'
-            : 'Удалить все диалоги?'
-        }
-        message={
-          messagesClearConfirm?.kind === 'thread'
-            ? 'Все сообщения в этом диалоге будут удалены. У собеседника история тоже пропадёт. Восстановить нельзя.'
-            : 'Будут удалены все ваши диалоги и сообщения. У собеседников история тоже исчезнет. Восстановить нельзя.'
-        }
-        confirmText={messagesClearConfirm?.kind === 'thread' ? 'Очистить' : 'Удалить всё'}
-        cancelText="Отмена"
-        danger
-      />
     </div>
   );
 };

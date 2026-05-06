@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Assignment;
 use App\Models\Group;
 use App\Models\Subject;
+use App\Models\TeachingLoad;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -18,29 +19,40 @@ class AssignmentSeeder extends Seeder
             return;
         }
 
-        $group029 = Group::firstOrCreate(['name' => 'ИСП-029'], ['teacher_id' => $teacherJs->id, 'status' => 'active']);
-        $group0029 = Group::firstOrCreate(['name' => 'ИСП-0029'], ['teacher_id' => $teacherPhp->id, 'status' => 'active']);
+        $group029 = Group::firstOrCreate(['name' => 'ИСП-029'], ['status' => 'active']);
+        $group0029 = Group::firstOrCreate(['name' => 'ИСП-0029'], ['status' => 'active']);
 
         $subjectDb = Subject::where('name', 'Базы данных')
-            ->where('teacher_id', $teacherJs->id)
             ->where('status', 'active')
             ->first();
         $subjectWeb = Subject::where('name', 'Веб-программирование')
-            ->where('teacher_id', $teacherJs->id)
             ->where('status', 'active')
             ->first();
         $subjectPhp = Subject::where('name', 'PHP-разработка')
-            ->where('teacher_id', $teacherPhp->id)
             ->where('status', 'active')
             ->first();
         $subjectLaravel = Subject::where('name', 'Laravel Framework')
-            ->where('teacher_id', $teacherPhp->id)
             ->where('status', 'active')
             ->first();
 
         if (!$subjectDb || !$subjectWeb || !$subjectPhp || !$subjectLaravel) {
             return;
         }
+
+        collect([
+            [$teacherJs->id, $subjectDb->id, $group029->id],
+            [$teacherJs->id, $subjectDb->id, $group0029->id],
+            [$teacherJs->id, $subjectWeb->id, $group029->id],
+            [$teacherJs->id, $subjectWeb->id, $group0029->id],
+            [$teacherPhp->id, $subjectPhp->id, $group029->id],
+            [$teacherPhp->id, $subjectPhp->id, $group0029->id],
+            [$teacherPhp->id, $subjectLaravel->id, $group029->id],
+            [$teacherPhp->id, $subjectLaravel->id, $group0029->id],
+        ])->each(fn ($load) => TeachingLoad::firstOrCreate([
+            'teacher_id' => $load[0],
+            'subject_id' => $load[1],
+            'group_id' => $load[2],
+        ], ['status' => 'active']));
 
         $assignments = [
             // Kartseva - ACTIVE
@@ -51,7 +63,6 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Спроектировать структуру БД колледжа, ER-диаграмму и SQL-скрипты.',
                 'deadline' => now()->addDays(2)->toDateString(),
                 'status' => 'active',
-                'priority' => 'high',
                 'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 20,
@@ -70,7 +81,6 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Реализовать SPA-приложение с фильтрацией расписания и личным кабинетом студента.',
                 'deadline' => now()->addDays(12)->toDateString(),
                 'status' => 'active',
-                'priority' => 'medium',
                 'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 50,
@@ -89,8 +99,7 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Проанализировать медленные запросы и предложить схему индексации.',
                 'deadline' => now()->addDays(1)->toDateString(),
                 'status' => 'active',
-                'priority' => 'medium',
-                'max_score' => 90,
+                'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 15,
                 'group_ids' => [$group029->id],
@@ -109,8 +118,7 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Подготовить план рефакторинга React-приложения с выделением слоев.',
                 'deadline' => now()->addDays(21)->toDateString(),
                 'status' => 'inactive',
-                'priority' => 'low',
-                'max_score' => 80,
+                'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 10,
                 'group_ids' => [$group029->id],
@@ -128,8 +136,7 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Реализовать клиентскую и серверную валидацию для типовых форм.',
                 'deadline' => now()->addDays(24)->toDateString(),
                 'status' => 'inactive',
-                'priority' => 'medium',
-                'max_score' => 70,
+                'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 10,
                 'group_ids' => [$group0029->id],
@@ -148,7 +155,6 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Привести схему БД к 3НФ и описать принятые решения.',
                 'deadline' => now()->subDays(10)->toDateString(),
                 'status' => 'archived',
-                'priority' => 'high',
                 'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 20,
@@ -168,7 +174,6 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Разработать CRUD-модуль учета заявок с валидацией и аутентификацией.',
                 'deadline' => now()->addDays(2)->toDateString(),
                 'status' => 'active',
-                'priority' => 'high',
                 'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 30,
@@ -187,8 +192,7 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Собрать полный набор миграций и сидеров для учебного проекта.',
                 'deadline' => now()->addDays(14)->toDateString(),
                 'status' => 'active',
-                'priority' => 'medium',
-                'max_score' => 95,
+                'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 20,
                 'group_ids' => [$group029->id, $group0029->id],
@@ -206,8 +210,7 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Реализовать очередь уведомлений и мониторинг фоновых задач.',
                 'deadline' => now()->addDays(1)->toDateString(),
                 'status' => 'active',
-                'priority' => 'medium',
-                'max_score' => 85,
+                'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 20,
                 'group_ids' => [$group0029->id],
@@ -226,8 +229,7 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Применить ключевые паттерны в модуле управления заданиями.',
                 'deadline' => now()->addDays(26)->toDateString(),
                 'status' => 'inactive',
-                'priority' => 'low',
-                'max_score' => 75,
+                'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 10,
                 'group_ids' => [$group029->id],
@@ -245,8 +247,7 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Покрыть unit-тестами основной сервисный слой проекта.',
                 'deadline' => now()->addDays(28)->toDateString(),
                 'status' => 'inactive',
-                'priority' => 'medium',
-                'max_score' => 80,
+                'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 15,
                 'group_ids' => [$group029->id, $group0029->id],
@@ -265,7 +266,6 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Сделать REST API для сущностей студентов и групп с токен-авторизацией.',
                 'deadline' => now()->subDays(4)->toDateString(),
                 'status' => 'archived',
-                'priority' => 'medium',
                 'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 25,
@@ -284,8 +284,7 @@ class AssignmentSeeder extends Seeder
                 'description' => 'Реализовать ролевую модель и ограничение доступа к API.',
                 'deadline' => now()->subDays(15)->toDateString(),
                 'status' => 'archived',
-                'priority' => 'high',
-                'max_score' => 90,
+                'max_score' => 100,
                 'submission_type' => 'file',
                 'max_file_size' => 20,
                 'group_ids' => [$group0029->id],
@@ -313,8 +312,7 @@ class AssignmentSeeder extends Seeder
             'description' => $payload['description'],
             'deadline' => $payload['deadline'],
             'status' => $payload['status'],
-            'priority' => $payload['priority'],
-            'max_score' => $payload['max_score'],
+            'max_score' => 100,
             'submission_type' => $payload['submission_type'],
             'max_file_size' => $payload['max_file_size'] ?? null,
         ]);

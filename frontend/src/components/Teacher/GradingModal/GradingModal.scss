@@ -27,6 +27,9 @@
   }
 
   .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -167,10 +170,22 @@
   }
 
   .score-preview__value {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
     font-size: 0.82rem;
     font-weight: 700;
     color: #1e3a8a;
     margin-bottom: 5px;
+  }
+
+  .score-preview__grade {
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4338ca;
+    font-size: 0.76rem;
   }
 
   .score-preview__bar {
@@ -314,6 +329,9 @@
   }
 
   .modal-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
     display: flex;
     justify-content: flex-end;
     gap: 10px;

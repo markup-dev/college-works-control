@@ -46,13 +46,16 @@ class AssignmentUpdatedNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
+        $this->assignment->loadMissing('teacher:id,login,last_name,first_name,middle_name');
         $deadline = $this->assignment->deadline?->format('d.m.Y') ?? '—';
+        $teacherName = $this->assignment->teacher?->full_name ?? 'Не указан';
 
         return [
             'title' => 'Задание обновлено',
             'body' => '«'.$this->assignment->title.'». Срок: '.$deadline,
             'kind' => 'assignment_updated',
             'assignment_id' => $this->assignment->id,
+            'teacher_name' => $teacherName,
         ];
     }
 }

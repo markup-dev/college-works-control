@@ -16,6 +16,7 @@ const ResultsModal = ({
 
   const maxScore = assignment.maxScore || 100;
   const score = assignment.score;
+  const gradeLabel = assignment.gradeLabel || assignment.grade_label || null;
   const percentage = score !== null && score !== undefined 
     ? Math.round((score / maxScore) * 100) 
     : 0;
@@ -27,7 +28,21 @@ const ResultsModal = ({
     Boolean(assignment.feedback) &&
     assignment.status !== 'submitted' &&
     assignment.status !== 'not_submitted';
-  const resultStatus = getResultStatusInfo(assignment.status);
+  const submissionStatuses = ['not_submitted', 'submitted', 'graded', 'returned'];
+  const resolveResultsStatus = () => {
+    const s = assignment.status;
+    if (submissionStatuses.includes(s)) {
+      return s;
+    }
+    if (assignment.score != null && assignment.score !== '') {
+      return 'graded';
+    }
+    if (assignment.submittedAt) {
+      return 'submitted';
+    }
+    return 'not_submitted';
+  };
+  const resultStatus = getResultStatusInfo(resolveResultsStatus());
 
   const getScoreColor = () => {
     if (score === null || score === undefined) return 'default';
@@ -66,9 +81,11 @@ const ResultsModal = ({
                   <span className="score-separator">/</span>
                   <span className="score-max">{maxScore}</span>
                 </div>
-                <div className="score-percentage">
-                  {percentage}%
-                </div>
+                {gradeLabel && (
+                  <div className="score-grade-label">
+                    Оценка по шкале: {gradeLabel}
+                  </div>
+                )}
                 <div
                   className="score-display__fill"
                   style={{ width: `${percentage}%` }}

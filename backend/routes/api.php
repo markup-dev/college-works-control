@@ -67,10 +67,10 @@ Route::middleware(['auth:sanctum', 'throttle:api_user'])->group(function () {
         Route::get('/message-partners', [ConversationController::class, 'partners']);
         Route::get('/conversations', [ConversationController::class, 'index']);
         Route::post('/conversations', [ConversationController::class, 'store']);
-        Route::delete('/conversations/messages', [ConversationController::class, 'destroyAllMessages']);
         Route::get('/conversations/{conversation}/messages', [ConversationController::class, 'messages']);
         Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'sendMessage']);
-        Route::delete('/conversations/{conversation}/messages', [ConversationController::class, 'destroyConversationMessages']);
+        Route::post('/conversations/{conversation}/archive', [ConversationController::class, 'archive']);
+        Route::post('/conversations/{conversation}/unarchive', [ConversationController::class, 'unarchive']);
     });
 
     // Админ-панель — только для администраторов
@@ -90,6 +90,11 @@ Route::middleware(['auth:sanctum', 'throttle:api_user'])->group(function () {
         Route::post('/subjects', [AdminController::class, 'createSubject']);
         Route::put('/subjects/{subject}', [AdminController::class, 'updateSubject']);
         Route::delete('/subjects/{subject}', [AdminController::class, 'deleteSubject']);
+
+        Route::get('/teaching-loads', [AdminController::class, 'teachingLoads']);
+        Route::post('/teaching-loads', [AdminController::class, 'createTeachingLoad']);
+        Route::put('/teaching-loads/{teachingLoad}', [AdminController::class, 'updateTeachingLoad']);
+        Route::delete('/teaching-loads/{teachingLoad}', [AdminController::class, 'deleteTeachingLoad']);
 
         Route::get('/logs', [AdminController::class, 'logs']);
 

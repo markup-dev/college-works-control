@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
@@ -16,6 +16,7 @@ const SubmissionModal = ({
   onSubmit 
 }) => {
   const { showWarning, showError } = useNotification();
+  const [submitting, setSubmitting] = useState(false);
   const isRetake = assignment?.status === 'returned';
   const canSubmitRetake = assignment?.canSubmitRetake ?? isRetake;
   const canSubmitCurrentAttempt = isRetake ? canSubmitRetake : true;
@@ -24,10 +25,19 @@ const SubmissionModal = ({
     : (assignment?.submissionType === 'demo' ? 'Сообщить о готовности' : 'Сдать работу');
 
   useBodyScrollLock(isOpen);
-  
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSubmitting(false);
+    }
+  }, [isOpen]);
+
   if (!isOpen || !assignment) return null;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (submitting) {
+      return;
+    }
     if (!canSubmitCurrentAttempt) {
       showError('Сдача недоступна: пересдача уже использована или задание закрыто для отправки.');
       return;
@@ -38,25 +48,25 @@ const SubmissionModal = ({
         showWarning('Пожалуйста, выберите файл для загрузки');
         return;
       }
-      
+
       const maxFileSize = (assignment.maxFileSize || 50) * 1024 * 1024;
       if (submissionFile.size > maxFileSize) {
         showError(`Файл слишком большой. Максимальный размер: ${assignment.maxFileSize || 50} МБ`);
         return;
       }
-      
+
       if (submissionFile.size === 0) {
         showError('Файл не может быть пустым');
         return;
       }
-      
+
       const allowedFormats = getAllowedFormatsFromAssignment(assignment);
       const fileExtension = '.' + submissionFile.name.split('.').pop()?.toLowerCase();
       if (!allowedFormats.includes(fileExtension)) {
         showError(`Недопустимый формат файла. Разрешены: ${allowedFormats.join(', ')}`);
         return;
       }
-      
+
       const invalidChars = /[<>:"/\\|?*]/;
       if (invalidChars.test(submissionFile.name)) {
         showError('Имя файла содержит недопустимые символы');
@@ -64,7 +74,12 @@ const SubmissionModal = ({
       }
     }
 
-    onSubmit();
+    setSubmitting(true);
+    try {
+      await Promise.resolve(onSubmit?.());
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return createPortal(
@@ -102,10 +117,15 @@ const SubmissionModal = ({
           <Button variant="secondary" onClick={onClose}>
             Отмена
           </Button>
-          <Button 
+          <Button
             variant="primary"
             onClick={handleSubmit}
-            disabled={!canSubmitCurrentAttempt || (assignment.submissionType === 'file' && !submissionFile)}
+            loading={submitting}
+            disabled={
+              submitting ||
+              !canSubmitCurrentAttempt ||
+              (assignment.submissionType === 'file' && !submissionFile)
+            }
           >
             {submitButtonLabel}
           </Button>
@@ -189,7 +209,7 @@ const FileUpload = ({ assignment, submissionFile, onFileSelect }) => {
       <FileDropzone
         accept={allowedFormats.join(',')}
         buttonText="Выбрать файл"
-        hint="Поддерживаются только допустимые форматы из списка выше."
+        hint="Форматы файлов — в списке выше."
         selectedFiles={submissionFile ? [submissionFile] : []}
         showSelectedFiles={false}
         onFilesSelected={handleFileChange}

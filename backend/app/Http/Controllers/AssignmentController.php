@@ -6,11 +6,14 @@ use App\Models\Assignment;
 use App\Models\AssignmentMaterial;
 use App\Models\Group;
 use App\Models\Subject;
+use App\Models\TeachingLoad;
+use App\Models\User;
 use App\Services\AssignmentNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AssignmentController extends Controller
 {
@@ -27,7 +30,9 @@ class AssignmentController extends Controller
             ]);
         }
 
-        $subjects = Subject::where('teacher_id', $user->id)
+        $subjects = Subject::whereHas('teachingLoads', fn ($loadQuery) => $loadQuery
+                ->where('teacher_id', $user->id)
+                ->where('status', 'active'))
             ->where('status', 'active')
             ->orderBy('name')
             ->get(['id', 'name']);
@@ -80,7 +85,9 @@ class AssignmentController extends Controller
             'teacher' => ['nullable', 'string', 'max:255'],
             'group_id' => ['nullable', 'integer', 'exists:groups,id'],
             'group' => ['nullable', 'string', 'max:100'],
-            'sort' => ['nullable', 'in:priority,deadline,deadline_desc,newest,oldest,title,subject,status,pending_desc,pending_asc'],
+            'work_filter' => ['nullable', 'in:needs_review,no_submissions,all_reviewed'],
+            'deadline_filter' => ['nullable', 'in:overdue,due_3d,due_week,not_urgent'],
+            'sort' => ['nullable', 'in:deadline,deadline_desc,newest,oldest,title,subject,status,pending_desc,pending_asc'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
@@ -117,9 +124,9 @@ class AssignmentController extends Controller
             }
 
             $query = Assignment::with([
-                'teacher:id,login,last_name,first_name,middle_name',
+                'teacher:id,login,last_name,first_name,middle_name,grade_scale',
                 'subjectRelation:id,name',
-                'groups:id,name,teacher_id',
+                'groups:id,name',
                 'submissions' => fn ($submissionQuery) => $submissionQuery
                     ->where('student_id', $user->id)
                     ->orderByDesc('submitted_at')
@@ -174,70 +181,13 @@ class AssignmentController extends Controller
                 $query->whereHas('groups', fn ($groupQuery) => $groupQuery->where('groups.name', $groupName));
             }
 
-            $sort = $validated['sort'] ?? 'priority';
-            switch ($sort) {
-                case 'deadline':
-                    $query->orderBy('deadline');
-                    break;
-                case 'deadline_desc':
-                    $query->orderByDesc('deadline');
-                    break;
-                case 'newest':
-                    $query->orderByDesc('created_at');
-                    break;
-                case 'oldest':
-                    $query->orderBy('created_at');
-                    break;
-                case 'title':
-                    $query->orderBy('title');
-                    break;
-                case 'subject':
-                    $query->orderBy('subject_id');
-                    break;
-                case 'pending_asc':
-                    $query->orderBy('pending_count');
-                    break;
-                case 'pending_desc':
-                    $query->orderByDesc('pending_count');
-                    break;
-                case 'priority':
-                default:
-                    $query->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
-                        ->orderBy('deadline');
-                    break;
-            }
+            $query->orderBy('deadline');
 
             $assignments = $query->get();
 
-            $transformed = $assignments->map(function ($assignment) {
-                $studentSubmissions = $assignment->relationLoaded('submissions')
-                    ? $assignment->submissions
-                    : collect();
-
-                $submission = $studentSubmissions->first();
-                $retakeUsed = $studentSubmissions->contains(fn($item) => (bool) $item->is_resubmission);
-                $canSubmitFirstAttempt = !$submission;
-                $canSubmitRetake = (bool) ($submission && $submission->status === 'returned' && !$retakeUsed);
-
-                $data = $assignment->toArray();
-                unset($data['teacher']);
-                $data['is_completed'] = $assignment->status === 'archived';
-                $data['status'] = $submission ? $submission->status : 'not_submitted';
-                $data['score'] = $submission?->score;
-                $data['submitted_at'] = $submission?->submitted_at;
-                $data['feedback'] = $submission?->teacher_comment;
-                $data['criterion_scores'] = $submission?->criterion_scores;
-                $data['retake_used'] = $retakeUsed;
-                $data['can_submit_first_attempt'] = $canSubmitFirstAttempt;
-                $data['can_submit_retake'] = $canSubmitRetake;
-                $data['criteria'] = $this->mergeCriteriaWithScores(
-                    is_array($data['criteria'] ?? null) ? $data['criteria'] : [],
-                    is_array($submission?->criterion_scores ?? null) ? $submission->criterion_scores : []
-                );
-                $data['teacher'] = $assignment->teacher?->full_name ?? 'Не указан';
-
-                return $data;
-            });
+            $transformed = $assignments->map(
+                fn ($assignment) => $this->transformStudentAssignmentPayload($assignment, $user)
+            );
 
             $counts = $this->buildStudentStatusCounts($transformed);
 
@@ -260,7 +210,7 @@ class AssignmentController extends Controller
                 })->values();
             }
 
-            $transformed = $this->sortStudentAssignments($transformed, $sort);
+            $transformed = $this->sortStudentAssignmentsByDefault($transformed);
 
             if ($shouldPaginate) {
                 $total = $transformed->count();
@@ -290,9 +240,9 @@ class AssignmentController extends Controller
         }
 
         $query->with([
-            'teacher:id,login,last_name,first_name,middle_name',
+            'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subjectRelation:id,name',
-            'groups:id,name,teacher_id',
+            'groups:id,name',
             'criteriaItems:id,assignment_id,position,text,max_points',
             'allowedFormatItems:id,assignment_id,format',
             'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
@@ -343,7 +293,34 @@ class AssignmentController extends Controller
             $query->whereHas('groups', fn ($groupQuery) => $groupQuery->where('groups.name', $groupName));
         }
 
-        $sort = $validated['sort'] ?? 'priority';
+        if (!empty($validated['work_filter'])) {
+            match ($validated['work_filter']) {
+                'needs_review' => $query->whereHas('submissions', fn ($submissionQuery) => $submissionQuery->where('status', 'submitted')),
+                'no_submissions' => $query->whereDoesntHave('submissions'),
+                'all_reviewed' => $query
+                    ->whereHas('submissions')
+                    ->whereDoesntHave('submissions', fn ($submissionQuery) => $submissionQuery->where('status', 'submitted')),
+                default => null,
+            };
+        }
+
+        if (!empty($validated['deadline_filter'])) {
+            $today = now()->startOfDay();
+            match ($validated['deadline_filter']) {
+                'overdue' => $query->whereNotNull('deadline')->whereDate('deadline', '<', $today->toDateString()),
+                'due_3d' => $query->whereNotNull('deadline')
+                    ->whereDate('deadline', '>=', $today->toDateString())
+                    ->whereDate('deadline', '<=', $today->copy()->addDays(3)->toDateString()),
+                'due_week' => $query->whereNotNull('deadline')
+                    ->whereDate('deadline', '>=', $today->toDateString())
+                    ->whereDate('deadline', '<=', $today->copy()->addDays(7)->toDateString()),
+                'not_urgent' => $query->whereNotNull('deadline')
+                    ->whereDate('deadline', '>', $today->copy()->addDays(7)->toDateString()),
+                default => null,
+            };
+        }
+
+        $sort = $validated['sort'] ?? 'deadline';
         switch ($sort) {
             case 'deadline':
                 $query->orderBy('deadline');
@@ -369,10 +346,8 @@ class AssignmentController extends Controller
             case 'pending_desc':
                 $query->orderByDesc('pending_count');
                 break;
-            case 'priority':
             default:
-                $query->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
-                    ->orderBy('deadline');
+                $query->orderBy('deadline');
                 break;
         }
 
@@ -411,19 +386,15 @@ class AssignmentController extends Controller
         $validated = $request->validate(
             [
                 'title' => ['required', 'string', 'min:3', 'max:255'],
-                'subject_id' => ['required', Rule::exists('subjects', 'id')->where(fn($query) => $query
-                    ->where('teacher_id', $request->user()->id)
-                    ->where('status', 'active'))],
+                'subject_id' => ['required', Rule::exists('subjects', 'id')->where(fn($query) => $query->where('status', 'active'))],
                 'description' => ['required', 'string', 'min:10', 'max:5000'],
                 'deadline' => ['required', 'date', 'after_or_equal:today'],
-                'max_score' => ['nullable', 'integer', 'min:1', 'max:1000'],
                 'submission_type' => ['nullable', 'in:file,demo'],
                 'criteria' => ['nullable', 'array', 'max:20'],
                 'criteria.*.text' => ['nullable', 'string', 'max:500'],
-                'criteria.*.max_points' => ['nullable', 'integer', 'min:0', 'max:1000'],
+                'criteria.*.max_points' => ['nullable', 'integer', 'min:1', 'max:100'],
                 'student_groups' => ['nullable', 'array', 'max:20'],
                 'student_groups.*' => ['string', 'max:50', 'regex:/^[А-ЯЁA-Z0-9-]+$/iu'],
-                'priority' => ['nullable', 'in:low,medium,high'],
                 'allowed_formats' => ['nullable', 'array', 'max:20'],
                 'allowed_formats.*' => ['string', 'max:30'],
                 'max_file_size' => ['nullable', 'integer', 'min:1', 'max:102400'],
@@ -436,34 +407,44 @@ class AssignmentController extends Controller
                 'description.required' => 'Введите описание задания.',
                 'description.min' => 'Описание задания должно содержать минимум 10 символов.',
                 'deadline.after_or_equal' => 'Срок сдачи не может быть в прошлом.',
-                'max_score.max' => 'Максимальный балл не должен превышать 1000.',
                 'student_groups.*.regex' => 'Название группы может содержать только буквы, цифры и дефис.',
             ]
         );
 
         $groupNames = $request->input('student_groups', []);
-        $criteria = $request->input('criteria', []);
+        $criteria = $this->normalizeCriteriaInput(
+            is_array($request->input('criteria', [])) ? $request->input('criteria', []) : []
+        );
         $allowedFormats = $request->input('allowed_formats', []);
-        unset($validated['student_groups'], $validated['criteria'], $validated['allowed_formats']);
+        $subjectId = (int) $validated['subject_id'];
 
-        $assignment = Assignment::create([
-            ...$validated,
-            'max_score' => $validated['max_score'] ?? 100,
-            'submission_type' => $validated['submission_type'] ?? 'file',
-            'priority' => $validated['priority'] ?? 'medium',
-            'status' => 'active',
-            'teacher_id' => $request->user()->id,
-        ]);
+        if (! $this->teacherCanTeachSubject($request->user()->id, $subjectId)) {
+            return response()->json(['message' => 'Выберите дисциплину из назначенной учебной нагрузки.'], 422);
+        }
 
         $groupIds = collect($groupNames)
             ->map(fn($name) => $this->normalizeGroupName((string) $name))
             ->filter()
             ->unique()
-            ->map(function ($groupName) use ($request) {
-                return $this->resolveGroupIdByName($groupName, $request->user()->id);
+            ->map(function ($groupName) use ($request, $subjectId) {
+                return $this->resolveGroupIdByName($groupName, $request->user()->id, $subjectId);
             })
             ->values()
             ->all();
+
+        if (empty($groupIds)) {
+            return response()->json(['message' => 'Выберите хотя бы одну группу из назначенной учебной нагрузки.'], 422);
+        }
+
+        unset($validated['student_groups'], $validated['criteria'], $validated['allowed_formats'], $validated['max_score']);
+
+        $assignment = Assignment::create([
+            ...$validated,
+            'max_score' => 100,
+            'submission_type' => $validated['submission_type'] ?? 'file',
+            'status' => 'active',
+            'teacher_id' => $request->user()->id,
+        ]);
 
         $assignment->groups()->sync($groupIds);
 
@@ -471,9 +452,9 @@ class AssignmentController extends Controller
         $this->syncAllowedFormats($assignment, is_array($allowedFormats) ? $allowedFormats : []);
 
         $assignment->load([
-            'teacher:id,login,last_name,first_name,middle_name',
+            'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subjectRelation:id,name',
-            'groups:id,name,teacher_id',
+            'groups:id,name',
             'criteriaItems:id,assignment_id,position,text,max_points',
             'allowedFormatItems:id,assignment_id,format',
             'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
@@ -507,12 +488,32 @@ class AssignmentController extends Controller
                 || ! $assignment->groups()->where('groups.id', $user->group_id)->exists()) {
                 return response()->json(['message' => 'Недостаточно прав для просмотра задания.'], 403);
             }
+
+            $assignment->load([
+                'teacher:id,login,last_name,first_name,middle_name,grade_scale',
+                'subjectRelation:id,name',
+                'groups:id,name',
+                'submissions' => fn ($submissionQuery) => $submissionQuery
+                    ->where('student_id', $user->id)
+                    ->orderByDesc('submitted_at')
+                    ->orderByDesc('id')
+                    ->select(['id', 'assignment_id', 'student_id', 'status', 'score', 'teacher_comment', 'criterion_scores', 'submitted_at', 'is_resubmission']),
+                'criteriaItems:id,assignment_id,position,text,max_points',
+                'allowedFormatItems:id,assignment_id,format',
+                'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
+            ]);
+            $assignment->loadCount([
+                'submissions',
+                'submissions as pending_count' => fn ($q) => $q->where('status', 'submitted'),
+            ]);
+
+            return response()->json($this->transformStudentAssignmentPayload($assignment, $user));
         }
 
         $assignment->load([
-            'teacher:id,login,last_name,first_name,middle_name',
+            'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subjectRelation:id,name',
-            'groups:id,name,teacher_id',
+            'groups:id,name',
             'criteriaItems:id,assignment_id,position,text,max_points',
             'allowedFormatItems:id,assignment_id,format',
             'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
@@ -530,20 +531,16 @@ class AssignmentController extends Controller
         $validated = $request->validate(
             [
                 'title' => ['sometimes', 'required', 'string', 'min:3', 'max:255'],
-                'subject_id' => ['sometimes', 'required', Rule::exists('subjects', 'id')->where(fn($query) => $query
-                    ->where('teacher_id', $request->user()->id)
-                    ->where('status', 'active'))],
+                'subject_id' => ['sometimes', 'required', Rule::exists('subjects', 'id')->where(fn($query) => $query->where('status', 'active'))],
                 'description' => ['nullable', 'string', 'min:10', 'max:5000'],
                 'deadline' => ['sometimes', 'required', 'date', 'after_or_equal:today'],
                 'status' => ['nullable', 'in:active,inactive,archived'],
-                'max_score' => ['nullable', 'integer', 'min:1', 'max:1000'],
                 'submission_type' => ['nullable', 'in:file,demo'],
                 'criteria' => ['nullable', 'array', 'max:20'],
                 'criteria.*.text' => ['nullable', 'string', 'max:500'],
-                'criteria.*.max_points' => ['nullable', 'integer', 'min:0', 'max:1000'],
+                'criteria.*.max_points' => ['nullable', 'integer', 'min:1', 'max:100'],
                 'student_groups' => ['nullable', 'array', 'max:20'],
                 'student_groups.*' => ['string', 'max:50', 'regex:/^[А-ЯЁA-Z0-9-]+$/iu'],
-                'priority' => ['nullable', 'in:low,medium,high'],
                 'allowed_formats' => ['nullable', 'array', 'max:20'],
                 'allowed_formats.*' => ['string', 'max:30'],
                 'max_file_size' => ['nullable', 'integer', 'min:1', 'max:102400'],
@@ -555,28 +552,39 @@ class AssignmentController extends Controller
                 'subject_id.exists' => 'Выберите корректную дисциплину из назначенных.',
                 'description.min' => 'Описание задания должно содержать минимум 10 символов.',
                 'deadline.after_or_equal' => 'Срок сдачи не может быть в прошлом.',
-                'max_score.max' => 'Максимальный балл не должен превышать 1000.',
                 'student_groups.*.regex' => 'Название группы может содержать только буквы, цифры и дефис.',
             ]
         );
 
         $newGroupIds = null;
+        $subjectId = (int) ($validated['subject_id'] ?? $assignment->subject_id);
+        if (! $this->teacherCanTeachSubject($request->user()->id, $subjectId)) {
+            return response()->json(['message' => 'Выберите дисциплину из назначенной учебной нагрузки.'], 422);
+        }
+
         if ($request->has('student_groups')) {
             $newGroupIds = collect($request->input('student_groups', []))
                 ->map(fn($name) => $this->normalizeGroupName((string) $name))
                 ->filter()
                 ->unique()
-                ->map(function ($groupName) use ($assignment) {
-                    return $this->resolveGroupIdByName($groupName, $assignment->teacher_id);
+                ->map(function ($groupName) use ($assignment, $subjectId) {
+                    return $this->resolveGroupIdByName($groupName, $assignment->teacher_id, $subjectId);
                 })
                 ->values()
                 ->all();
+
+            if (empty($newGroupIds)) {
+                return response()->json(['message' => 'Выберите хотя бы одну группу из назначенной учебной нагрузки.'], 422);
+            }
         }
 
-        $newCriteria = $request->has('criteria') ? $request->input('criteria', []) : null;
+        $newCriteria = $request->has('criteria')
+            ? $this->normalizeCriteriaInput(is_array($request->input('criteria', [])) ? $request->input('criteria', []) : [])
+            : null;
         $newAllowedFormats = $request->has('allowed_formats') ? $request->input('allowed_formats', []) : null;
 
-        unset($validated['student_groups'], $validated['criteria'], $validated['allowed_formats']);
+        unset($validated['student_groups'], $validated['criteria'], $validated['allowed_formats'], $validated['max_score']);
+        $validated['max_score'] = 100;
         $assignment->update($validated);
         if (is_array($newGroupIds)) {
             $assignment->groups()->sync($newGroupIds);
@@ -589,9 +597,9 @@ class AssignmentController extends Controller
         }
 
         $fresh = $assignment->fresh()->load([
-            'teacher:id,login,last_name,first_name,middle_name',
+            'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subjectRelation:id,name',
-            'groups:id,name,teacher_id',
+            'groups:id,name',
             'criteriaItems:id,assignment_id,position,text,max_points',
             'allowedFormatItems:id,assignment_id,format',
             'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
@@ -686,9 +694,9 @@ class AssignmentController extends Controller
         return response()->json([
             'success' => true,
             'assignment' => $assignment->fresh()->load([
-                'teacher:id,login,last_name,first_name,middle_name',
+                'teacher:id,login,last_name,first_name,middle_name,grade_scale',
                 'subjectRelation:id,name',
-                'groups:id,name,teacher_id',
+                'groups:id,name',
                 'criteriaItems:id,assignment_id,position,text,max_points',
                 'allowedFormatItems:id,assignment_id,format',
                 'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
@@ -747,7 +755,7 @@ class AssignmentController extends Controller
                 return [
                     'position' => (int) $index,
                     'text' => $text,
-                    'max_points' => max(0, (int) ($criterion['max_points'] ?? 0)),
+                    'max_points' => max(1, (int) ($criterion['max_points'] ?? 0)),
                 ];
             })
             ->filter()
@@ -757,6 +765,45 @@ class AssignmentController extends Controller
         if (!empty($rows)) {
             $assignment->criteriaItems()->createMany($rows);
         }
+    }
+
+    private function normalizeCriteriaInput(array $criteria): array
+    {
+        $rows = collect($criteria)
+            ->filter(fn($criterion) => is_array($criterion))
+            ->map(function ($criterion, $index) {
+                $text = trim((string) ($criterion['text'] ?? ''));
+                if ($text === '') {
+                    return null;
+                }
+
+                return [
+                    'position' => (int) $index,
+                    'text' => $text,
+                    'max_points' => (int) ($criterion['max_points'] ?? $criterion['maxPoints'] ?? 0),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        if ($rows->contains(fn($criterion) => $criterion['max_points'] < 1)) {
+            throw ValidationException::withMessages([
+                'criteria' => ['У каждого критерия должно быть минимум 1 балл.'],
+            ]);
+        }
+
+        $total = $rows->sum('max_points');
+        if ($total !== 100) {
+            throw ValidationException::withMessages([
+                'criteria' => ["Сумма баллов по критериям должна быть 100, сейчас {$total}."],
+            ]);
+        }
+
+        return $rows->all();
     }
 
     private function syncAllowedFormats(Assignment $assignment, array $allowedFormats): void
@@ -773,6 +820,47 @@ class AssignmentController extends Controller
         if (!empty($rows)) {
             $assignment->allowedFormatItems()->createMany($rows);
         }
+    }
+
+    private function transformStudentAssignmentPayload(Assignment $assignment, User $student): array
+    {
+        if ($assignment->status === 'archived') {
+            $assignment->syncCompletionStatus();
+        }
+
+        $studentSubmissions = $assignment->relationLoaded('submissions')
+            ? $assignment->submissions
+            : $assignment->submissions()
+                ->where('student_id', $student->id)
+                ->orderByDesc('submitted_at')
+                ->orderByDesc('id')
+                ->select(['id', 'assignment_id', 'student_id', 'status', 'score', 'teacher_comment', 'criterion_scores', 'submitted_at', 'is_resubmission'])
+                ->get();
+
+        $submission = $studentSubmissions->first();
+        $retakeUsed = $studentSubmissions->contains(fn ($item) => (bool) $item->is_resubmission);
+        $canSubmitFirstAttempt = ! $submission;
+        $canSubmitRetake = (bool) ($submission && $submission->status === 'returned' && ! $retakeUsed);
+
+        $data = $assignment->toArray();
+        unset($data['teacher']);
+        $data['is_completed'] = $assignment->status === 'archived';
+        $data['status'] = $submission ? $submission->status : 'not_submitted';
+        $data['score'] = $submission?->score;
+        $data['grade_label'] = $submission?->gradeLabel();
+        $data['submitted_at'] = $submission?->submitted_at;
+        $data['feedback'] = $submission?->teacher_comment;
+        $data['criterion_scores'] = $submission?->criterion_scores;
+        $data['retake_used'] = $retakeUsed;
+        $data['can_submit_first_attempt'] = $canSubmitFirstAttempt;
+        $data['can_submit_retake'] = $canSubmitRetake;
+        $data['criteria'] = $this->mergeCriteriaWithScores(
+            is_array($data['criteria'] ?? null) ? $data['criteria'] : [],
+            is_array($submission?->criterion_scores ?? null) ? $submission->criterion_scores : []
+        );
+        $data['teacher'] = $assignment->teacher?->full_name ?? 'Не указан';
+
+        return $data;
     }
 
     private function mergeCriteriaWithScores(array $criteria, array $criterionScores): array
@@ -803,51 +891,25 @@ class AssignmentController extends Controller
             ->all();
     }
 
-    private function sortStudentAssignments(Collection $assignments, string $sort): Collection
+    private function sortStudentAssignmentsByDefault(Collection $assignments): Collection
     {
-        switch ($sort) {
-            case 'deadline':
-                return $assignments->sort(fn ($a, $b) => $this->timestampFromDate($a['deadline'] ?? null) <=> $this->timestampFromDate($b['deadline'] ?? null))->values();
-            case 'deadline_desc':
-                return $assignments->sort(fn ($a, $b) => $this->timestampFromDate($b['deadline'] ?? null) <=> $this->timestampFromDate($a['deadline'] ?? null))->values();
-            case 'newest':
-                return $assignments->sort(fn ($a, $b) => $this->timestampFromDate($b['created_at'] ?? null) <=> $this->timestampFromDate($a['created_at'] ?? null))->values();
-            case 'oldest':
-                return $assignments->sort(fn ($a, $b) => $this->timestampFromDate($a['created_at'] ?? null) <=> $this->timestampFromDate($b['created_at'] ?? null))->values();
-            case 'title':
-                return $assignments->sort(fn ($a, $b) => strcasecmp((string) ($a['title'] ?? ''), (string) ($b['title'] ?? '')))->values();
-            case 'subject':
-                return $assignments->sort(fn ($a, $b) => strcasecmp((string) ($a['subject'] ?? ''), (string) ($b['subject'] ?? '')))->values();
-            case 'status':
-                return $assignments->sort(fn ($a, $b) => strcasecmp((string) ($a['status'] ?? ''), (string) ($b['status'] ?? '')))->values();
-            case 'priority':
-            default:
-                return $assignments->sort(function ($a, $b) {
-                    $bucketA = $this->studentPriorityBucket($a);
-                    $bucketB = $this->studentPriorityBucket($b);
-                    if ($bucketA !== $bucketB) {
-                        return $bucketA <=> $bucketB;
-                    }
+        return $assignments->sort(function ($a, $b) {
+            $bucketA = $this->studentPriorityBucket($a);
+            $bucketB = $this->studentPriorityBucket($b);
+            if ($bucketA !== $bucketB) {
+                return $bucketA <=> $bucketB;
+            }
 
-                    if (in_array($bucketA, [0, 1], true)) {
-                        return $this->timestampFromDate($a['deadline'] ?? null) <=> $this->timestampFromDate($b['deadline'] ?? null);
-                    }
+            if (in_array($bucketA, [0, 1, 2], true)) {
+                return $this->timestampFromDate($a['deadline'] ?? null) <=> $this->timestampFromDate($b['deadline'] ?? null);
+            }
 
-                    if ($bucketA === 2) {
-                        $priorityDiff = $this->priorityRank($b['priority'] ?? null) <=> $this->priorityRank($a['priority'] ?? null);
-                        if ($priorityDiff !== 0) {
-                            return $priorityDiff;
-                        }
-                        return $this->timestampFromDate($a['deadline'] ?? null) <=> $this->timestampFromDate($b['deadline'] ?? null);
-                    }
+            if (in_array($bucketA, [3, 4], true)) {
+                return $this->timestampFromDate($b['submitted_at'] ?? null) <=> $this->timestampFromDate($a['submitted_at'] ?? null);
+            }
 
-                    if (in_array($bucketA, [3, 4], true)) {
-                        return $this->timestampFromDate($b['submitted_at'] ?? null) <=> $this->timestampFromDate($a['submitted_at'] ?? null);
-                    }
-
-                    return strcasecmp((string) ($a['title'] ?? ''), (string) ($b['title'] ?? ''));
-                })->values();
-        }
+            return strcasecmp((string) ($a['title'] ?? ''), (string) ($b['title'] ?? ''));
+        })->values();
     }
 
     private function buildStudentStatusCounts(Collection $assignments): array
@@ -903,16 +965,6 @@ class AssignmentController extends Controller
         return 5;
     }
 
-    private function priorityRank(?string $priority): int
-    {
-        return match ((string) $priority) {
-            'high' => 3,
-            'medium' => 2,
-            'low' => 1,
-            default => 0,
-        };
-    }
-
     private function daysUntilDeadline(mixed $value): ?int
     {
         $timestamp = $this->timestampFromDate($value);
@@ -943,27 +995,40 @@ class AssignmentController extends Controller
         return mb_strtoupper($normalized);
     }
 
-    private function resolveGroupIdByName(string $groupName, int $teacherId): int
+    private function resolveGroupIdByName(string $groupName, int $teacherId, int $subjectId): int
     {
-        $exactGroup = Group::where('name', $groupName)->first();
+        $exactGroup = Group::where('name', $groupName)
+            ->whereHas('teachingLoads', fn ($loadQuery) => $loadQuery
+                ->where('teacher_id', $teacherId)
+                ->where('subject_id', $subjectId)
+                ->where('status', 'active'))
+            ->first();
         if ($exactGroup) {
             return (int) $exactGroup->id;
         }
 
-        $normalizedExistingGroup = Group::all(['id', 'name'])
+        $normalizedExistingGroup = Group::whereHas('teachingLoads', fn ($loadQuery) => $loadQuery
+                ->where('teacher_id', $teacherId)
+                ->where('subject_id', $subjectId)
+                ->where('status', 'active'))
+            ->get(['id', 'name'])
             ->first(fn($group) => $this->normalizeGroupName((string) $group->name) === $groupName);
 
         if ($normalizedExistingGroup) {
             return (int) $normalizedExistingGroup->id;
         }
 
-        $created = Group::create([
-            'name' => $groupName,
-            'teacher_id' => $teacherId,
-            'status' => 'active',
-        ]);
+        throw new \Illuminate\Http\Exceptions\HttpResponseException(response()->json([
+            'message' => "Группа {$groupName} не назначена вам по выбранной дисциплине.",
+        ], 422));
+    }
 
-        return (int) $created->id;
+    private function teacherCanTeachSubject(int $teacherId, int $subjectId): bool
+    {
+        return TeachingLoad::where('teacher_id', $teacherId)
+            ->where('subject_id', $subjectId)
+            ->where('status', 'active')
+            ->exists();
     }
 
     private function applyTeacherTextFilter($query, string $teacherFilter): void

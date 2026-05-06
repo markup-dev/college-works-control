@@ -95,7 +95,15 @@ const TeacherDashboard = () => {
   const [searchTerm, setSearchTerm] = useState(storedFilters?.searchTerm || '');
   const [assignmentSearchTerm, setAssignmentSearchTerm] = useState(storedFilters?.assignmentSearchTerm || '');
   const [assignmentGroupFilter, setAssignmentGroupFilter] = useState(storedFilters?.assignmentGroupFilter || 'all');
-  const [assignmentSortBy, setAssignmentSortBy] = useState(storedFilters?.assignmentSortBy || 'priority');
+  const [assignmentSubjectFilter, setAssignmentSubjectFilter] = useState(
+    storedFilters?.assignmentSubjectFilter || 'all'
+  );
+  const [assignmentWorkFilter, setAssignmentWorkFilter] = useState(
+    storedFilters?.assignmentWorkFilter || 'all'
+  );
+  const [assignmentDeadlineFilter, setAssignmentDeadlineFilter] = useState(
+    storedFilters?.assignmentDeadlineFilter || 'all'
+  );
   const [assignmentToDelete, setAssignmentToDelete] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [detailsAssignment, setDetailsAssignment] = useState(null);
@@ -142,7 +150,9 @@ const TeacherDashboard = () => {
   const handleResetAssignmentFilters = () => {
     setAssignmentSearchTerm('');
     setAssignmentGroupFilter('all');
-    setAssignmentSortBy('priority');
+    setAssignmentSubjectFilter('all');
+    setAssignmentWorkFilter('all');
+    setAssignmentDeadlineFilter('all');
     setAssignmentPage(1);
   };
 
@@ -297,15 +307,31 @@ const TeacherDashboard = () => {
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== 'assignments' && activeTab !== 'completed') {
+      return;
+    }
+
     loadTeacherAssignments({
       page: assignmentPage,
       perPage: PAGINATION_DEFAULTS.teacherAssignments,
-      sort: assignmentSortBy,
+      sort: 'deadline',
       search: debouncedAssignmentSearch || undefined,
       group: assignmentGroupFilter !== 'all' ? assignmentGroupFilter : undefined,
+      subjectId: assignmentSubjectFilter !== 'all' ? assignmentSubjectFilter : undefined,
+      workFilter: activeTab === 'assignments' && assignmentWorkFilter !== 'all' ? assignmentWorkFilter : undefined,
+      assignmentDeadlineFilter: assignmentDeadlineFilter !== 'all' ? assignmentDeadlineFilter : undefined,
       status: activeTab === 'completed' ? 'archived' : (activeTab === 'assignments' ? 'not_archived' : undefined),
     });
-  }, [activeTab, assignmentPage, assignmentSortBy, debouncedAssignmentSearch, assignmentGroupFilter, loadTeacherAssignments]);
+  }, [
+    activeTab,
+    assignmentPage,
+    debouncedAssignmentSearch,
+    assignmentGroupFilter,
+    assignmentSubjectFilter,
+    assignmentWorkFilter,
+    assignmentDeadlineFilter,
+    loadTeacherAssignments,
+  ]);
 
   useEffect(() => {
     if (activeTab !== 'submissions') {
@@ -343,28 +369,29 @@ const TeacherDashboard = () => {
 
     (async () => {
       setSubmissionsPanelLoading(true);
+      const priorityRequest = (async () => {
+        try {
+          const { data } = await api.get('/submissions', { params: priorityParams });
+          if (!cancelled) {
+            const list = Array.isArray(data?.data) ? data.data : [];
+            setPriorityQueue(list.map(normalizeSubmission));
+          }
+        } catch {
+          if (!cancelled) {
+            setPriorityQueue([]);
+          }
+        }
+      })();
+
       try {
-        await Promise.all([
-          loadTeacherSubmissions(submissionParams, { trackLoading: false }),
-          (async () => {
-            try {
-              const { data } = await api.get('/submissions', { params: priorityParams });
-              if (!cancelled) {
-                const list = Array.isArray(data?.data) ? data.data : [];
-                setPriorityQueue(list.map(normalizeSubmission));
-              }
-            } catch {
-              if (!cancelled) {
-                setPriorityQueue([]);
-              }
-            }
-          })(),
-        ]);
+        await loadTeacherSubmissions(submissionParams, { trackLoading: false });
       } finally {
         if (!cancelled) {
           setSubmissionsPanelLoading(false);
         }
       }
+
+      await priorityRequest;
     })();
 
     return () => {
@@ -395,7 +422,9 @@ const TeacherDashboard = () => {
         searchTerm,
         assignmentSearchTerm,
         assignmentGroupFilter,
-        assignmentSortBy,
+        assignmentSubjectFilter,
+        assignmentWorkFilter,
+        assignmentDeadlineFilter,
         submissionSort,
         deadlineFilter,
       })
@@ -408,7 +437,9 @@ const TeacherDashboard = () => {
     searchTerm,
     assignmentSearchTerm,
     assignmentGroupFilter,
-    assignmentSortBy,
+    assignmentSubjectFilter,
+    assignmentWorkFilter,
+    assignmentDeadlineFilter,
     submissionSort,
     deadlineFilter,
   ]);
@@ -423,16 +454,15 @@ const TeacherDashboard = () => {
     const completedAssignmentsCount = analyticsAssignments.filter((assignment) => assignment.isCompleted || assignment.status === 'archived').length;
     const activeAssignmentsCount = analyticsAssignments.length - completedAssignmentsCount;
     const hasAssignmentsTotal = assignmentsMeta?.total !== undefined && assignmentsMeta?.total !== null;
-    const hasSubmissionsTotal = submissionsMeta?.total !== undefined && submissionsMeta?.total !== null;
 
     const dashboardStats = {
       totalAssignments: activeAssignmentsCount > 0 || !hasAssignmentsTotal
         ? activeAssignmentsCount
         : Number(assignmentsMeta.total),
       completedAssignments: completedAssignmentsCount,
-      pendingSubmissions: hasSubmissionsTotal
-        ? Number(submissionsMeta.total)
-        : analyticsSubmissions.filter(s => s.status === 'submitted').length,
+      pendingSubmissions: analyticsSubmissions.length > 0
+        ? analyticsSubmissions.filter(s => s.status === 'submitted').length
+        : submissions.filter(s => s.status === 'submitted').length,
       gradedSubmissions: analyticsSubmissions.filter(s => s.status === 'graded').length,
       returnedSubmissions: analyticsSubmissions.filter(s => s.status === 'returned').length,
       totalSubmissions: analyticsSubmissions.length
@@ -454,7 +484,7 @@ const TeacherDashboard = () => {
       filteredActiveAssignments: activeAssignments,
       filteredCompletedAssignments: completedAssignments,
     };
-  }, [assignments, submissions, analyticsAssignments, analyticsSubmissions, assignmentsMeta, submissionsMeta]);
+  }, [assignments, submissions, analyticsAssignments, analyticsSubmissions, assignmentsMeta]);
 
   const assignmentGroupOptions = useMemo(
     () => buildNormalizedGroupOptions(teacherAvailableGroups),
@@ -469,7 +499,24 @@ const TeacherDashboard = () => {
     [analyticsAssignments, teacherAvailableSubjects]
   );
 
+  const assignmentSubjectOptions = submissionAssignmentOptions;
+
   const submissionGroupOptions = useMemo(() => assignmentGroupOptions, [assignmentGroupOptions]);
+
+  useEffect(() => {
+    if (assignmentSubjectFilter === 'all') {
+      return;
+    }
+
+    const hasSelectedSubject = assignmentSubjectOptions.some(
+      (subject) => String(subject.id) === String(assignmentSubjectFilter)
+    );
+
+    if (!hasSelectedSubject) {
+      setAssignmentSubjectFilter('all');
+      setAssignmentPage(1);
+    }
+  }, [assignmentSubjectFilter, assignmentSubjectOptions]);
 
   useEffect(() => {
     if (assignmentFilter === 'all') {
@@ -837,8 +884,11 @@ const TeacherDashboard = () => {
             searchTerm={searchTerm}
             assignmentSearchTerm={assignmentSearchTerm}
             assignmentGroupFilter={assignmentGroupFilter}
-            assignmentSortBy={assignmentSortBy}
+            assignmentSubjectFilter={assignmentSubjectFilter}
+            assignmentWorkFilter={assignmentWorkFilter}
+            assignmentDeadlineFilter={assignmentDeadlineFilter}
             assignmentGroupOptions={assignmentGroupOptions}
+            assignmentSubjectOptions={assignmentSubjectOptions}
             submissionGroupOptions={submissionGroupOptions}
             assignmentsMeta={assignmentsMeta}
             submissionsMeta={submissionsMeta}
@@ -846,7 +896,6 @@ const TeacherDashboard = () => {
               setAssignmentFilter(value);
               setSubmissionPage(1);
             }}
-            onAssignmentSortChange={setAssignmentSortBy}
             onGroupFilterChange={(value) => {
               setGroupFilter(value);
               setSubmissionPage(1);
@@ -865,6 +914,18 @@ const TeacherDashboard = () => {
             }}
             onAssignmentGroupFilterChange={(value) => {
               setAssignmentGroupFilter(value);
+              setAssignmentPage(1);
+            }}
+            onAssignmentSubjectFilterChange={(value) => {
+              setAssignmentSubjectFilter(value);
+              setAssignmentPage(1);
+            }}
+            onAssignmentWorkFilterChange={(value) => {
+              setAssignmentWorkFilter(value);
+              setAssignmentPage(1);
+            }}
+            onAssignmentDeadlineFilterChange={(value) => {
+              setAssignmentDeadlineFilter(value);
               setAssignmentPage(1);
             }}
             onResetAssignmentFilters={handleResetAssignmentFilters}
@@ -1015,8 +1076,11 @@ const DashboardContent = ({
   searchTerm,
   assignmentSearchTerm,
   assignmentGroupFilter,
-  assignmentSortBy,
+  assignmentSubjectFilter,
+  assignmentWorkFilter,
+  assignmentDeadlineFilter,
   assignmentGroupOptions,
+  assignmentSubjectOptions,
   submissionGroupOptions,
   assignmentsMeta,
   submissionsMeta,
@@ -1026,9 +1090,11 @@ const DashboardContent = ({
   onSearchChange,
   onAssignmentSearchChange,
   onAssignmentGroupFilterChange,
+  onAssignmentSubjectFilterChange,
+  onAssignmentWorkFilterChange,
+  onAssignmentDeadlineFilterChange,
   onResetAssignmentFilters,
   onResetSubmissionFilters,
-  onAssignmentSortChange,
   onPrevAssignmentsPage,
   onNextAssignmentsPage,
   onPrevSubmissionsPage,
@@ -1059,11 +1125,16 @@ const DashboardContent = ({
             activeAssignments={activeAssignments}
             searchTerm={assignmentSearchTerm}
             groupFilter={assignmentGroupFilter}
+            workFilter={assignmentWorkFilter}
+            deadlineFilter={assignmentDeadlineFilter}
             availableGroups={assignmentGroupOptions}
-            sortBy={assignmentSortBy}
+            subjectFilter={assignmentSubjectFilter}
+            availableSubjects={assignmentSubjectOptions}
             onSearchChange={onAssignmentSearchChange}
             onGroupFilterChange={onAssignmentGroupFilterChange}
-            onSortChange={onAssignmentSortChange}
+            onSubjectFilterChange={onAssignmentSubjectFilterChange}
+            onWorkFilterChange={onAssignmentWorkFilterChange}
+            onDeadlineFilterChange={onAssignmentDeadlineFilterChange}
             onResetFilters={onResetAssignmentFilters}
             paginationMeta={assignmentsMeta}
             onPrevPage={onPrevAssignmentsPage}
@@ -1081,11 +1152,14 @@ const DashboardContent = ({
             completedAssignments={completedAssignments}
             searchTerm={assignmentSearchTerm}
             groupFilter={assignmentGroupFilter}
+            deadlineFilter={assignmentDeadlineFilter}
             availableGroups={assignmentGroupOptions}
-            sortBy={assignmentSortBy}
+            subjectFilter={assignmentSubjectFilter}
+            availableSubjects={assignmentSubjectOptions}
             onSearchChange={onAssignmentSearchChange}
             onGroupFilterChange={onAssignmentGroupFilterChange}
-            onSortChange={onAssignmentSortChange}
+            onSubjectFilterChange={onAssignmentSubjectFilterChange}
+            onDeadlineFilterChange={onAssignmentDeadlineFilterChange}
             onResetFilters={onResetAssignmentFilters}
             paginationMeta={assignmentsMeta}
             onPrevPage={onPrevAssignmentsPage}
@@ -1209,15 +1283,100 @@ const TeacherPriorityBlock = ({ reviewQueue = [], onViewDetails }) => {
   );
 };
 
+const ASSIGNMENT_QUICK_FILTERS = [
+  { value: 'all', label: 'Все работы' },
+  { value: 'needs_review', label: 'Нужна проверка' },
+  { value: 'no_submissions', label: 'Без сдач' },
+  { value: 'all_reviewed', label: 'Все проверены' },
+];
+
+const ASSIGNMENT_DEADLINE_FILTERS = [
+  { value: 'all', label: 'Все сроки' },
+  { value: 'overdue', label: 'Просроченные' },
+  { value: 'due_3d', label: 'Скоро дедлайн' },
+  { value: 'due_week', label: 'На неделе' },
+  { value: 'not_urgent', label: 'Без срочности' },
+];
+
+const AssignmentQuickFilters = ({ label, value = 'all', onChange, options }) => (
+  <div className="assignment-quick-filters" aria-label={label}>
+    {options.map((filter) => (
+      <button
+        key={filter.value}
+        type="button"
+        className={`assignment-quick-filters__chip${value === filter.value ? ' is-active' : ''}`}
+        onClick={() => onChange?.(filter.value)}
+        aria-pressed={value === filter.value}
+      >
+        {filter.label}
+      </button>
+    ))}
+  </div>
+);
+
+const TeacherFilterPopover = ({ id, disabled = false, children }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const popoverRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const handleDocumentMouseDown = (event) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="teacher-filter-toolbar" ref={popoverRef}>
+      <button
+        type="button"
+        className={`teacher-filter-trigger${isOpen ? ' teacher-filter-trigger--open' : ''}`}
+        aria-expanded={isOpen}
+        aria-controls={id}
+        onClick={() => setIsOpen((open) => !open)}
+        disabled={disabled}
+      >
+        Фильтр
+      </button>
+      {isOpen && (
+        <div id={id} className="teacher-filter-popover" role="dialog" aria-label="Фильтры">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AssignmentsSection = ({
   activeAssignments,
   searchTerm,
   groupFilter,
+  workFilter,
+  deadlineFilter,
   availableGroups,
-  sortBy,
+  subjectFilter,
+  availableSubjects,
   onSearchChange,
   onGroupFilterChange,
-  onSortChange,
+  onSubjectFilterChange,
+  onWorkFilterChange,
+  onDeadlineFilterChange,
   onResetFilters,
   paginationMeta = {},
   onPrevPage,
@@ -1236,8 +1395,8 @@ const AssignmentsSection = ({
     </div>
 
     <div className="filters-section">
-      <div className="controls-row">
-        <div className="search-box">
+      <div className="controls-row teacher-dashboard-filter-row">
+        <div className="search-box teacher-dashboard-filter-search">
           <input
             type="text"
             placeholder="Поиск по названию, предмету..."
@@ -1246,39 +1405,72 @@ const AssignmentsSection = ({
             className="search-input"
           />
         </div>
-        <div className="sort-filter">
-          <select
-            value={groupFilter}
-            onChange={(e) => onGroupFilterChange(e.target.value)}
-            className="filter-select group-filter"
-          >
-            <option value="all">Все группы</option>
-            {availableGroups.map((group) => (
-              <option key={group} value={group}>
-                {group}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="sort-filter">
-          <select
-            value={sortBy}
-            onChange={(e) => onSortChange(e.target.value)}
-            className="sort-select subject-filter"
-          >
-            <option value="priority">По приоритету</option>
-            <option value="deadline">По ближайшему сроку</option>
-            <option value="deadline_desc">По дальнему сроку</option>
-            <option value="newest">Сначала новые</option>
-            <option value="oldest">Сначала старые</option>
-            <option value="subject">По предмету</option>
-            <option value="title">По названию</option>
-            <option value="submissions">По количеству работ</option>
-          </select>
-        </div>
-        <Button variant="secondary" onClick={onResetFilters}>
+        <TeacherFilterPopover id="teacher-assignment-filter-popover">
+          <div className="teacher-filter-field">
+            <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-group-filter">
+              Группа
+            </label>
+            <select
+              id="teacher-assignment-group-filter"
+              value={groupFilter}
+              onChange={(e) => onGroupFilterChange(e.target.value)}
+              className="filter-select group-filter"
+            >
+              <option value="all">Все группы</option>
+              {availableGroups.map((group) => (
+                <option key={group} value={group}>
+                  {group}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="teacher-filter-field">
+            <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-subject-filter">
+              Предмет
+            </label>
+            <select
+              id="teacher-assignment-subject-filter"
+              value={subjectFilter}
+              onChange={(e) => onSubjectFilterChange(e.target.value)}
+              className="filter-select subject-filter"
+            >
+              <option value="all">Все предметы</option>
+              {availableSubjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="teacher-filter-field">
+            <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-deadline-filter">
+              Срок
+            </label>
+            <select
+              id="teacher-assignment-deadline-filter"
+              value={deadlineFilter}
+              onChange={(e) => onDeadlineFilterChange(e.target.value)}
+              className="filter-select deadline-filter"
+            >
+              {ASSIGNMENT_DEADLINE_FILTERS.map((filter) => (
+                <option key={filter.value} value={filter.value}>
+                  {filter.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </TeacherFilterPopover>
+        <Button variant="secondary" className="teacher-dashboard-filter-reset-btn" onClick={onResetFilters}>
           Сбросить фильтры
         </Button>
+      </div>
+      <div className="assignment-quick-filter-groups">
+        <AssignmentQuickFilters
+          label="Фильтр заданий по работам"
+          value={workFilter}
+          onChange={onWorkFilterChange}
+          options={ASSIGNMENT_QUICK_FILTERS}
+        />
       </div>
     </div>
 
@@ -1314,11 +1506,14 @@ const CompletedAssignmentsSection = ({
   completedAssignments,
   searchTerm,
   groupFilter,
+  deadlineFilter,
   availableGroups,
-  sortBy,
+  subjectFilter,
+  availableSubjects,
   onSearchChange,
   onGroupFilterChange,
-  onSortChange,
+  onSubjectFilterChange,
+  onDeadlineFilterChange,
   onResetFilters,
   paginationMeta = {},
   onPrevPage,
@@ -1333,8 +1528,8 @@ const CompletedAssignmentsSection = ({
     </div>
 
     <div className="filters-section">
-      <div className="controls-row">
-        <div className="search-box">
+      <div className="controls-row teacher-dashboard-filter-row">
+        <div className="search-box teacher-dashboard-filter-search">
           <input
             type="text"
             placeholder="Поиск по названию, предмету..."
@@ -1343,37 +1538,62 @@ const CompletedAssignmentsSection = ({
             className="search-input"
           />
         </div>
-        <div className="sort-filter">
-          <select
-            value={groupFilter}
-            onChange={(e) => onGroupFilterChange(e.target.value)}
-            className="filter-select group-filter"
-          >
-            <option value="all">Все группы</option>
-            {availableGroups.map((group) => (
-              <option key={group} value={group}>
-                {group}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="sort-filter">
-          <select
-            value={sortBy}
-            onChange={(e) => onSortChange(e.target.value)}
-            className="sort-select subject-filter"
-          >
-            <option value="priority">По приоритету</option>
-            <option value="deadline">По ближайшему сроку</option>
-            <option value="deadline_desc">По дальнему сроку</option>
-            <option value="newest">Сначала новые</option>
-            <option value="oldest">Сначала старые</option>
-            <option value="subject">По предмету</option>
-            <option value="title">По названию</option>
-            <option value="submissions">По количеству работ</option>
-          </select>
-        </div>
-        <Button variant="secondary" onClick={onResetFilters}>
+        <TeacherFilterPopover id="teacher-completed-assignment-filter-popover">
+          <div className="teacher-filter-field">
+            <label className="teacher-filter-popover__label" htmlFor="teacher-completed-group-filter">
+              Группа
+            </label>
+            <select
+              id="teacher-completed-group-filter"
+              value={groupFilter}
+              onChange={(e) => onGroupFilterChange(e.target.value)}
+              className="filter-select group-filter"
+            >
+              <option value="all">Все группы</option>
+              {availableGroups.map((group) => (
+                <option key={group} value={group}>
+                  {group}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="teacher-filter-field">
+            <label className="teacher-filter-popover__label" htmlFor="teacher-completed-subject-filter">
+              Предмет
+            </label>
+            <select
+              id="teacher-completed-subject-filter"
+              value={subjectFilter}
+              onChange={(e) => onSubjectFilterChange(e.target.value)}
+              className="filter-select subject-filter"
+            >
+              <option value="all">Все предметы</option>
+              {availableSubjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="teacher-filter-field">
+            <label className="teacher-filter-popover__label" htmlFor="teacher-completed-deadline-filter">
+              Срок
+            </label>
+            <select
+              id="teacher-completed-deadline-filter"
+              value={deadlineFilter}
+              onChange={(e) => onDeadlineFilterChange(e.target.value)}
+              className="filter-select deadline-filter"
+            >
+              {ASSIGNMENT_DEADLINE_FILTERS.map((filter) => (
+                <option key={filter.value} value={filter.value}>
+                  {filter.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </TeacherFilterPopover>
+        <Button variant="secondary" className="teacher-dashboard-filter-reset-btn" onClick={onResetFilters}>
           Сбросить фильтры
         </Button>
       </div>
@@ -1438,8 +1658,8 @@ const SubmissionsSection = ({
     <div className="section-header teacher-submissions-header">
       <h2>Работы студентов</h2>
       <div className="teacher-submissions-filters" aria-busy={submissionsBusy}>
-        <div className="teacher-submissions-search-row">
-          <div className="teacher-submissions-search-box">
+        <div className="teacher-submissions-search-row teacher-dashboard-filter-row">
+          <div className="teacher-submissions-search-box teacher-dashboard-filter-search">
             <input
               type="text"
               placeholder="Поиск по студенту, заданию, группе..."
@@ -1450,70 +1670,93 @@ const SubmissionsSection = ({
               aria-disabled={submissionsBusy}
             />
           </div>
+          <TeacherFilterPopover id="teacher-submissions-filter-popover" disabled={submissionsBusy}>
+            <div className="teacher-filter-field">
+              <label className="teacher-filter-popover__label" htmlFor="teacher-submissions-assignment-filter">
+                Предмет
+              </label>
+              <select
+                id="teacher-submissions-assignment-filter"
+                value={assignmentFilter}
+                onChange={(e) => onAssignmentFilterChange(e.target.value)}
+                className="teacher-submissions-select assignment-filter"
+                disabled={submissionsBusy}
+                aria-disabled={submissionsBusy}
+              >
+                <option value="all">Все предметы</option>
+                {assignmentOptions.map(assignment => (
+                  <option key={assignment.id} value={assignment.id}>
+                    {assignment.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="teacher-filter-field">
+              <label className="teacher-filter-popover__label" htmlFor="teacher-submissions-group-filter">
+                Группа
+              </label>
+              <select
+                id="teacher-submissions-group-filter"
+                value={groupFilter}
+                onChange={(e) => onGroupFilterChange(e.target.value)}
+                className="teacher-submissions-select group-filter"
+                disabled={submissionsBusy}
+                aria-disabled={submissionsBusy}
+              >
+                <option value="all">Все группы</option>
+                {availableGroups.map((group) => (
+                  <option key={group} value={group}>
+                    {group}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="teacher-filter-field">
+              <label className="teacher-filter-popover__label" htmlFor="teacher-submissions-status-filter">
+                Статус
+              </label>
+              <select
+                id="teacher-submissions-status-filter"
+                value={statusFilter}
+                onChange={(e) => onStatusFilterChange(e.target.value)}
+                className="teacher-submissions-select status-filter"
+                disabled={submissionsBusy}
+                aria-disabled={submissionsBusy}
+              >
+                <option value="all">Все статусы</option>
+                <option value="submitted">На проверке</option>
+                <option value="returned">Возвращены на доработку</option>
+                <option value="graded">Зачтены</option>
+              </select>
+            </div>
+            <div className="teacher-filter-field">
+              <label className="teacher-filter-popover__label" htmlFor="teacher-submissions-deadline-filter">
+                Срок
+              </label>
+              <select
+                id="teacher-submissions-deadline-filter"
+                value={deadlineFilter}
+                onChange={(e) => onDeadlineFilterChange?.(e.target.value)}
+                className="teacher-submissions-select deadline-filter"
+                title="По календарному дедлайну задания. Просроченные: на проверке или возвращённые при истёкшем сроке, а также зачтённые, но сданные после дедлайна; зачтённые в срок скрываются."
+                disabled={submissionsBusy}
+                aria-disabled={submissionsBusy}
+              >
+                <option value="all">Все сроки заданий</option>
+                <option value="overdue">Просроченный дедлайн</option>
+                <option value="due_3d">Дедлайн в 3 дня</option>
+                <option value="due_week">Дедлайн на неделе</option>
+              </select>
+            </div>
+          </TeacherFilterPopover>
           <Button
             variant="secondary"
-            className="teacher-submissions-reset-btn"
+            className="teacher-submissions-reset-btn teacher-dashboard-filter-reset-btn"
             onClick={onResetFilters}
             disabled={submissionsBusy}
           >
             Сбросить фильтры
           </Button>
-        </div>
-        <div className="teacher-submissions-divider" />
-        <div className="teacher-submissions-selects-row">
-          <select
-            value={assignmentFilter}
-            onChange={(e) => onAssignmentFilterChange(e.target.value)}
-            className="teacher-submissions-select assignment-filter"
-            disabled={submissionsBusy}
-            aria-disabled={submissionsBusy}
-          >
-            <option value="all">Все предметы</option>
-            {assignmentOptions.map(assignment => (
-              <option key={assignment.id} value={assignment.id}>
-                {assignment.title}
-              </option>
-            ))}
-          </select>
-          <select
-            value={groupFilter}
-            onChange={(e) => onGroupFilterChange(e.target.value)}
-            className="teacher-submissions-select group-filter"
-            disabled={submissionsBusy}
-            aria-disabled={submissionsBusy}
-          >
-            <option value="all">Все группы</option>
-            {availableGroups.map((group) => (
-              <option key={group} value={group}>
-                {group}
-              </option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => onStatusFilterChange(e.target.value)}
-            className="teacher-submissions-select status-filter"
-            disabled={submissionsBusy}
-            aria-disabled={submissionsBusy}
-          >
-            <option value="all">Все статусы</option>
-            <option value="submitted">На проверке</option>
-            <option value="returned">Возвращены на доработку</option>
-            <option value="graded">Зачтены</option>
-          </select>
-          <select
-            value={deadlineFilter}
-            onChange={(e) => onDeadlineFilterChange?.(e.target.value)}
-            className="teacher-submissions-select deadline-filter"
-            title="По календарному дедлайну задания. Просроченные: на проверке или возвращённые при истёкшем сроке, а также зачтённые, но сданные после дедлайна; зачтённые в срок скрываются."
-            disabled={submissionsBusy}
-            aria-disabled={submissionsBusy}
-          >
-            <option value="all">Все сроки заданий</option>
-            <option value="overdue">Просроченный дедлайн</option>
-            <option value="due_3d">Дедлайн в 3 дня</option>
-            <option value="due_week">Дедлайн на неделе</option>
-          </select>
         </div>
         {submissionsBusy && (
           <p className="teacher-submissions-loading-note" role="status" aria-live="polite">
