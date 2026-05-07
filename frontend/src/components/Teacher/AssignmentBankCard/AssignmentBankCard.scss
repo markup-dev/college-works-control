@@ -1,0 +1,93 @@
+.assignment-bank-card-wrap {
+  height: 100%;
+}
+
+.assignment-bank-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.assignment-bank-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assignment-bank-card__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.assignment-bank-card__subject {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #e8eef8;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+
+.assignment-bank-card__desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #475569;
+  flex: 1 1 auto;
+}
+
+.assignment-bank-card__stats {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.assignment-bank-card.card--hoverable {
+  cursor: default;
+}
+
+.assignment-bank-card__main {
+  cursor: pointer;
+  border-radius: 8px;
+  margin: -4px;
+  padding: 4px;
+  outline: none;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+
+  &:focus-visible {
+    box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.25);
+  }
+}
+
+.assignment-bank-card__actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+
+  .btn {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+}
+
+.assignment-bank-card__delete {
+  background: #b91c1c !important;
+  border-color: #b91c1c !important;
+}
+
+.assignment-bank-card__delete:hover:not(:disabled) {
+  background: #991b1b !important;
+  border-color: #991b1b !important;
+}

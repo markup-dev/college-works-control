@@ -336,6 +336,22 @@
     word-break: break-word;
   }
 
+  .details-section--notice .section-title {
+    color: #b45309;
+  }
+
+  .submission-return-comment {
+    font-size: 0.92rem;
+    color: #334155;
+    line-height: 1.5;
+    padding: 11px 12px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
   .modal-actions {
     position: sticky;
     bottom: 0;
@@ -346,6 +362,17 @@
     padding: 16px 22px;
     border-top: 1px solid #e5eaf2;
     background: #f8fbff;
+
+    .modal-actions__hint {
+      margin: 0;
+      margin-right: auto;
+      padding-right: 12px;
+      font-size: 0.88rem;
+      color: #64748b;
+      line-height: 1.45;
+      max-width: min(100%, 440px);
+      text-align: left;
+    }
 
     .btn:first-child {
       margin-right: auto;

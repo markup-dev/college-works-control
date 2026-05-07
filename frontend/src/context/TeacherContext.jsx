@@ -205,6 +205,7 @@ export const TeacherProvider = ({ children }) => {
         nextQuery.deadlineFilter && nextQuery.deadlineFilter !== 'all'
           ? nextQuery.deadlineFilter
           : undefined,
+      ...(nextQuery.listContext === 'full' ? { list_context: 'full' } : {}),
     };
 
     if (trackLoading) {
@@ -449,13 +450,32 @@ export const TeacherProvider = ({ children }) => {
   const availableGroups = useMemo(() => {
     const set = new Set();
     metaGroups.forEach((group) => {
-      const normalized = normalizeGroupName(group);
+      const rawName = typeof group === 'string' ? group : group?.name;
+      const normalized = normalizeGroupName(rawName);
       if (normalized) {
         set.add(normalized);
       }
     });
     return Array.from(set);
   }, [metaGroups]);
+
+  const teachingGroups = useMemo(
+    () =>
+      metaGroups
+        .map((raw) => {
+          if (raw && typeof raw === 'object' && raw.id != null && raw.name != null) {
+            const id = Number(raw.id);
+            const name = String(raw.name).trim();
+            if (Number.isFinite(id) && id > 0 && name) {
+              return { id, name };
+            }
+          }
+          return null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.name.localeCompare(b.name, 'ru')),
+    [metaGroups]
+  );
 
   const availableSubjects = useMemo(() => {
     return metaSubjects
@@ -489,6 +509,7 @@ export const TeacherProvider = ({ children }) => {
     assignmentsQuery,
     submissionsQuery,
     availableGroups,
+    teachingGroups,
     availableSubjects,
     assignmentFilterOptions,
     loading,

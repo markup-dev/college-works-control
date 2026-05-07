@@ -161,6 +161,60 @@ export const validateRegisterForm = (formData) => {
   };
 };
 
+export const validateBankTemplateForm = (formData) => {
+  const errors = {};
+
+  const trimmedTitle = formData.title?.trim() || '';
+  if (!trimmedTitle) {
+    errors.title = 'Введите название задания';
+  } else if (trimmedTitle.length < 3) {
+    errors.title = 'Название должно содержать минимум 3 символа';
+  } else if (trimmedTitle.length > 255) {
+    errors.title = 'Название не должно превышать 255 символов';
+  }
+
+  if (!formData.subjectId) {
+    errors.subject = 'Выберите предмет';
+  }
+
+  const trimmedDescription = formData.description?.trim() || '';
+  if (!trimmedDescription) {
+    errors.description = 'Введите описание задания';
+  } else if (trimmedDescription.length < 10) {
+    errors.description = 'Описание должно содержать минимум 10 символов';
+  } else if (trimmedDescription.length > 5000) {
+    errors.description = 'Описание не должно превышать 5000 символов';
+  }
+
+  const criteria = Array.isArray(formData.criteria)
+    ? formData.criteria
+        .map((criterion) => ({
+          text: typeof criterion === 'string' ? criterion.trim() : (criterion?.text || '').trim(),
+          maxPoints: Number(typeof criterion === 'string' ? 0 : criterion?.maxPoints),
+        }))
+        .filter((criterion) => criterion.text)
+    : [];
+
+  if (criteria.length > 0) {
+    const hasInvalidPoints = criteria.some((criterion) => !Number.isInteger(criterion.maxPoints) || criterion.maxPoints < 1);
+
+    if (hasInvalidPoints) {
+      errors.criteria = 'У каждого критерия должно быть минимум 1 балл';
+    } else {
+      const criteriaTotal = criteria.reduce((sum, criterion) => sum + criterion.maxPoints, 0);
+
+      if (criteriaTotal !== 100) {
+        errors.criteria = `Сумма баллов по критериям должна быть 100, сейчас ${criteriaTotal}`;
+      }
+    }
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+};
+
 export const validateAssignmentForm = (formData) => {
   const errors = {};
 

@@ -35,6 +35,7 @@ const Messages = () => {
   const [listTab, setListTab] = useState('inbox');
   const [activePartnerIds, setActivePartnerIds] = useState(() => new Set());
   const [listDrawerOpen, setListDrawerOpen] = useState(false);
+  const [conversationsListLoading, setConversationsListLoading] = useState(true);
 
   const threadBodyRef = useRef(null);
   const composerRef = useRef(null);
@@ -61,16 +62,29 @@ const Messages = () => {
   useEffect(() => {
     if (!listDrawerOpen) return undefined;
     const mq = window.matchMedia('(max-width: 900px)');
-    const onMq = () => {
-      if (!mq.matches) setListDrawerOpen(false);
+    const prevOverflow = document.body.style.overflow;
+
+    const syncScrollLock = () => {
+      if (mq.matches) {
+        document.body.style.overflow = 'hidden';
+      } else {
+        document.body.style.overflow = prevOverflow;
+      }
     };
+
+    const onMq = () => {
+      if (!mq.matches) {
+        setListDrawerOpen(false);
+      }
+      syncScrollLock();
+    };
+
+    syncScrollLock();
     mq.addEventListener('change', onMq);
     const onKey = (e) => {
       if (e.key === 'Escape') setListDrawerOpen(false);
     };
     document.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     return () => {
       mq.removeEventListener('change', onMq);
       document.removeEventListener('keydown', onKey);
@@ -225,6 +239,7 @@ const Messages = () => {
   useEffect(() => {
     if (loadingList) return undefined;
     let cancelled = false;
+    setConversationsListLoading(true);
     (async () => {
       try {
         const scope = listTab === 'archive' ? 'archived' : 'active';
@@ -235,6 +250,8 @@ const Messages = () => {
         }
       } catch (err) {
         if (!cancelled) showError(getErrorMessage(err, 'Не удалось загрузить диалоги'));
+      } finally {
+        if (!cancelled) setConversationsListLoading(false);
       }
     })();
     return () => {
@@ -790,29 +807,52 @@ const Messages = () => {
 
         <section className="messages-thread">
           {!threadOpen ? (
-            <div className="messages-thread__idle" aria-hidden />
+            <div className="messages-thread__idle">
+              {!conversationsListLoading &&
+              listTab === 'inbox' &&
+              conversations.length === 0 &&
+              !draftRecipient ? (
+                <div className="messages-thread__idle-inner">
+                  <p className="messages-thread__idle-title">Нет открытого диалога</p>
+                  <p className="messages-thread__idle-text">
+                    Слева откройте список «Сообщения» и выберите человека в разделе «Новое сообщение» или существующий диалог.
+                  </p>
+                  <button
+                    type="button"
+                    className="messages-thread__idle-open-list"
+                    onClick={() => setListDrawerOpen(true)}
+                  >
+                    Открыть список
+                  </button>
+                </div>
+              ) : null}
+            </div>
           ) : (
             <>
               <header className="messages-thread__header">
                 <div className="messages-thread__header-top">
                   <h2 className="messages-thread__title">{otherName}</h2>
                   {activeConversationId && !draftRecipient && listTab === 'inbox' ? (
-                    <button
-                      type="button"
-                      className="messages-thread__action-link"
-                      onClick={archiveCurrentConversation}
-                    >
-                      В архив
-                    </button>
+                    <div className="messages-thread__header-actions">
+                      <button
+                        type="button"
+                        className="messages-thread__action-link messages-thread__action-link--secondary"
+                        onClick={archiveCurrentConversation}
+                      >
+                        В архив
+                      </button>
+                    </div>
                   ) : null}
                   {activeConversationId && !draftRecipient && listTab === 'archive' ? (
-                    <button
-                      type="button"
-                      className="messages-thread__action-link"
-                      onClick={unarchiveCurrentConversation}
-                    >
-                      Вернуть из архива
-                    </button>
+                    <div className="messages-thread__header-actions">
+                      <button
+                        type="button"
+                        className="messages-thread__action-link messages-thread__action-link--secondary"
+                        onClick={unarchiveCurrentConversation}
+                      >
+                        Вернуть из архива
+                      </button>
+                    </div>
                   ) : null}
                 </div>
                 {draftRecipient && (
@@ -841,17 +881,9 @@ const Messages = () => {
                         hour: '2-digit',
                         minute: '2-digit',
                       });
-                      return (
-                        <li
-                          key={m.id}
-                          className={[
-                            'messages-bubbles__item',
-                            own ? 'is-own' : '',
-                            !own && sameSenderAsPrev ? 'messages-bubbles__item--followup' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                        >
+
+                      const bubbleBlock = (
+                        <>
                           {!own && !sameSenderAsPrev && (
                             <div className="messages-bubbles__sender-row">
                               <span className="messages-bubbles__sender-name">
@@ -878,7 +910,9 @@ const Messages = () => {
                                     : 'messages-bubbles__status'
                                 }
                                 title={
-                                  m.readAt ? 'Прочитано' : 'Доставлено, ещё не прочитано'
+                                  m.readAt
+                                    ? 'Прочитано'
+                                    : 'Доставлено, ещё не прочитано'
                                 }
                                 aria-label={
                                   m.readAt
@@ -898,6 +932,25 @@ const Messages = () => {
                               </span>
                             )}
                           </div>
+                        </>
+                      );
+
+                      return (
+                        <li
+                          key={m.id}
+                          className={[
+                            'messages-bubbles__item',
+                            own ? 'is-own' : '',
+                            !own && sameSenderAsPrev ? 'messages-bubbles__item--followup' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                        >
+                          {own ? (
+                            <div className="messages-bubbles__own-chain">{bubbleBlock}</div>
+                          ) : (
+                            bubbleBlock
+                          )}
                         </li>
                       );
                     })}

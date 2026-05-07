@@ -167,6 +167,13 @@ const SubmissionDetailsModal = ({
             </div>
           )}
 
+          {submission.status === 'returned' && submission.teacherComment && (
+            <div className="details-section details-section--notice">
+              <h4 className="section-title">Комментарий при возврате</h4>
+              <div className="submission-return-comment">{submission.teacherComment}</div>
+            </div>
+          )}
+
           {assignment?.description && (
             <div className="details-section">
               <h4 className="section-title">Описание задания</h4>
@@ -206,24 +213,30 @@ const SubmissionDetailsModal = ({
               Отправить на доработку
             </Button>
           )}
-          {submission.status === 'submitted' ? (
-            <Button 
-              variant="primary" 
+          {submission.status === 'submitted' && (
+            <Button
+              variant="primary"
               onClick={() => {
                 onGrade?.(submission);
               }}
             >
               Оценить работу
             </Button>
-          ) : (
-            <Button 
-              variant="primary" 
+          )}
+          {submission.status === 'graded' && (
+            <Button
+              variant="primary"
               onClick={() => {
                 onGrade?.(submission);
               }}
             >
               Изменить оценку
             </Button>
+          )}
+          {submission.status === 'returned' && (
+            <p className="modal-actions__hint">
+              Работа у студента на доработке. Оценить можно только после новой сдачи файла.
+            </p>
           )}
           <Button variant="secondary" onClick={onClose}>
             Закрыть

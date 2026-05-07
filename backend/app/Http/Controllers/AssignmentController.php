@@ -37,10 +37,10 @@ class AssignmentController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $groupNames = Group::query()
+        $groups = Group::query()
             ->whereIn('id', $user->attachedTeachingGroupIds())
             ->orderBy('name')
-            ->pluck('name');
+            ->get(['id', 'name']);
 
         $assignments = Assignment::where('teacher_id', $user->id)
             ->orderByDesc('created_at')
@@ -55,10 +55,12 @@ class AssignmentController extends Controller
                 ])
                 ->values()
                 ->all(),
-            'groups' => $groupNames
-                ->map(fn($name) => $this->normalizeGroupName((string) $name))
-                ->filter()
-                ->unique()
+            'groups' => $groups
+                ->filter(fn ($group) => ! empty($group->name))
+                ->map(fn ($group) => [
+                    'id' => (int) $group->id,
+                    'name' => (string) $group->name,
+                ])
                 ->values()
                 ->all(),
             'assignments' => $assignments
@@ -97,6 +99,15 @@ class AssignmentController extends Controller
         $shouldPaginate = $perPage > 0 || array_key_exists('page', $validated);
         if ($shouldPaginate && $perPage <= 0) {
             $perPage = self::DEFAULT_PER_PAGE;
+        }
+
+        if (! empty($validated['group_id']) && $user->role === 'teacher') {
+            $allowedGroupIds = $user->attachedTeachingGroupIds()->map(fn ($id) => (int) $id)->all();
+            if (! in_array((int) $validated['group_id'], $allowedGroupIds, true)) {
+                throw ValidationException::withMessages([
+                    'group_id' => 'Нет доступа к этой группе.',
+                ]);
+            }
         }
 
         if ($user->role === 'student') {

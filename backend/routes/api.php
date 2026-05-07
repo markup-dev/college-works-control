@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AssignmentController;
+use App\Http\Controllers\AssignmentTemplateController;
 use App\Http\Controllers\SubmissionController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ConversationController;
@@ -32,6 +33,9 @@ Route::middleware(['auth:sanctum', 'throttle:api_user'])->group(function () {
     Route::middleware('role:teacher')->group(function () {
         Route::get('/teacher/students', [TeacherStudentController::class, 'index']);
         Route::get('/teacher/students/{user}', [TeacherStudentController::class, 'show']);
+        Route::get('/teacher/groups/overview', [TeacherStudentController::class, 'groupsOverview']);
+        Route::get('/teacher/groups/{group}', [TeacherStudentController::class, 'groupDetails']);
+        Route::get('/teacher/groups/{group}/students/{user}', [TeacherStudentController::class, 'studentDetails']);
         Route::post('/teacher/messages/broadcast', [TeacherBroadcastMessageController::class, 'store'])
             ->middleware('throttle:teacher_broadcast');
 
@@ -39,6 +43,15 @@ Route::middleware(['auth:sanctum', 'throttle:api_user'])->group(function () {
         Route::put('/assignments/{assignment}', [AssignmentController::class, 'update']);
         Route::post('/assignments/{assignment}/materials', [AssignmentController::class, 'uploadMaterials']);
         Route::delete('/assignments/{assignment}', [AssignmentController::class, 'destroy']);
+
+        Route::get('/assignment-bank', [AssignmentTemplateController::class, 'index']);
+        Route::post('/assignment-bank/from-assignment/{assignment}', [AssignmentTemplateController::class, 'storeFromAssignment']);
+        Route::post('/assignment-bank/{assignment_template}/publish', [AssignmentTemplateController::class, 'publish']);
+        Route::post('/assignment-bank/{assignment_template}/materials', [AssignmentTemplateController::class, 'uploadMaterials']);
+        Route::get('/assignment-bank/{assignment_template}/materials/{material}/download', [AssignmentTemplateController::class, 'downloadMaterial']);
+        Route::get('/assignment-bank/{assignment_template}', [AssignmentTemplateController::class, 'show']);
+        Route::put('/assignment-bank/{assignment_template}', [AssignmentTemplateController::class, 'update']);
+        Route::delete('/assignment-bank/{assignment_template}', [AssignmentTemplateController::class, 'destroy']);
     });
 
     // Отправки работ

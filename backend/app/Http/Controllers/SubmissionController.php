@@ -23,6 +23,7 @@ class SubmissionController extends Controller
         $user = $request->user();
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
+            'list_context' => ['nullable', 'in:full'],
             'status' => ['nullable', 'in:submitted,graded,returned'],
             'assignment_id' => ['nullable', 'integer', 'exists:assignments,id'],
             'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
@@ -34,6 +35,15 @@ class SubmissionController extends Controller
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
+
+        if (! empty($validated['group_id']) && $user->role === 'teacher') {
+            $allowedGroupIds = $user->attachedTeachingGroupIds()->map(fn ($id) => (int) $id)->all();
+            if (! in_array((int) $validated['group_id'], $allowedGroupIds, true)) {
+                throw ValidationException::withMessages([
+                    'group_id' => 'Нет доступа к этой группе.',
+                ]);
+            }
+        }
 
         $requestedPage = (int) ($validated['page'] ?? 1);
         $perPage = (int) ($validated['per_page'] ?? 0);
@@ -61,6 +71,12 @@ class SubmissionController extends Controller
         if (!empty($validated['status'])) {
             // review_queue joins assignments, which also has status — qualify column for SQL.
             $query->where('submissions.status', $validated['status']);
+        } elseif (
+            $user->role === 'teacher'
+            && ($validated['list_context'] ?? null) !== 'full'
+        ) {
+            // По умолчанию преподаватель не видит возвращённые студенту работы — только после новой сдачи.
+            $query->whereIn('submissions.status', ['submitted', 'graded']);
         }
 
         if (!empty($validated['assignment_id'])) {
@@ -387,6 +403,18 @@ class SubmissionController extends Controller
         if ($validated['score'] > $maxScore) {
             throw ValidationException::withMessages([
                 'score' => ["Оценка не может превышать максимальный балл задания ({$maxScore})."],
+            ]);
+        }
+
+        if ($submission->status === 'returned') {
+            throw ValidationException::withMessages([
+                'status' => ['Эта работа возвращена студенту на доработку. Оценить можно только новую сдачу после повторной отправки.'],
+            ]);
+        }
+
+        if (! in_array($submission->status, ['submitted', 'graded'], true)) {
+            throw ValidationException::withMessages([
+                'status' => ['Сейчас эту работу нельзя оценить.'],
             ]);
         }
 

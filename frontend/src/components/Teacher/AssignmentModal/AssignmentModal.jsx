@@ -110,7 +110,8 @@ const AssignmentModal = ({
   onSubmit,
   availableGroups = [],
   availableSubjects = [],
-  initialFormData = null
+  initialFormData = null,
+  modalMode = 'default',
 }) => {
   const { showError } = useNotification();
   const [acceptAllFormats, setAcceptAllFormats] = useState(true);
@@ -155,7 +156,7 @@ const AssignmentModal = ({
     if (assignment) {
       const criteria = normalizeCriteriaForForm(assignment.criteria);
 
-      return {
+      const base = {
         ...buildEmptyFormData(),
         title: assignment.title || '',
         subjectId: assignment.subjectId || assignment.subjectRelation?.id || null,
@@ -175,10 +176,17 @@ const AssignmentModal = ({
         existingMaterials: normalizeMaterialFiles(assignment.materialFiles || assignment.materialItems || []),
         removedMaterialIds: [],
       };
+
+      if (modalMode === 'bankTemplate') {
+        base.studentGroups = [];
+        base.deadline = '';
+      }
+
+      return base;
     }
 
     return buildEmptyFormData();
-  }, [assignment, initialFormData]);
+  }, [assignment, initialFormData, modalMode]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -223,6 +231,7 @@ const AssignmentModal = ({
 
   if (!isOpen) return null;
 
+  const isBankTemplateEdit = modalMode === 'bankTemplate';
   const isEdit = !!assignment;
   const criteriaCount = Array.isArray(formData.criteria) ? formData.criteria.length : 0;
   const criteriaPointsTotal = Array.isArray(formData.criteria)
@@ -245,7 +254,7 @@ const AssignmentModal = ({
       return;
     }
 
-    if (!isEdit && groupOptions.length === 0) {
+    if (modalMode !== 'bankTemplate' && !isEdit && groupOptions.length === 0) {
       showError('Невозможно создать задание без назначенной учебной группы');
       return;
     }
@@ -262,11 +271,20 @@ const AssignmentModal = ({
       description: formData.description?.trim() || ''
     };
 
-    const { validateAssignmentForm } = require('../../../utils/validation');
-    const validation = validateAssignmentForm({
+    let validation;
+    if (modalMode === 'bankTemplate') {
+      const { validateBankTemplateForm } = require('../../../utils/validation');
+      validation = validateBankTemplateForm({
+        ...trimmedFormData,
+        subjectId: formData.subjectId,
+      });
+    } else {
+      const { validateAssignmentForm } = require('../../../utils/validation');
+      validation = validateAssignmentForm({
       ...trimmedFormData,
       studentGroups: normalizeGroupSelection(formData.studentGroups)
     });
+    }
     
     if (!validation.isValid) {
       const firstError = Object.values(validation.errors)[0];
@@ -292,7 +310,17 @@ const AssignmentModal = ({
       ? normalizeAllowedFormats(formData.allowedFormats)
       : [];
 
-    const submissionData = {
+    const submissionData = modalMode === 'bankTemplate'
+      ? {
+          ...trimmedFormData,
+          subjectId: Number(formData.subjectId),
+          maxScore: 100,
+          criteria: criteriaArray,
+          allowedFormats,
+          materialFiles: formData.materialFiles || [],
+          removedMaterialIds: formData.removedMaterialIds || [],
+        }
+      : {
       ...trimmedFormData,
       subjectId: Number(formData.subjectId),
       deadline: `${trimmedFormData.deadline}T23:59:00`,
@@ -455,9 +483,19 @@ const AssignmentModal = ({
         <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-header__titles">
-            <h3>{isEdit ? 'Редактирование задания' : 'Создание нового задания'}</h3>
+            <h3>
+              {isBankTemplateEdit
+                ? 'Заготовка в банке заданий'
+                : isEdit
+                  ? 'Редактирование задания'
+                  : 'Создание нового задания'}
+            </h3>
             <p className="modal-header__subtitle">
-              {isEdit ? 'Обновите параметры, материалы и критерии оценки' : 'Заполните основные поля и настройте формат сдачи'}
+              {isBankTemplateEdit
+                ? 'Изменения сохраняются только для банка и не затрагивают уже выданные задания.'
+                : isEdit
+                  ? 'Обновите параметры, материалы и критерии оценки'
+                  : 'Заполните основные поля и настройте формат сдачи'}
             </p>
           </div>
           <button type="button" className="modal-close" onClick={onClose}>×</button>
@@ -477,7 +515,7 @@ const AssignmentModal = ({
               </span>
             </div>
 
-            {hasNoAssignableGroups && (
+            {hasNoAssignableGroups && modalMode !== 'bankTemplate' && (
               <div className="assignment-modal-warning">
                 Для вашего аккаунта пока не назначены учебные группы. Обратитесь к администратору, чтобы он
                 назначил группу во вкладке "Группы".
@@ -533,6 +571,7 @@ const AssignmentModal = ({
                   </FormGroup>
                 </div>
                 
+                {modalMode !== 'bankTemplate' && (
                 <div className="form-row">
                   <FormGroup label="Учебная группа:" required>
                     {groupOptions.length > 0 ? (
@@ -586,6 +625,7 @@ const AssignmentModal = ({
                     />
                   </FormGroup>
                 </div>
+                )}
               </div>
 
               <div className="form-section">
@@ -784,7 +824,13 @@ const AssignmentModal = ({
               loading={isSubmitting}
               disabled={isSubmitting || hasNoAssignableGroups || hasNoAssignableSubjects}
             >
-              {isSubmitting ? (isEdit ? 'Сохранение…' : 'Создание…') : (isEdit ? 'Сохранить изменения' : 'Создать задание')}
+              {isSubmitting
+                ? (isBankTemplateEdit || isEdit ? 'Сохранение…' : 'Создание…')
+                : (isBankTemplateEdit
+                    ? 'Сохранить заготовку'
+                    : isEdit
+                      ? 'Сохранить изменения'
+                      : 'Создать задание')}
             </Button>
           </div>
         </form>

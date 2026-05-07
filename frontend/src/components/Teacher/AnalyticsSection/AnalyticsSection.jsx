@@ -1,6 +1,5 @@
 import React from 'react';
 import Card from '../../UI/Card/Card';
-import Button from '../../UI/Button/Button';
 import { formatDate, normalizeGroupName } from '../../../utils';
 import './AnalyticsSection.scss';
 
@@ -35,8 +34,31 @@ const normalizeScore = (score) => {
   return Number.isFinite(num) ? num : null;
 };
 
-const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
+const AnalyticsSection = ({
+  submissions = [],
+  assignments = [],
+  groupOptions = [],
+  selectedGroupId = 'all',
+  onGroupChange,
+  loading = false,
+}) => {
   const [period, setPeriod] = React.useState('30');
+  const [activityView, setActivityView] = React.useState('weeks');
+
+  const isGroupScoped = selectedGroupId !== 'all';
+  const scopedGroupLabel = React.useMemo(() => {
+    if (!isGroupScoped) {
+      return '';
+    }
+    const match = groupOptions.find((g) => String(g.id) === String(selectedGroupId));
+    return match?.name || '';
+  }, [groupOptions, isGroupScoped, selectedGroupId]);
+
+  React.useEffect(() => {
+    if (isGroupScoped) {
+      setActivityView('weeks');
+    }
+  }, [isGroupScoped, selectedGroupId]);
 
   const dateThreshold = React.useMemo(() => {
     if (period === 'all') {
@@ -248,64 +270,82 @@ const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
     return buckets;
   }, [submissionsInPeriod, period]);
 
-  const handleExport = React.useCallback(() => {
-    const rows = [
-      ['Тип', 'Название', 'Метрика', 'Значение'],
-      ['KPI', 'Работ в срезе', 'Всего', kpi.total],
-      ['KPI', 'Работ в срезе', 'На проверке', kpi.pending],
-      ['KPI', 'Работ в срезе', 'Проверено', kpi.graded],
-      ['KPI', 'Работ в срезе', 'Возвращено', kpi.returned],
-      ['KPI', 'Работ в срезе', 'Средний балл', kpi.avgScore !== null ? kpi.avgScore.toFixed(1) : '—'],
-      ['KPI', 'Работ в срезе', 'Доля возвратов, %', kpi.returnRate],
-      ['KPI', 'Работ в срезе', 'Доля проверенных, %', kpi.gradedRate],
-    ];
+  const groupActivity = React.useMemo(() => {
+    const grouped = new Map();
 
-    assignmentInsights.forEach((item) => {
-      rows.push(['Задание', item.title, 'На проверке', item.pending]);
-      rows.push(['Задание', item.title, 'Возвращено', item.returned]);
-      rows.push(['Задание', item.title, 'Проверено', item.graded]);
-      rows.push(['Задание', item.title, 'Прогресс, %', item.completionRate]);
-      rows.push(['Задание', item.title, 'Средний балл', item.avgScore !== null ? item.avgScore.toFixed(1) : '—']);
+    submissionsInPeriod.forEach((submission) => {
+      const groupName = normalizeGroupName(submission.group) || 'Не указана';
+      if (!grouped.has(groupName)) {
+        grouped.set(groupName, { submitted: 0, graded: 0 });
+      }
+      const bucket = grouped.get(groupName);
+      bucket.submitted += 1;
+      if (submission.status === 'graded') {
+        bucket.graded += 1;
+      }
     });
 
-    studentRisks.forEach((item) => {
-      rows.push(['Студент', item.name, 'Группа', item.group]);
-      rows.push(['Студент', item.name, 'Возвраты', item.returnedCount]);
-      rows.push(['Студент', item.name, 'На проверке', item.pendingCount]);
-      rows.push(['Студент', item.name, 'Средний балл', item.avgScore !== null ? item.avgScore.toFixed(1) : '—']);
-    });
+    return Array.from(grouped.entries())
+      .map(([label, stats]) => ({
+        key: `group-${label}`,
+        label,
+        submitted: stats.submitted,
+        graded: stats.graded,
+      }))
+      .sort((a, b) => b.submitted - a.submitted)
+      .slice(0, 10);
+  }, [submissionsInPeriod]);
 
-    const csvContent = rows
-      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `teacher-analytics-${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [kpi, assignmentInsights, studentRisks]);
+  const chartData = activityView === 'groups' ? groupActivity : activity;
+  const summaryCardTitle = isGroupScoped ? 'Показатели группы' : 'Сводка по группам';
 
   return (
     <div className="analytics-section">
       <div className="analytics-section__header">
         <div>
           <h2>Аналитика</h2>
-          <p>Показывает текущую нагрузку, качество проверки и рисковые зоны.</p>
+          <p>
+            {isGroupScoped && scopedGroupLabel
+              ? `Срез только по группе «${scopedGroupLabel}». Задания и работы загружаются с учётом привязки к этой группе.`
+              : 'Показатели по всем вашим группам с учётом выбранного периода.'}
+          </p>
         </div>
         <div className="analytics-section__controls">
-          <select value={period} onChange={(event) => setPeriod(event.target.value)}>
-            {PERIOD_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          <Button variant="outline" onClick={handleExport}>
-            Экспорт CSV
-          </Button>
+          <label className="analytics-section__field">
+            <span className="analytics-section__field-label">Период</span>
+            <select
+              value={period}
+              onChange={(event) => setPeriod(event.target.value)}
+              disabled={loading}
+              aria-label="Период для аналитики"
+            >
+              {PERIOD_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="analytics-section__field">
+            <span className="analytics-section__field-label">Группа</span>
+            <select
+              value={selectedGroupId}
+              onChange={(event) => onGroupChange?.(event.target.value)}
+              disabled={loading || groupOptions.length === 0}
+              aria-label="Фильтр аналитики по группе"
+            >
+              <option value="all">Все группы</option>
+              {groupOptions.map((g) => (
+                <option key={g.id} value={String(g.id)}>{g.name}</option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
+
+      {loading ? (
+        <div className="analytics-section__loading-banner" role="status" aria-live="polite">
+          Обновление данных…
+        </div>
+      ) : null}
 
       <div className="analytics-kpi app-reveal-stagger">
         <KpiCard label="Работ в срезе" value={kpi.total} tone="default" />
@@ -360,9 +400,32 @@ const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
         </Card>
 
         <Card className="analytics-card analytics-card--wide">
-          <h3>Динамика по неделям</h3>
+          <div className="analytics-card__header-row">
+            <h3>{isGroupScoped ? 'Динамика по неделям' : (activityView === 'groups' ? 'Динамика по группам' : 'Динамика по неделям')}</h3>
+            {!isGroupScoped ? (
+              <div className="analytics-view-toggle" role="group" aria-label="Переключение динамики">
+                <button
+                  type="button"
+                  className={`analytics-view-toggle__btn ${activityView === 'weeks' ? 'is-active' : ''}`}
+                  onClick={() => setActivityView('weeks')}
+                >
+                  По неделям
+                </button>
+                <button
+                  type="button"
+                  className={`analytics-view-toggle__btn ${activityView === 'groups' ? 'is-active' : ''}`}
+                  onClick={() => setActivityView('groups')}
+                >
+                  По группам
+                </button>
+              </div>
+            ) : null}
+          </div>
+          {chartData.length === 0 ? (
+            <EmptyState text="Недостаточно данных для динамики." />
+          ) : (
           <div className="activity-chart">
-            {activity.map((bucket) => (
+            {chartData.map((bucket) => (
               <div className="activity-chart__col" key={bucket.key}>
                 <div className="activity-chart__bars">
                   <span
@@ -376,10 +439,13 @@ const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
                     title={`Проверено: ${bucket.graded}`}
                   />
                 </div>
-                <span className="activity-chart__label">{bucket.label}</span>
+                <span className="activity-chart__label" title={bucket.label}>
+                  {bucket.label}
+                </span>
               </div>
             ))}
           </div>
+          )}
         </Card>
 
         <Card className="analytics-card">
@@ -406,7 +472,7 @@ const AnalyticsSection = ({ submissions = [], assignments = [] }) => {
         </Card>
 
         <Card className="analytics-card">
-          <h3>Сводка по группам</h3>
+          <h3>{summaryCardTitle}</h3>
           {groupSummary.length === 0 ? (
             <EmptyState text="Нет данных по группам." />
           ) : (

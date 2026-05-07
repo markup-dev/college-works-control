@@ -1,0 +1,261 @@
+/* Self-contained shell so this modal always stacks above the page (no dependency on AssignmentModal import). */
+.modal-overlay.publish-bank-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5100;
+  padding: 1.25rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.publish-bank-modal .modal-content {
+  background: #fff;
+  border: 1px solid #e6edf7;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 520px;
+  max-height: min(92vh, 100dvh - 2.5rem);
+  margin: auto;
+  overflow: auto;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.22);
+}
+
+.publish-bank-modal .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid #e5ebf4;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+
+  h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #1f2937;
+    font-weight: 700;
+  }
+}
+
+.publish-bank-modal .modal-subtitle {
+  margin: 8px 0 0;
+  font-size: 0.875rem;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.publish-bank-modal .modal-close {
+  flex-shrink: 0;
+  background: #f3f6fb;
+  border: 1px solid transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #64748b;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: #334155;
+    border-color: #d6dfed;
+    background: #ffffff;
+  }
+}
+
+.publish-bank-modal .modal-body {
+  padding: 0.95rem 1.1rem 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+.publish-bank-meta {
+  margin-bottom: 16px;
+}
+
+.publish-bank-meta__subject {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e8eef8;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+
+.publish-bank-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.publish-bank-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.publish-bank-date {
+  padding: 10px 12px;
+  border: 1px solid #d7dfeb;
+  border-radius: 8px;
+  font: inherit;
+  color: #334155;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: #2c5aa0;
+    box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.12);
+  }
+}
+
+.publish-bank-modal .modal-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 1.1rem;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+/* Group dropdown (same patterns as AssignmentModal, scoped to avoid leaking). */
+.publish-bank-modal .group-dropdown {
+  position: relative;
+}
+
+.publish-bank-modal .group-dropdown__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px solid #d7dfeb;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.62rem 0.7rem;
+  color: #334155;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    border-color: #b8c7de;
+  }
+
+  &.is-open {
+    border-color: #2c5aa0;
+    box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.12);
+  }
+}
+
+.publish-bank-modal .group-dropdown__menu:not(.group-dropdown__menu--portal) {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  border: 1px solid #d7dfeb;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+}
+
+.publish-bank-modal .group-dropdown__menu--portal {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid #d7dfeb;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
+}
+
+.publish-bank-modal .group-dropdown__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fbff;
+  flex-shrink: 0;
+
+  button {
+    border: none;
+    background: transparent;
+    color: #2c5aa0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.2rem 0.3rem;
+    cursor: pointer;
+    font-family: inherit;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.publish-bank-modal .group-dropdown__list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
+  padding: 0.55rem 0.6rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.publish-bank-modal .group-dropdown__menu--portal .group-dropdown__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.publish-bank-modal .group-checkbox-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+  color: #334155;
+  font-size: 0.84rem;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+
+  input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: #2c5aa0;
+    margin: 0;
+  }
+
+  &:hover {
+    border-color: #b8c7de;
+    background: #f0f6ff;
+  }
+}

@@ -4,15 +4,39 @@ import Button from '../../UI/Button/Button';
 import { 
   getAssignmentStatusInfo, 
   formatDate,
-  calculateSubmissionStats 
+  calculateSubmissionStats,
+  getDaysUntilDeadline,
 } from '../../../utils';
 import './AssignmentCard.scss';
+
+const getDeadlineUrgencyBadge = (deadline, assignmentStatus) => {
+  if (!deadline || !['active', 'inactive'].includes(assignmentStatus)) {
+    return null;
+  }
+  const days = getDaysUntilDeadline(deadline);
+  if (days === null) {
+    return null;
+  }
+  if (days < 0) {
+    return { label: 'Дедлайн прошёл', tone: 'overdue' };
+  }
+  if (days === 0) {
+    return { label: 'Дедлайн сегодня', tone: 'today' };
+  }
+  if (days === 1) {
+    return { label: 'Остался 1 день', tone: 'soon' };
+  }
+  if (days === 2 || days === 3) {
+    return { label: `Осталось ${days} дня`, tone: 'soon' };
+  }
+  return null;
+};
 
 const AssignmentCard = React.memo(({
   assignment,
   onViewSubmissions,
   onDeleteAssignment,
-  onViewDetails
+  onViewDetails,
 }) => {
   const {
     title,
@@ -27,6 +51,7 @@ const AssignmentCard = React.memo(({
 
   const stats = calculateSubmissionStats(submissions, assignment);
   const statusInfo = getAssignmentStatusInfo(status);
+  const deadlineUrgency = getDeadlineUrgencyBadge(deadline, status);
   const canViewSubmissions = status !== 'inactive';
   const isDraft = status === 'draft';
 
@@ -124,6 +149,11 @@ const AssignmentCard = React.memo(({
           <span className={`status-badge status-badge--${statusInfo.variant}`}>
             {statusInfo.label}
           </span>
+          {deadlineUrgency ? (
+            <span className={`deadline-urgency-badge deadline-urgency-badge--${deadlineUrgency.tone}`}>
+              {deadlineUrgency.label}
+            </span>
+          ) : null}
         </div>
       </div>
 

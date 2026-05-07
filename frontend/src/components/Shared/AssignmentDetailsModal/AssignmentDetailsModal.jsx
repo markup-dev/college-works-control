@@ -36,6 +36,8 @@ const AssignmentDetailsModal = ({
   onViewResults = null,
   onResubmit = null,
   onViewSubmissions = null,
+  onAddToBank = null,
+  assignmentAlreadyInBank = false,
 }) => {
   if (!assignment) {
     return null;
@@ -65,6 +67,11 @@ const AssignmentDetailsModal = ({
     && daysUntilDeadline >= 0
     && daysUntilDeadline <= 3
     && assignment?.status === 'not_submitted';
+
+  const showDeadlineCountdown =
+    mode === 'student'
+    && typeof daysUntilDeadline === 'number'
+    && ['not_submitted', 'returned'].includes(assignment?.status);
 
   return (
     <Modal 
@@ -104,7 +111,7 @@ const AssignmentDetailsModal = ({
             <MetaItem label="Дедлайн" icon="deadline">
               <div className="meta-deadline">
                 <span>{deadline}</span>
-                {mode === 'student' && typeof daysUntilDeadline === 'number' && (
+                {showDeadlineCountdown && (
                   <span className={`deadline-indicator ${daysUntilDeadline < 0 ? 'deadline-indicator--overdue' : daysUntilDeadline <= 3 ? 'deadline-indicator--urgent' : ''}`}>
                     {daysUntilDeadline < 0 
                       ? `Просрочено на ${Math.abs(daysUntilDeadline)} д.` 
@@ -220,26 +227,46 @@ const AssignmentDetailsModal = ({
           </div>
         )}
 
-        {mode === 'teacher' && (typeof onEdit === 'function' || typeof onViewSubmissions === 'function') && (
-          <div className="assignment-details-modal__actions">
-            <div className="assignment-details-modal__actions-group">
-              {typeof onViewSubmissions === 'function' && (
+        {mode === 'teacher' && (typeof onEdit === 'function' || typeof onViewSubmissions === 'function' || typeof onAddToBank === 'function') && (
+          <div className="assignment-details-modal__actions assignment-details-modal__actions--teacher-row">
+            {typeof onAddToBank === 'function' && assignment.status !== 'inactive' && (
+              assignmentAlreadyInBank ? (
                 <Button
+                  type="button"
                   variant="secondary"
-                  onClick={() => onViewSubmissions(assignment)}
+                  className="assignment-details-modal__bank-btn"
+                  disabled
+                  title="Заготовка уже в банке — откройте «Банк заданий», чтобы править её"
                 >
-                  Просмотреть работы
+                  Уже в банке
                 </Button>
-              )}
-              {typeof onEdit === 'function' && (
+              ) : (
                 <Button
-                  variant="primary"
-                  onClick={() => onEdit(assignment)}
+                  type="button"
+                  variant="secondary"
+                  className="assignment-details-modal__bank-btn"
+                  onClick={() => onAddToBank(assignment)}
                 >
-                  Редактировать задание
+                  В банк заданий
                 </Button>
-              )}
-            </div>
+              )
+            )}
+            {typeof onViewSubmissions === 'function' && (
+              <Button
+                variant="secondary"
+                onClick={() => onViewSubmissions(assignment)}
+              >
+                Просмотреть работы
+              </Button>
+            )}
+            {typeof onEdit === 'function' && (
+              <Button
+                variant="primary"
+                onClick={() => onEdit(assignment)}
+              >
+                Редактировать задание
+              </Button>
+            )}
           </div>
         )}
       </div>

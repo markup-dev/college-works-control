@@ -2,10 +2,12 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom';
 import DashboardHeader from '../../components/Teacher/DashboardHeader/DashboardHeader';
 import AssignmentCard from '../../components/Teacher/AssignmentCard/AssignmentCard';
+import AssignmentBankCard from '../../components/Teacher/AssignmentBankCard/AssignmentBankCard';
 import SubmissionsTable from '../../components/Teacher/SubmissionsTable/SubmissionsTable';
 import AnalyticsSection from '../../components/Teacher/AnalyticsSection/AnalyticsSection';
 import GradingModal from '../../components/Teacher/GradingModal/GradingModal';
 import AssignmentModal from '../../components/Teacher/AssignmentModal/AssignmentModal';
+import PublishFromBankModal from '../../components/Teacher/PublishFromBankModal/PublishFromBankModal';
 import SubmissionDetailsModal from '../../components/Teacher/SubmissionDetailsModal/SubmissionDetailsModal';
 import Button from '../../components/UI/Button/Button';
 import Pagination from '../../components/UI/Pagination/Pagination';
@@ -29,6 +31,18 @@ import useDebouncedValue from '../../hooks/useDebouncedValue';
 import './TeacherDashboard.scss';
 
 const TEACHER_DASHBOARD_FILTERS_KEY = 'teacher-dashboard-filters-v1';
+
+const DEFAULT_SUBMISSION_STATUS_FILTER = 'submitted';
+
+const normalizeStoredSubmissionStatus = (value) => {
+  if (value === 'all' || value == null || value === '') {
+    return DEFAULT_SUBMISSION_STATUS_FILTER;
+  }
+  if (['submitted', 'graded', 'returned'].includes(value)) {
+    return value;
+  }
+  return DEFAULT_SUBMISSION_STATUS_FILTER;
+};
 
 const getStoredTeacherFilters = () => {
   try {
@@ -54,6 +68,7 @@ const TeacherDashboard = () => {
     assignmentsMeta = {},
     submissionsMeta = {},
     availableGroups: teacherAvailableGroups,
+    teachingGroups,
     availableSubjects: teacherAvailableSubjects,
     loading,
     submissionsLoading,
@@ -65,6 +80,7 @@ const TeacherDashboard = () => {
     createAssignment,
     updateAssignment,
     deleteAssignment,
+    loadTeacherData,
     error 
   } = useTeacher();
   const { showSuccess, showError, showInfo } = useNotification();
@@ -91,7 +107,7 @@ const TeacherDashboard = () => {
   });
   const [assignmentFilter, setAssignmentFilter] = useState(storedFilters?.assignmentFilter || 'all');
   const [groupFilter, setGroupFilter] = useState(storedFilters?.groupFilter || 'all');
-  const [statusFilter, setStatusFilter] = useState(storedFilters?.statusFilter || 'all');
+  const [statusFilter, setStatusFilter] = useState(normalizeStoredSubmissionStatus(storedFilters?.statusFilter));
   const [searchTerm, setSearchTerm] = useState(storedFilters?.searchTerm || '');
   const [assignmentSearchTerm, setAssignmentSearchTerm] = useState(storedFilters?.assignmentSearchTerm || '');
   const [assignmentGroupFilter, setAssignmentGroupFilter] = useState(storedFilters?.assignmentGroupFilter || 'all');
@@ -110,6 +126,18 @@ const TeacherDashboard = () => {
   const [showAssignmentDetails, setShowAssignmentDetails] = useState(false);
   const [assignmentFormDraft, setAssignmentFormDraft] = useState(null);
   const [assignmentPage, setAssignmentPage] = useState(1);
+  const [assignmentsBankMode, setAssignmentsBankMode] = useState(
+    Boolean(storedFilters?.assignmentsBankMode)
+  );
+  const [bankTemplates, setBankTemplates] = useState([]);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [showBankTemplateModal, setShowBankTemplateModal] = useState(false);
+  const [editingBankTemplate, setEditingBankTemplate] = useState(null);
+  const [showPublishBankModal, setShowPublishBankModal] = useState(false);
+  const [publishBankTemplate, setPublishBankTemplate] = useState(null);
+  const [publishBankSubmitting, setPublishBankSubmitting] = useState(false);
+  const [bankTemplateToDelete, setBankTemplateToDelete] = useState(null);
+  const [showBankDeleteConfirm, setShowBankDeleteConfirm] = useState(false);
   const [submissionPage, setSubmissionPage] = useState(1);
   const [submissionSort, setSubmissionSort] = useState(
     storedFilters?.submissionSort || 'review_queue'
@@ -122,6 +150,8 @@ const TeacherDashboard = () => {
   const [analyticsAssignments, setAnalyticsAssignments] = useState([]);
   const [analyticsSubmissions, setAnalyticsSubmissions] = useState([]);
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
+  const [analyticsSnapshotLoading, setAnalyticsSnapshotLoading] = useState(false);
+  const [analyticsGroupId, setAnalyticsGroupId] = useState(storedFilters?.analyticsGroupId || 'all');
   const submissionsTabBusy = submissionsPanelLoading || submissionsLoading;
 
   const debouncedAssignmentSearch = useDebouncedValue(assignmentSearchTerm, 350);
@@ -147,6 +177,26 @@ const TeacherDashboard = () => {
     }
   }, [debouncedSubmissionsSearch, assignmentFilter, groupFilter, deadlineFilter]);
 
+  const loadBankTemplates = useCallback(async (options = {}) => {
+    const { silent = false } = options;
+    if (!silent) {
+      setBankLoading(true);
+    }
+    try {
+      const { data } = await api.get('/assignment-bank');
+      setBankTemplates(Array.isArray(data?.data) ? data.data : []);
+    } catch {
+      setBankTemplates([]);
+      if (!silent) {
+        showError('Не удалось загрузить банк заданий');
+      }
+    } finally {
+      if (!silent) {
+        setBankLoading(false);
+      }
+    }
+  }, [showError]);
+
   const handleResetAssignmentFilters = () => {
     setAssignmentSearchTerm('');
     setAssignmentGroupFilter('all');
@@ -160,7 +210,7 @@ const TeacherDashboard = () => {
     setSearchTerm('');
     setAssignmentFilter('all');
     setGroupFilter('all');
-    setStatusFilter('all');
+    setStatusFilter(DEFAULT_SUBMISSION_STATUS_FILTER);
     setSubmissionSort('review_queue');
     setDeadlineFilter('all');
     setSubmissionPage(1);
@@ -219,6 +269,7 @@ const TeacherDashboard = () => {
           group: 'all',
           studentId: 'all',
           status: 'all',
+          listContext: 'full',
           search: undefined,
           sort: 'review_queue',
           deadlineFilter: 'all',
@@ -263,10 +314,14 @@ const TeacherDashboard = () => {
   const loadAnalyticsSnapshot = useCallback(async () => {
     if (!user) return;
 
+    const idNum = analyticsGroupId !== 'all' ? Number(analyticsGroupId) : NaN;
+    const groupParams = Number.isFinite(idNum) && idNum > 0 ? { group_id: idNum } : {};
+
+    setAnalyticsSnapshotLoading(true);
     try {
       const [assignmentsRes, submissionsRes] = await Promise.all([
-        api.get('/assignments', { params: { sort: 'newest' } }),
-        api.get('/submissions', { params: { sort: 'newest' } }),
+        api.get('/assignments', { params: { sort: 'newest', ...groupParams } }),
+        api.get('/submissions', { params: { sort: 'newest', list_context: 'full', ...groupParams } }),
       ]);
 
       const rawAssignments = Array.isArray(assignmentsRes.data?.data)
@@ -281,8 +336,10 @@ const TeacherDashboard = () => {
       setAnalyticsLoaded(true);
     } catch (error) {
       setAnalyticsLoaded(false);
+    } finally {
+      setAnalyticsSnapshotLoading(false);
     }
-  }, [user]);
+  }, [user, analyticsGroupId]);
 
   useEffect(() => {
     if (user) {
@@ -307,7 +364,30 @@ const TeacherDashboard = () => {
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== 'assignments') {
+      setAssignmentsBankMode(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'assignments' || !assignmentsBankMode) {
+      return;
+    }
+    loadBankTemplates();
+  }, [activeTab, assignmentsBankMode, loadBankTemplates]);
+
+  useEffect(() => {
+    if (!showAssignmentDetails || !detailsAssignment?.id) {
+      return;
+    }
+    loadBankTemplates({ silent: true });
+  }, [showAssignmentDetails, detailsAssignment?.id, loadBankTemplates]);
+
+  useEffect(() => {
     if (activeTab !== 'assignments' && activeTab !== 'completed') {
+      return;
+    }
+    if (activeTab === 'assignments' && assignmentsBankMode) {
       return;
     }
 
@@ -331,6 +411,7 @@ const TeacherDashboard = () => {
     assignmentWorkFilter,
     assignmentDeadlineFilter,
     loadTeacherAssignments,
+    assignmentsBankMode,
   ]);
 
   useEffect(() => {
@@ -348,7 +429,7 @@ const TeacherDashboard = () => {
       perPage: PAGINATION_DEFAULTS.teacherSubmissions,
       sort: submissionSort,
       search: debouncedSubmissionsSearch || undefined,
-      status: statusFilter !== 'all' ? statusFilter : undefined,
+      status: statusFilter,
       subjectId: assignmentFilter !== 'all' ? assignmentFilter : 'all',
       group: groupFilter !== 'all' ? groupFilter : 'all',
       deadlineFilter: deadlineFilter !== 'all' ? deadlineFilter : 'all',
@@ -427,6 +508,8 @@ const TeacherDashboard = () => {
         assignmentDeadlineFilter,
         submissionSort,
         deadlineFilter,
+        analyticsGroupId,
+        assignmentsBankMode,
       })
     );
   }, [
@@ -442,7 +525,19 @@ const TeacherDashboard = () => {
     assignmentDeadlineFilter,
     submissionSort,
     deadlineFilter,
+    analyticsGroupId,
+    assignmentsBankMode,
   ]);
+
+  useEffect(() => {
+    if (analyticsGroupId === 'all') {
+      return;
+    }
+    const allowed = teachingGroups.some((g) => String(g.id) === String(analyticsGroupId));
+    if (!allowed) {
+      setAnalyticsGroupId('all');
+    }
+  }, [analyticsGroupId, teachingGroups]);
 
   const {
     dashboardStats,
@@ -503,6 +598,49 @@ const TeacherDashboard = () => {
 
   const submissionGroupOptions = useMemo(() => assignmentGroupOptions, [assignmentGroupOptions]);
 
+  const filteredBankTemplates = useMemo(() => {
+    let list = [...bankTemplates];
+    const q = debouncedAssignmentSearch.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (t) =>
+          (t.title || '').toLowerCase().includes(q) ||
+          (t.description || '').toLowerCase().includes(q) ||
+          (t.subjectRelation?.name || '').toLowerCase().includes(q)
+      );
+    }
+    if (assignmentSubjectFilter !== 'all') {
+      list = list.filter((t) => String(t.subjectId) === String(assignmentSubjectFilter));
+    }
+    return list;
+  }, [bankTemplates, debouncedAssignmentSearch, assignmentSubjectFilter]);
+
+  const bankSourceAssignmentIds = useMemo(() => {
+    const ids = new Set();
+    bankTemplates.forEach((t) => {
+      const sid = t.source_assignment_id;
+      if (sid == null || sid === '') {
+        return;
+      }
+      const n = Number(sid);
+      if (!Number.isNaN(n)) {
+        ids.add(n);
+      }
+    });
+    return ids;
+  }, [bankTemplates]);
+
+  const detailsAssignmentInBank = useMemo(() => {
+    if (!detailsAssignment?.id) {
+      return false;
+    }
+    const id = Number(detailsAssignment.id);
+    if (Number.isNaN(id)) {
+      return false;
+    }
+    return bankSourceAssignmentIds.has(id);
+  }, [detailsAssignment, bankSourceAssignmentIds]);
+
   useEffect(() => {
     if (assignmentSubjectFilter === 'all') {
       return;
@@ -544,6 +682,121 @@ const TeacherDashboard = () => {
     }
   }, [groupFilter, submissionGroupOptions]);
 
+  const uploadBankTemplateMaterials = async (templateId, materialFiles = [], removedMaterialIds = []) => {
+    const files = Array.isArray(materialFiles) ? materialFiles.filter(Boolean) : [];
+    const removeIds = Array.isArray(removedMaterialIds) ? removedMaterialIds.filter(Boolean) : [];
+    if (!templateId || (files.length === 0 && removeIds.length === 0)) {
+      return;
+    }
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files[]', file));
+    removeIds.forEach((id) => formData.append('remove_ids[]', String(id)));
+    await api.post(`/assignment-bank/${templateId}/materials`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  };
+
+  const handleAddAssignmentToBank = async (assignment) => {
+    if (!assignment?.id) return;
+    try {
+      await api.post(`/assignment-bank/from-assignment/${assignment.id}`);
+      showSuccess('Заготовка добавлена в банк заданий');
+      await loadBankTemplates({ silent: true });
+    } catch (err) {
+      const msg = err?.response?.data?.message;
+      showError(typeof msg === 'string' ? msg : 'Не удалось добавить в банк');
+    }
+  };
+
+  const handleEditBankTemplate = (template) => {
+    setEditingBankTemplate(template);
+    setShowBankTemplateModal(true);
+  };
+
+  const handleSaveBankTemplate = async (data) => {
+    if (!editingBankTemplate?.id) return;
+    try {
+      await api.put(`/assignment-bank/${editingBankTemplate.id}`, {
+        title: data.title,
+        subjectId: data.subjectId,
+        description: data.description,
+        submissionType: data.submissionType,
+        criteria: (data.criteria || []).map((c) => ({
+          text: c.text,
+          maxPoints: c.maxPoints,
+        })),
+        allowedFormats: data.allowedFormats,
+      });
+      await uploadBankTemplateMaterials(
+        editingBankTemplate.id,
+        data.materialFiles,
+        data.removedMaterialIds
+      );
+      showSuccess('Заготовка сохранена');
+      setShowBankTemplateModal(false);
+      setEditingBankTemplate(null);
+      await loadBankTemplates();
+      await loadTeacherMeta({ silent: true });
+    } catch (err) {
+      const msg = err?.response?.data?.message;
+      showError(typeof msg === 'string' ? msg : 'Не удалось сохранить заготовку');
+    }
+  };
+
+  const handleRequestDeleteBankTemplate = (template) => {
+    setBankTemplateToDelete(template);
+    setShowBankDeleteConfirm(true);
+  };
+
+  const handleConfirmDeleteBankTemplate = async () => {
+    const t = bankTemplateToDelete;
+    if (!t?.id) return;
+    try {
+      await api.delete(`/assignment-bank/${t.id}`);
+      showSuccess('Заготовка удалена из банка');
+      setBankTemplateToDelete(null);
+      setShowBankDeleteConfirm(false);
+      await loadBankTemplates();
+    } catch (err) {
+      const msg = err?.response?.data?.message;
+      showError(typeof msg === 'string' ? msg : 'Не удалось удалить заготовку');
+    }
+  };
+
+  const handleCloseBankDeleteModal = () => {
+    setShowBankDeleteConfirm(false);
+    setBankTemplateToDelete(null);
+  };
+
+  const handleOpenPublishBank = (template) => {
+    setPublishBankTemplate(template);
+    setShowPublishBankModal(true);
+  };
+
+  const handleConfirmPublishFromBank = async ({ templateId, deadline, studentGroups }) => {
+    setPublishBankSubmitting(true);
+    try {
+      await api.post(`/assignment-bank/${templateId}/publish`, {
+        deadline,
+        studentGroups,
+      });
+      showSuccess('Задание выдано студентам');
+      setShowPublishBankModal(false);
+      setPublishBankTemplate(null);
+      await loadTeacherData();
+      await loadAnalyticsSnapshot();
+      await loadTeacherStudentDirectory();
+      if (assignmentsBankMode) {
+        await loadBankTemplates();
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message;
+      showError(typeof msg === 'string' ? msg : 'Не удалось выдать задание');
+    } finally {
+      setPublishBankSubmitting(false);
+    }
+  };
+
   const handleCreateAssignment = () => {
     setAssignmentFormDraft(null);
     setSelectedAssignment(null);
@@ -557,6 +810,10 @@ const TeacherDashboard = () => {
   };
 
   const handleGradeSubmission = (submission) => {
+    if (!submission || submission.status === 'returned') {
+      return;
+    }
+
     const linkedAssignment = assignments.find((item) => item.id === submission.assignmentId);
     const hasDraftForCurrentSubmission = gradeData.draftSubmissionId === submission.id;
 
@@ -589,9 +846,10 @@ const TeacherDashboard = () => {
     if (showDetailsModal) {
       setShowDetailsModal(false);
     }
-    setGradeData({ 
-      score: submission.score || '', 
-      comment: submission.teacherComment || '',
+    const isGraded = submission.status === 'graded';
+    setGradeData({
+      score: isGraded ? String(submission.score ?? '') : '',
+      comment: isGraded ? (submission.teacherComment || '') : '',
       criterionScores,
       draftSubmissionId: submission.id,
       useCriteriaScoring: Array.isArray(submission.criterionScores) && submission.criterionScores.length > 0
@@ -748,7 +1006,7 @@ const TeacherDashboard = () => {
     const relatedAssignment = assignments.find((assignment) => Number(assignment.id) === Number(assignmentId));
     const nextSubjectId = relatedAssignment?.subjectId || relatedAssignment?.subject_id;
     setAssignmentFilter(nextSubjectId ? String(nextSubjectId) : 'all');
-    setStatusFilter('all');
+    setStatusFilter(DEFAULT_SUBMISSION_STATUS_FILTER);
     setSubmissionPage(1);
     setActiveTab('submissions');
   };
@@ -957,6 +1215,17 @@ const TeacherDashboard = () => {
             teacherStudentsLoading={teacherStudentsLoading}
             onReloadTeacherStudents={loadTeacherStudentDirectory}
             submissionsTabBusy={submissionsTabBusy}
+            teachingGroups={teachingGroups}
+            analyticsGroupId={analyticsGroupId}
+            onAnalyticsGroupChange={setAnalyticsGroupId}
+            analyticsSnapshotLoading={analyticsSnapshotLoading}
+            assignmentsBankMode={assignmentsBankMode}
+            onToggleAssignmentsBankMode={setAssignmentsBankMode}
+            filteredBankTemplates={filteredBankTemplates}
+            bankLoading={bankLoading}
+            onEditBankTemplate={handleEditBankTemplate}
+            onDeleteBankTemplate={handleRequestDeleteBankTemplate}
+            onPublishBankTemplate={handleOpenPublishBank}
           />
         </div>
       </main>
@@ -994,6 +1263,31 @@ const TeacherDashboard = () => {
         }
       />
 
+      <AssignmentModal
+        assignment={editingBankTemplate}
+        isOpen={showBankTemplateModal}
+        onClose={() => {
+          setShowBankTemplateModal(false);
+          setEditingBankTemplate(null);
+        }}
+        onSubmit={handleSaveBankTemplate}
+        availableGroups={teacherAvailableGroups}
+        availableSubjects={teacherAvailableSubjects}
+        modalMode="bankTemplate"
+      />
+
+      <PublishFromBankModal
+        isOpen={showPublishBankModal}
+        template={publishBankTemplate}
+        availableGroups={teacherAvailableGroups}
+        onClose={() => {
+          setShowPublishBankModal(false);
+          setPublishBankTemplate(null);
+        }}
+        onConfirm={handleConfirmPublishFromBank}
+        isSubmitting={publishBankSubmitting}
+      />
+
       <AssignmentDetailsModal
         assignment={detailsAssignment}
         isOpen={showAssignmentDetails}
@@ -1003,6 +1297,8 @@ const TeacherDashboard = () => {
         onEdit={handleEditAssignmentFromDetails}
         onViewSubmissions={handleViewSubmissionsFromDetails}
         onDownloadMaterial={handleDownloadAssignmentMaterial}
+        onAddToBank={handleAddAssignmentToBank}
+        assignmentAlreadyInBank={detailsAssignmentInBank}
       />
 
       <ConfirmModal
@@ -1014,6 +1310,20 @@ const TeacherDashboard = () => {
           assignmentToDelete
             ? `Вы уверены, что хотите удалить задание "${assignmentToDelete.title}"? Связанные сдачи также будут удалены.`
             : 'Вы уверены, что хотите удалить задание?'
+        }
+        confirmText="Удалить"
+        danger
+      />
+
+      <ConfirmModal
+        isOpen={showBankDeleteConfirm}
+        onClose={handleCloseBankDeleteModal}
+        onConfirm={handleConfirmDeleteBankTemplate}
+        title="Удалить заготовку?"
+        message={
+          bankTemplateToDelete
+            ? `Удалить «${bankTemplateToDelete.title}» из банка? Выданные ранее задания не затронутся.`
+            : 'Удалить заготовку из банка?'
         }
         confirmText="Удалить"
         danger
@@ -1116,6 +1426,17 @@ const DashboardContent = ({
   teacherStudentsLoading,
   onReloadTeacherStudents,
   submissionsTabBusy = false,
+  teachingGroups = [],
+  analyticsGroupId = 'all',
+  onAnalyticsGroupChange,
+  analyticsSnapshotLoading = false,
+  assignmentsBankMode = false,
+  onToggleAssignmentsBankMode,
+  filteredBankTemplates = [],
+  bankLoading = false,
+  onEditBankTemplate,
+  onDeleteBankTemplate,
+  onPublishBankTemplate,
 }) => {
   const renderSection = () => {
     switch (activeTab) {
@@ -1143,6 +1464,13 @@ const DashboardContent = ({
             onViewSubmissions={onViewSubmissions}
             onViewDetails={onViewAssignmentDetails}
             onDeleteAssignment={onDeleteAssignment}
+            assignmentsBankMode={assignmentsBankMode}
+            onToggleAssignmentsBankMode={onToggleAssignmentsBankMode}
+            filteredBankTemplates={filteredBankTemplates}
+            bankLoading={bankLoading}
+            onEditBankTemplate={onEditBankTemplate}
+            onDeleteBankTemplate={onDeleteBankTemplate}
+            onPublishBankTemplate={onPublishBankTemplate}
           />
         );
 
@@ -1202,7 +1530,16 @@ const DashboardContent = ({
         );
       
       case 'analytics':
-        return <AnalyticsSection submissions={analyticsSubmissions} assignments={analyticsAssignments} />;
+        return (
+          <AnalyticsSection
+            submissions={analyticsSubmissions}
+            assignments={analyticsAssignments}
+            groupOptions={teachingGroups}
+            selectedGroupId={analyticsGroupId}
+            onGroupChange={onAnalyticsGroupChange}
+            loading={analyticsSnapshotLoading}
+          />
+        );
       
       case 'students':
         return (
@@ -1384,14 +1721,32 @@ const AssignmentsSection = ({
   onCreateAssignment,
   onViewSubmissions,
   onViewDetails,
-  onDeleteAssignment
+  onDeleteAssignment,
+  assignmentsBankMode = false,
+  onToggleAssignmentsBankMode,
+  filteredBankTemplates = [],
+  bankLoading = false,
+  onEditBankTemplate,
+  onDeleteBankTemplate,
+  onPublishBankTemplate,
 }) => (
   <div className="assignments-section">
     <div className="section-header">
-      <h2>Учебные задания</h2>
-      <Button variant="primary" onClick={onCreateAssignment}>
-        + Создать задание
-      </Button>
+      <h2>{assignmentsBankMode ? 'Банк заданий' : 'Учебные задания'}</h2>
+      <div className="section-header__actions">
+        <Button
+          type="button"
+          variant={assignmentsBankMode ? 'primary' : 'secondary'}
+          onClick={() => onToggleAssignmentsBankMode?.(!assignmentsBankMode)}
+        >
+          {assignmentsBankMode ? 'Мои задания' : 'Банк заданий'}
+        </Button>
+        {!assignmentsBankMode && (
+          <Button variant="primary" onClick={onCreateAssignment}>
+            + Создать задание
+          </Button>
+        )}
+      </div>
     </div>
 
     <div className="filters-section">
@@ -1399,31 +1754,37 @@ const AssignmentsSection = ({
         <div className="search-box teacher-dashboard-filter-search">
           <input
             type="text"
-            placeholder="Поиск по названию, предмету..."
+            placeholder={
+              assignmentsBankMode
+                ? 'Поиск в банке по названию, описанию...'
+                : 'Поиск по названию, предмету...'
+            }
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
             className="search-input"
           />
         </div>
         <TeacherFilterPopover id="teacher-assignment-filter-popover">
-          <div className="teacher-filter-field">
-            <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-group-filter">
-              Группа
-            </label>
-            <select
-              id="teacher-assignment-group-filter"
-              value={groupFilter}
-              onChange={(e) => onGroupFilterChange(e.target.value)}
-              className="filter-select group-filter"
-            >
-              <option value="all">Все группы</option>
-              {availableGroups.map((group) => (
-                <option key={group} value={group}>
-                  {group}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!assignmentsBankMode && (
+            <div className="teacher-filter-field">
+              <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-group-filter">
+                Группа
+              </label>
+              <select
+                id="teacher-assignment-group-filter"
+                value={groupFilter}
+                onChange={(e) => onGroupFilterChange(e.target.value)}
+                className="filter-select group-filter"
+              >
+                <option value="all">Все группы</option>
+                {availableGroups.map((group) => (
+                  <option key={group} value={group}>
+                    {group}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="teacher-filter-field">
             <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-subject-filter">
               Предмет
@@ -1442,39 +1803,65 @@ const AssignmentsSection = ({
               ))}
             </select>
           </div>
-          <div className="teacher-filter-field">
-            <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-deadline-filter">
-              Срок
-            </label>
-            <select
-              id="teacher-assignment-deadline-filter"
-              value={deadlineFilter}
-              onChange={(e) => onDeadlineFilterChange(e.target.value)}
-              className="filter-select deadline-filter"
-            >
-              {ASSIGNMENT_DEADLINE_FILTERS.map((filter) => (
-                <option key={filter.value} value={filter.value}>
-                  {filter.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!assignmentsBankMode && (
+            <div className="teacher-filter-field">
+              <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-deadline-filter">
+                Срок
+              </label>
+              <select
+                id="teacher-assignment-deadline-filter"
+                value={deadlineFilter}
+                onChange={(e) => onDeadlineFilterChange(e.target.value)}
+                className="filter-select deadline-filter"
+              >
+                {ASSIGNMENT_DEADLINE_FILTERS.map((filter) => (
+                  <option key={filter.value} value={filter.value}>
+                    {filter.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </TeacherFilterPopover>
         <Button variant="secondary" className="teacher-dashboard-filter-reset-btn" onClick={onResetFilters}>
           Сбросить фильтры
         </Button>
       </div>
-      <div className="assignment-quick-filter-groups">
-        <AssignmentQuickFilters
-          label="Фильтр заданий по работам"
-          value={workFilter}
-          onChange={onWorkFilterChange}
-          options={ASSIGNMENT_QUICK_FILTERS}
-        />
-      </div>
+      {!assignmentsBankMode && (
+        <div className="assignment-quick-filter-groups">
+          <AssignmentQuickFilters
+            label="Фильтр заданий по работам"
+            value={workFilter}
+            onChange={onWorkFilterChange}
+            options={ASSIGNMENT_QUICK_FILTERS}
+          />
+        </div>
+      )}
     </div>
 
-    {activeAssignments.length > 0 ? (
+    {assignmentsBankMode ? (
+      bankLoading ? (
+        <div className="empty-state">
+          <p>Загрузка банка…</p>
+        </div>
+      ) : filteredBankTemplates.length > 0 ? (
+        <div className="assignments-grid app-reveal-stagger">
+          {filteredBankTemplates.map((template) => (
+            <AssignmentBankCard
+              key={template.id}
+              template={template}
+              onOpenTemplate={onEditBankTemplate}
+              onDelete={onDeleteBankTemplate}
+              onPublish={onPublishBankTemplate}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <p>В банке пока нет заготовок. Добавьте задание через «Детали задания» — кнопка «В банк заданий».</p>
+        </div>
+      )
+    ) : activeAssignments.length > 0 ? (
       <div className="assignments-grid app-reveal-stagger">
         {activeAssignments.map((assignment) => (
           <AssignmentCard
@@ -1491,14 +1878,16 @@ const AssignmentsSection = ({
         <p>Нет активных заданий по текущим фильтрам</p>
       </div>
     )}
-    <Pagination
-      currentPage={paginationMeta.currentPage}
-      lastPage={paginationMeta.lastPage}
-      total={paginationMeta.total}
-      fallbackCount={activeAssignments.length}
-      onPrev={onPrevPage}
-      onNext={onNextPage}
-    />
+    {!assignmentsBankMode && (
+      <Pagination
+        currentPage={paginationMeta.currentPage}
+        lastPage={paginationMeta.lastPage}
+        total={paginationMeta.total}
+        fallbackCount={activeAssignments.length}
+        onPrev={onPrevPage}
+        onNext={onNextPage}
+      />
+    )}
   </div>
 );
 
@@ -1723,7 +2112,6 @@ const SubmissionsSection = ({
                 disabled={submissionsBusy}
                 aria-disabled={submissionsBusy}
               >
-                <option value="all">Все статусы</option>
                 <option value="submitted">На проверке</option>
                 <option value="returned">Возвращены на доработку</option>
                 <option value="graded">Зачтены</option>

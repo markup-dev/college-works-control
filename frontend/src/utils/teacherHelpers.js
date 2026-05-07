@@ -125,3 +125,22 @@ export const calculateSubmissionStats = (submissions = [], assignment = null) =>
     completionRate
   };
 };
+
+/** «Фамилия И.О.» из полного ФИО (слова через пробел). */
+export const formatSurnameWithInitials = (fullName) => {
+  const normalized = String(fullName ?? '').trim().replace(/\s+/g, ' ');
+  if (!normalized) return '—';
+  const parts = normalized.split(' ');
+  if (parts.length === 1) {
+    return parts[0];
+  }
+  const surname = parts[0];
+  const initials = parts
+    .slice(1)
+    .map((part) => {
+      const ch = part.charAt(0);
+      return ch ? `${ch.toUpperCase()}.` : '';
+    })
+    .join('');
+  return `${surname} ${initials}`.trim();
+};

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import Button from '../../UI/Button/Button';
-import { formatDate, getSubmissionStatusInfo } from '../../../utils';
+import { formatDate, formatSurnameWithInitials, getSubmissionStatusInfo } from '../../../utils';
 import { getDeadlineReviewHint } from '../../../utils/submissionReviewQueue';
 import './SubmissionsTable.scss';
 
@@ -8,7 +8,6 @@ const SubmissionsTable = ({
   submissions = [],
   assignments = [],
   onGradeSubmission,
-  onDownloadFile,
   onViewDetails,
   className = "",
   loading = false,
@@ -156,7 +155,6 @@ const SubmissionsTable = ({
             submission={submission}
             assignment={assignments.find((item) => item.id === submission.assignmentId)}
             onGradeSubmission={onGradeSubmission}
-            onDownloadFile={onDownloadFile}
             onViewDetails={onViewDetails}
             showDeadlineHint
           />
@@ -170,12 +168,10 @@ const SubmissionCard = ({
   submission,
   assignment,
   onGradeSubmission,
-  onDownloadFile,
   onViewDetails,
   showDeadlineHint = false,
 }) => {
   const statusInfo = getSubmissionStatusInfo(submission.status);
-  const maxScore = assignment?.maxScore || submission.maxScore || 100;
   const effectiveSubmissionType = assignment?.submissionType || submission.submissionType || 'file';
   const isDemoSubmission = effectiveSubmissionType === 'demo';
   const deadlineHint =
@@ -183,64 +179,58 @@ const SubmissionCard = ({
       ? getDeadlineReviewHint(submission.assignmentDeadline, submission.status)
       : null;
 
+  const shortName = (submission.studentName || '').trim()
+    ? formatSurnameWithInitials(submission.studentName)
+    : 'Студент не указан';
+  const groupLabel = (submission.group || '').trim() || '—';
+  const subjectLabel = String(
+    submission.subjectName || submission.subject || assignment?.subjectName || assignment?.subject || '',
+  ).trim() || '—';
+
   return (
     <article className="submission-card" onClick={() => onViewDetails?.(submission)}>
-      <div className="submission-card__top">
-        <div>
-          <h4 className="submission-card__student">{submission.studentName || 'Студент не указан'}</h4>
-          <p className="submission-card__group">{submission.group || 'Группа не указана'}</p>
-        </div>
-        <div className="submission-card__status-stack">
-          <span className={`submission-card__status submission-card__status--${statusInfo.variant}`}>
+      <div className="submission-card__col submission-card__col--main">
+        <p className="submission-card__line submission-card__line--identity">
+          <span className="submission-card__name">{shortName}</span>
+          <span className="submission-card__paren">({groupLabel})</span>
+        </p>
+        <p className="submission-card__line submission-card__line--task">
+          <span className="submission-card__task-title">{submission.assignmentTitle || 'Без названия'}</span>
+          <span className="submission-card__paren submission-card__paren--muted">({subjectLabel})</span>
+        </p>
+        {isDemoSubmission ? (
+          <p className="submission-card__demo-note">Демонстрация без файла</p>
+        ) : null}
+      </div>
+
+      <div className="submission-card__col submission-card__col--meta">
+        <div className="submission-card__badges" aria-label="Статус">
+          <span className={`submission-card__pill submission-card__pill--${statusInfo.variant}`}>
             {statusInfo.label}
           </span>
-          {submission.isResubmission && <span className="submission-card__resubmission">Пересдача</span>}
+          {submission.isResubmission ? (
+            <span className="submission-card__pill submission-card__pill--resend">Пересдача</span>
+          ) : null}
           {deadlineHint ? (
-            <span
-              className={`submission-card__deadline-hint submission-card__deadline-hint--${deadlineHint.tone}`}
-            >
+            <span className={`submission-card__pill submission-card__pill--deadline-${deadlineHint.tone}`}>
               {deadlineHint.label}
             </span>
           ) : null}
         </div>
-      </div>
-
-      <div className="submission-card__middle">
-        <div className="submission-card__assignment">
-          <p className="submission-card__assignment-title">{submission.assignmentTitle || 'Без названия'}</p>
-        </div>
-        {isDemoSubmission && (
-          <p className="submission-card__meta-line">Демонстрация без файла</p>
-        )}
-
-        <div className="submission-card__footer">
-          <p className="submission-card__meta-line">{formatSubmissionDate(submission.submissionDate)}</p>
-          <p className="submission-card__score">
-            <span>Оценка:</span> {formatScore(submission.score, maxScore, submission.gradeLabel)}
+        <p className="submission-card__submitted">Сдано: {formatSubmissionDate(submission.submissionDate)}</p>
+        {submission.status === 'graded' && submission.gradeLabel ? (
+          <p className="submission-card__grade">
+            Оценка: <span className="submission-card__grade-value">{submission.gradeLabel}</span>
           </p>
-        </div>
+        ) : null}
       </div>
 
-      <div className="submission-card__actions">
-        {submission.fileName && (
-          <Button
-            variant="secondary"
-            size="small"
-            className="submission-card__action-btn submission-card__action-btn--download"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDownloadFile?.(submission);
-            }}
-          >
-            Скачать файл
-          </Button>
-        )}
-
+      <div className="submission-card__col submission-card__col--cta">
         {submission.status === 'submitted' && (
           <Button
             variant="primary"
             size="small"
-            className="submission-card__action-btn"
+            className="submission-card__btn"
             onClick={(event) => {
               event.stopPropagation();
               onGradeSubmission?.(submission);
@@ -254,7 +244,7 @@ const SubmissionCard = ({
           <Button
             variant="primary"
             size="small"
-            className="submission-card__action-btn submission-card__action-btn--edit"
+            className="submission-card__btn submission-card__btn--edit"
             onClick={(event) => {
               event.stopPropagation();
               onGradeSubmission?.(submission);
@@ -265,17 +255,7 @@ const SubmissionCard = ({
         )}
 
         {submission.status === 'returned' && (
-          <Button
-            variant="primary"
-            size="small"
-            className="submission-card__action-btn"
-            onClick={(event) => {
-              event.stopPropagation();
-              onGradeSubmission?.(submission);
-            }}
-          >
-            Проверить
-          </Button>
+          <span className="submission-card__cta-note">Ждём новую сдачу</span>
         )}
       </div>
     </article>
@@ -291,13 +271,6 @@ const formatSubmissionDate = (date) => {
   } catch {
     return '—';
   }
-};
-
-const formatScore = (score, maxScore, gradeLabel) => {
-  if (score === null || score === undefined) {
-    return '—';
-  }
-  return gradeLabel ? `${score}/${maxScore} · ${gradeLabel}` : `${score}/${maxScore}`;
 };
 
 const CardsSkeleton = () => (

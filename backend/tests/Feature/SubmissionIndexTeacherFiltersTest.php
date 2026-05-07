@@ -118,6 +118,85 @@ class SubmissionIndexTeacherFiltersTest extends TestCase
         $this->assertContains($gradedLate->id, $ids);
     }
 
+    public function test_teacher_default_list_excludes_returned_unless_full_context_or_status_filter(): void
+    {
+        $teacher = $this->createUser('teacher');
+        $group = Group::create([
+            'name' => 'Тест-' . uniqid(),
+            'status' => 'active',
+        ]);
+        $student = $this->createUser('student', $group->id);
+        $assignment = $this->createAssignment($teacher->id, ['pdf'], 10, $group, now()->addDays(7)->toDateString());
+
+        $returned = Submission::create([
+            'assignment_id' => $assignment->id,
+            'student_id' => $student->id,
+            'status' => 'returned',
+            'teacher_comment' => 'Доработать',
+            'file_name' => 'w.pdf',
+            'file_path' => 'path/w.pdf',
+            'submitted_at' => now()->subDay(),
+        ]);
+
+        Sanctum::actingAs($teacher);
+
+        $response = $this->getJson('/api/submissions?' . http_build_query([
+            'per_page' => 20,
+            'page' => 1,
+        ]));
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertNotContains($returned->id, $ids);
+
+        $responseFull = $this->getJson('/api/submissions?' . http_build_query([
+            'list_context' => 'full',
+            'per_page' => 20,
+            'page' => 1,
+        ]));
+        $responseFull->assertOk();
+        $idsFull = collect($responseFull->json('data'))->pluck('id')->all();
+        $this->assertContains($returned->id, $idsFull);
+
+        $responseReturned = $this->getJson('/api/submissions?' . http_build_query([
+            'status' => 'returned',
+            'per_page' => 20,
+            'page' => 1,
+        ]));
+        $responseReturned->assertOk();
+        $idsReturned = collect($responseReturned->json('data'))->pluck('id')->all();
+        $this->assertContains($returned->id, $idsReturned);
+    }
+
+    public function test_teacher_cannot_grade_returned_submission(): void
+    {
+        $teacher = $this->createUser('teacher');
+        $group = Group::create([
+            'name' => 'Тест-' . uniqid(),
+            'status' => 'active',
+        ]);
+        $student = $this->createUser('student', $group->id);
+        $assignment = $this->createAssignment($teacher->id, ['pdf'], 10, $group, now()->addDays(7)->toDateString());
+
+        $submission = Submission::create([
+            'assignment_id' => $assignment->id,
+            'student_id' => $student->id,
+            'status' => 'returned',
+            'teacher_comment' => 'Исправить',
+            'file_name' => 'w.pdf',
+            'file_path' => 'path/w.pdf',
+            'submitted_at' => now()->subDay(),
+        ]);
+
+        Sanctum::actingAs($teacher);
+
+        $response = $this->putJson("/api/submissions/{$submission->id}/grade", [
+            'score' => 75,
+            'comment' => 'Ок',
+        ]);
+
+        $response->assertStatus(422);
+    }
+
     private function createAssignment(
         int $teacherId,
         array $formats,

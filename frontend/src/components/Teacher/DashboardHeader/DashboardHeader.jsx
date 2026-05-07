@@ -79,7 +79,7 @@ const DashboardTabs = ({ activeTab, onTabChange, totalAssignments, completedAssi
     <TabButton
       active={activeTab === 'students'}
       onClick={() => onTabChange('students')}
-      label="Студенты"
+      label="Группы"
       loading={loading}
     />
   </nav>
