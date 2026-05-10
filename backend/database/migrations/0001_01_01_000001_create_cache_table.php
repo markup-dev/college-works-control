@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/** Кэш драйвера database и блокировки cache_locks для очередей и rate limit при хранении в БД. */
 return new class extends Migration
 {
     /**

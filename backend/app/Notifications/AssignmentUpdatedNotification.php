@@ -6,10 +6,14 @@ use App\Models\Assignment;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Студенту: задание изменено преподавателем (актуальный дедлайн в письме и в payload для UI).
+ * viaChannels — опционально ограничить каналы (аналогично AssignmentAnnouncedNotification).
+ */
 class AssignmentUpdatedNotification extends Notification
 {
     /**
-     * @param  list<string>|null  $viaChannels  Если задано — только эти каналы.
+     * @param  list<string>|null  $viaChannels  Если задано — уведомление только по этим каналам.
      */
     public function __construct(
         public Assignment $assignment,

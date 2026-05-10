@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Критерий оценивания задания: порядок, формулировка, максимум баллов по пункту рубрики.
+ */
 class AssignmentCriterion extends Model
 {
     protected $fillable = [

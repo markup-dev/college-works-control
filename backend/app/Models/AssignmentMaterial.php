@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Прикреплённый к заданию файл методички/инструкции (путь в storage и метаданные).
+ */
 class AssignmentMaterial extends Model
 {
     use HasFactory;

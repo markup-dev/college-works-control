@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
 import api from '../services/api';
 import { DEFAULT_ALLOWED_FORMATS, getAllowedFormatsFromAssignment, normalizeGroupName, PAGINATION_DEFAULTS } from '../utils';
+import { resolveAssignmentSubjectId, resolveAssignmentSubjectName } from '../utils/filterHelpers';
 
 export const normalizeAssignment = (assignment) => ({
   ...assignment,
-  subject: assignment.subject || assignment.subjectRelation?.name || '',
-  subjectId: assignment.subjectId || assignment.subject_id || assignment.subjectRelation?.id || null,
+  subject: resolveAssignmentSubjectName(assignment),
+  subjectId: resolveAssignmentSubjectId(assignment),
   studentGroups: assignment.studentGroups || assignment.groups?.map((g) => g.name) || [],
   allowedFormats: getAllowedFormatsFromAssignment(assignment),
   materialFiles: assignment.materialFiles || assignment.materialItems || [],

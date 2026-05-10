@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Файл, прикреплённый к шаблону задания (до публикации в Assignment).
+ */
 class AssignmentTemplateMaterial extends Model
 {
     protected $fillable = [

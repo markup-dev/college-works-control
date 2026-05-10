@@ -7,6 +7,10 @@ use App\Models\Submission;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
 
+/**
+ * Лента уведомлений из таблицы notifications (database channel).
+ * После выборки при необходимости догружаем ФИО преподавателя и группу студента — в payload при сохранении их могло не быть.
+ */
 class NotificationController extends Controller
 {
     public function index(Request $request)
@@ -25,6 +29,7 @@ class NotificationController extends Controller
             'created_at' => $n->created_at->toIso8601String(),
         ]);
 
+        // Уведомления без teacher_name (или с заглушкой) — подтянуть с assignment.teacher одним запросом.
         $assignmentIdsForTeacher = $payloads
             ->pluck('data')
             ->filter(fn ($data) => is_array($data)
@@ -48,6 +53,7 @@ class NotificationController extends Controller
                     (int) $assignment->id => $assignment->teacher?->full_name,
                 ]);
 
+        // Для преподавателя: если в data не было student_group_name — восстановить текст из submission.
         $submissionIdsForGroup = $payloads
             ->pluck('data')
             ->filter(fn ($data) => is_array($data)

@@ -6,6 +6,9 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
+/**
+ * Нормализация тела запроса: ключи JSON/form с фронта в camelCase приводятся к snake_case для валидации Laravel.
+ */
 class ConvertCamelToSnake
 {
     public function handle(Request $request, Closure $next)

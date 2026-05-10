@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Сдача работы студентом по заданию: файл или демонстрация, статусы submitted/graded/returned, баллы и разбивка по критериям.
+ * Цепочка пересдач через previous_submission_id; текстовая оценка (метка) берётся со шкалы преподавателя задания.
+ */
 class Submission extends Model
 {
     use HasFactory;

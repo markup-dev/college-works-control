@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/** Банк шаблонов заданий преподавателя и дочерние таблицы критериев, форматов и файлов шаблона. */
 return new class extends Migration
 {
     public function up(): void
@@ -13,7 +14,7 @@ return new class extends Migration
             $table->unsignedBigInteger('teacher_id');
             $table->unsignedBigInteger('source_assignment_id')->nullable();
             $table->string('title');
-            $table->unsignedBigInteger('subject_id')->nullable()->index();
+            $table->unsignedBigInteger('subject_id')->nullable();
             $table->text('description')->nullable();
             $table->string('submission_type')->default('file');
             $table->integer('max_file_size')->nullable();
@@ -23,6 +24,9 @@ return new class extends Migration
                 ->references('id')->on('users')->cascadeOnDelete();
             $table->foreign('source_assignment_id', 'asg_bnk_src_asg_fk')
                 ->references('id')->on('assignments')->nullOnDelete();
+            $table->foreign('subject_id', 'asg_bnk_subj_fk')
+                ->references('id')->on('subjects')
+                ->nullOnDelete();
 
             $table->unique(
                 ['teacher_id', 'source_assignment_id'],

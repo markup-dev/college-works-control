@@ -2,12 +2,14 @@ import api from './api';
 
 const normalizeUser = (user) => {
   if (!user) return user;
+  const notificationSettings = user.notificationSettings ?? user.notifications ?? { email: true };
   const fullName = [user.lastName, user.firstName, user.middleName]
     .filter(Boolean)
     .join(' ')
     .trim();
   return {
     ...user,
+    notificationSettings,
     fullName,
     group: user.group || user.studentGroup?.name || '',
     registrationDate: user.registrationDate || user.createdAt || '',

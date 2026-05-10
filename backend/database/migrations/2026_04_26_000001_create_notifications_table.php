@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/** Уведомления Laravel (канал database): morph notifiable и JSON data для UI. */
 return new class extends Migration
 {
     public function up(): void

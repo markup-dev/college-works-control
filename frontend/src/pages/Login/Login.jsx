@@ -16,13 +16,13 @@ const DEMO_ACCOUNTS = [
   {
     role: 'teacher',
     roleLabel: 'Преподаватель (JS)',
-    login: 'teacher_kartseva',
+    login: 'karceva_ms',
     password: 'Password123',
   },
   {
     role: 'teacher',
     roleLabel: 'Преподаватель (PHP)',
-    login: 'teacher_karevskiy',
+    login: 'karevskii_ma',
     password: 'Password123',
   },
   {

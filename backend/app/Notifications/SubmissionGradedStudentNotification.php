@@ -6,6 +6,9 @@ use App\Models\Submission;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Студенту: работа принята и оценена; баллы и при необходимости метка по шкале преподавателя задания (gradeLabel).
+ */
 class SubmissionGradedStudentNotification extends Notification
 {
     public function __construct(public Submission $submission) {}

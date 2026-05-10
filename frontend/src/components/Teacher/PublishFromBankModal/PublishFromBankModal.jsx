@@ -137,7 +137,7 @@ const PublishFromBankModal = ({
 
   if (!isOpen || !template) return null;
 
-  const subjectName = template.subjectRelation?.name || template.subject || '';
+  const subjectName = template.subject?.name || template.subject || '';
 
   return createPortal(
     <div className="modal-overlay publish-bank-modal" onClick={onClose}>

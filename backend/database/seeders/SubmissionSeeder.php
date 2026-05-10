@@ -8,6 +8,7 @@ use App\Models\Submission;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
+/** Демо-сдачи с разными статусами (в т.ч. пересдачи) для отчётов и списков проверки. */
 class SubmissionSeeder extends Seeder
 {
     public function run(): void

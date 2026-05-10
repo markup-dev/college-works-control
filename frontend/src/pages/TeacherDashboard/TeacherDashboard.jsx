@@ -14,6 +14,7 @@ import Pagination from '../../components/UI/Pagination/Pagination';
 import InputModal from '../../components/UI/Modal/InputModal';
 import ConfirmModal from '../../components/UI/Modal/ConfirmModal';
 import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsModal/AssignmentDetailsModal';
+import DashboardFilterToolbar from '../../components/Shared/DashboardFilterToolbar';
 import TeacherStudentsSection from '../../components/Teacher/TeacherStudentsSection/TeacherStudentsSection';
 import { useAuth } from '../../context/AuthContext';
 import { useTeacher, normalizeSubmission, normalizeAssignment } from '../../context/TeacherContext';
@@ -145,8 +146,6 @@ const TeacherDashboard = () => {
   const [deadlineFilter, setDeadlineFilter] = useState(storedFilters?.deadlineFilter || 'all');
   const [priorityQueue, setPriorityQueue] = useState([]);
   const [submissionsPanelLoading, setSubmissionsPanelLoading] = useState(false);
-  const [teacherStudentDirectory, setTeacherStudentDirectory] = useState([]);
-  const [teacherStudentsLoading, setTeacherStudentsLoading] = useState(false);
   const [analyticsAssignments, setAnalyticsAssignments] = useState([]);
   const [analyticsSubmissions, setAnalyticsSubmissions] = useState([]);
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
@@ -215,25 +214,6 @@ const TeacherDashboard = () => {
     setDeadlineFilter('all');
     setSubmissionPage(1);
   };
-
-  const loadTeacherStudentDirectory = useCallback(async () => {
-    if (!user || user.role !== 'teacher') {
-      return;
-    }
-    setTeacherStudentsLoading(true);
-    try {
-      const { data } = await api.get('/teacher/students');
-      setTeacherStudentDirectory(Array.isArray(data?.data) ? data.data : []);
-    } catch {
-      setTeacherStudentDirectory([]);
-    } finally {
-      setTeacherStudentsLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    loadTeacherStudentDirectory();
-  }, [loadTeacherStudentDirectory]);
 
   useEffect(() => {
     if (user?.role !== 'teacher') {
@@ -606,7 +586,7 @@ const TeacherDashboard = () => {
         (t) =>
           (t.title || '').toLowerCase().includes(q) ||
           (t.description || '').toLowerCase().includes(q) ||
-          (t.subjectRelation?.name || '').toLowerCase().includes(q)
+          (t.subject?.name || '').toLowerCase().includes(q)
       );
     }
     if (assignmentSubjectFilter !== 'all') {
@@ -785,7 +765,6 @@ const TeacherDashboard = () => {
       setPublishBankTemplate(null);
       await loadTeacherData();
       await loadAnalyticsSnapshot();
-      await loadTeacherStudentDirectory();
       if (assignmentsBankMode) {
         await loadBankTemplates();
       }
@@ -890,7 +869,6 @@ const TeacherDashboard = () => {
       );
       if (result.success) {
         loadAnalyticsSnapshot();
-        loadTeacherStudentDirectory();
         setShowGradingModal(false);
         setSelectedSubmission(null);
         setGradeData({ score: '', comment: '', criterionScores: [], draftSubmissionId: null, useCriteriaScoring: false });
@@ -920,7 +898,6 @@ const TeacherDashboard = () => {
             const result = await returnSubmission(submission.id, comment);
             if (result.success) {
               loadAnalyticsSnapshot();
-              loadTeacherStudentDirectory();
               showSuccess(`Работа "${submission.assignmentTitle}" возвращена студенту на доработку`);
               if (activeTab === 'submissions') {
                 void fetchPriorityQueueForFilters();
@@ -1060,7 +1037,6 @@ const TeacherDashboard = () => {
       const result = await deleteAssignment(assignment.id);
       if (result.success) {
         loadAnalyticsSnapshot();
-        loadTeacherStudentDirectory();
         showSuccess(`Задание "${assignment.title}" удалено`);
       } else {
         showError(result.error || 'Не удалось удалить задание');
@@ -1090,7 +1066,6 @@ const TeacherDashboard = () => {
         closeAssignmentModal();
         showSuccess(selectedAssignment ? 'Задание обновлено!' : 'Задание успешно создано!');
         void loadAnalyticsSnapshot();
-        void loadTeacherStudentDirectory();
       } else {
         showError(result.error || (selectedAssignment ? 'Ошибка при обновлении задания' : 'Ошибка при создании задания'));
       }
@@ -1211,9 +1186,6 @@ const TeacherDashboard = () => {
               setSubmissionSort(value);
               setSubmissionPage(1);
             }}
-            teacherStudents={teacherStudentDirectory}
-            teacherStudentsLoading={teacherStudentsLoading}
-            onReloadTeacherStudents={loadTeacherStudentDirectory}
             submissionsTabBusy={submissionsTabBusy}
             teachingGroups={teachingGroups}
             analyticsGroupId={analyticsGroupId}
@@ -1422,9 +1394,6 @@ const DashboardContent = ({
   onDeadlineFilterChange,
   submissionSort,
   onSubmissionSortChange,
-  teacherStudents,
-  teacherStudentsLoading,
-  onReloadTeacherStudents,
   submissionsTabBusy = false,
   teachingGroups = [],
   analyticsGroupId = 'all',
@@ -1542,13 +1511,7 @@ const DashboardContent = ({
         );
       
       case 'students':
-        return (
-          <TeacherStudentsSection
-            students={teacherStudents}
-            loading={teacherStudentsLoading}
-            onReload={onReloadTeacherStudents}
-          />
-        );
+        return <TeacherStudentsSection />;
       
       default:
         return null;
@@ -1651,55 +1614,6 @@ const AssignmentQuickFilters = ({ label, value = 'all', onChange, options }) => 
   </div>
 );
 
-const TeacherFilterPopover = ({ id, disabled = false, children }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const popoverRef = useRef(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return undefined;
-    }
-
-    const handleDocumentMouseDown = (event) => {
-      if (popoverRef.current && !popoverRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleDocumentMouseDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleDocumentMouseDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen]);
-
-  return (
-    <div className="teacher-filter-toolbar" ref={popoverRef}>
-      <button
-        type="button"
-        className={`teacher-filter-trigger${isOpen ? ' teacher-filter-trigger--open' : ''}`}
-        aria-expanded={isOpen}
-        aria-controls={id}
-        onClick={() => setIsOpen((open) => !open)}
-        disabled={disabled}
-      >
-        Фильтр
-      </button>
-      {isOpen && (
-        <div id={id} className="teacher-filter-popover" role="dialog" aria-label="Фильтры">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-};
-
 const AssignmentsSection = ({
   activeAssignments,
   searchTerm,
@@ -1750,24 +1664,34 @@ const AssignmentsSection = ({
     </div>
 
     <div className="filters-section">
-      <div className="controls-row teacher-dashboard-filter-row">
-        <div className="search-box teacher-dashboard-filter-search">
-          <input
-            type="text"
-            placeholder={
-              assignmentsBankMode
-                ? 'Поиск в банке по названию, описанию...'
-                : 'Поиск по названию, предмету...'
-            }
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="search-input"
-          />
-        </div>
-        <TeacherFilterPopover id="teacher-assignment-filter-popover">
+      <div className="teacher-dashboard-filter-row teacher-dashboard-filter-row--unified">
+        <DashboardFilterToolbar
+          popoverAlign="end"
+          searchValue={searchTerm}
+          onSearchChange={onSearchChange}
+          searchPlaceholder={
+            assignmentsBankMode
+              ? 'Поиск в банке по названию, описанию...'
+              : 'Поиск по названию, предмету...'
+          }
+          searchInputType="text"
+          searchBoxClassName="search-box teacher-dashboard-filter-search"
+          onReset={onResetFilters}
+          popoverAriaLabel="Фильтры заданий"
+          renderReset={({ closeAndReset }) => (
+            <Button
+              type="button"
+              variant="secondary"
+              className="teacher-dashboard-filter-reset-btn"
+              onClick={closeAndReset}
+            >
+              Сбросить фильтры
+            </Button>
+          )}
+        >
           {!assignmentsBankMode && (
-            <div className="teacher-filter-field">
-              <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-group-filter">
+            <div className="filter-popover__field">
+              <label className="filter-popover__label" htmlFor="teacher-assignment-group-filter">
                 Группа
               </label>
               <select
@@ -1785,8 +1709,8 @@ const AssignmentsSection = ({
               </select>
             </div>
           )}
-          <div className="teacher-filter-field">
-            <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-subject-filter">
+          <div className="filter-popover__field">
+            <label className="filter-popover__label" htmlFor="teacher-assignment-subject-filter">
               Предмет
             </label>
             <select
@@ -1804,8 +1728,8 @@ const AssignmentsSection = ({
             </select>
           </div>
           {!assignmentsBankMode && (
-            <div className="teacher-filter-field">
-              <label className="teacher-filter-popover__label" htmlFor="teacher-assignment-deadline-filter">
+            <div className="filter-popover__field">
+              <label className="filter-popover__label" htmlFor="teacher-assignment-deadline-filter">
                 Срок
               </label>
               <select
@@ -1822,10 +1746,7 @@ const AssignmentsSection = ({
               </select>
             </div>
           )}
-        </TeacherFilterPopover>
-        <Button variant="secondary" className="teacher-dashboard-filter-reset-btn" onClick={onResetFilters}>
-          Сбросить фильтры
-        </Button>
+        </DashboardFilterToolbar>
       </div>
       {!assignmentsBankMode && (
         <div className="assignment-quick-filter-groups">
@@ -1917,19 +1838,29 @@ const CompletedAssignmentsSection = ({
     </div>
 
     <div className="filters-section">
-      <div className="controls-row teacher-dashboard-filter-row">
-        <div className="search-box teacher-dashboard-filter-search">
-          <input
-            type="text"
-            placeholder="Поиск по названию, предмету..."
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="search-input"
-          />
-        </div>
-        <TeacherFilterPopover id="teacher-completed-assignment-filter-popover">
-          <div className="teacher-filter-field">
-            <label className="teacher-filter-popover__label" htmlFor="teacher-completed-group-filter">
+      <div className="teacher-dashboard-filter-row teacher-dashboard-filter-row--unified">
+        <DashboardFilterToolbar
+          popoverAlign="end"
+          searchValue={searchTerm}
+          onSearchChange={onSearchChange}
+          searchPlaceholder="Поиск по названию, предмету..."
+          searchInputType="text"
+          searchBoxClassName="search-box teacher-dashboard-filter-search"
+          onReset={onResetFilters}
+          popoverAriaLabel="Фильтры завершённых заданий"
+          renderReset={({ closeAndReset }) => (
+            <Button
+              type="button"
+              variant="secondary"
+              className="teacher-dashboard-filter-reset-btn"
+              onClick={closeAndReset}
+            >
+              Сбросить фильтры
+            </Button>
+          )}
+        >
+          <div className="filter-popover__field">
+            <label className="filter-popover__label" htmlFor="teacher-completed-group-filter">
               Группа
             </label>
             <select
@@ -1946,8 +1877,8 @@ const CompletedAssignmentsSection = ({
               ))}
             </select>
           </div>
-          <div className="teacher-filter-field">
-            <label className="teacher-filter-popover__label" htmlFor="teacher-completed-subject-filter">
+          <div className="filter-popover__field">
+            <label className="filter-popover__label" htmlFor="teacher-completed-subject-filter">
               Предмет
             </label>
             <select
@@ -1964,8 +1895,8 @@ const CompletedAssignmentsSection = ({
               ))}
             </select>
           </div>
-          <div className="teacher-filter-field">
-            <label className="teacher-filter-popover__label" htmlFor="teacher-completed-deadline-filter">
+          <div className="filter-popover__field">
+            <label className="filter-popover__label" htmlFor="teacher-completed-deadline-filter">
               Срок
             </label>
             <select
@@ -1981,10 +1912,7 @@ const CompletedAssignmentsSection = ({
               ))}
             </select>
           </div>
-        </TeacherFilterPopover>
-        <Button variant="secondary" className="teacher-dashboard-filter-reset-btn" onClick={onResetFilters}>
-          Сбросить фильтры
-        </Button>
+        </DashboardFilterToolbar>
       </div>
     </div>
 
@@ -2047,21 +1975,34 @@ const SubmissionsSection = ({
     <div className="section-header teacher-submissions-header">
       <h2>Работы студентов</h2>
       <div className="teacher-submissions-filters" aria-busy={submissionsBusy}>
-        <div className="teacher-submissions-search-row teacher-dashboard-filter-row">
-          <div className="teacher-submissions-search-box teacher-dashboard-filter-search">
-            <input
-              type="text"
-              placeholder="Поиск по студенту, заданию, группе..."
-              value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="teacher-submissions-search-input"
-              disabled={submissionsBusy}
-              aria-disabled={submissionsBusy}
-            />
-          </div>
-          <TeacherFilterPopover id="teacher-submissions-filter-popover" disabled={submissionsBusy}>
-            <div className="teacher-filter-field">
-              <label className="teacher-filter-popover__label" htmlFor="teacher-submissions-assignment-filter">
+        <div className="teacher-submissions-search-row teacher-dashboard-filter-row teacher-dashboard-filter-row--unified">
+          <DashboardFilterToolbar
+            popoverAlign="end"
+            searchValue={searchTerm}
+            onSearchChange={onSearchChange}
+            searchPlaceholder="Поиск по студенту, заданию, группе..."
+            searchInputType="text"
+            searchBoxClassName="teacher-submissions-search-box teacher-dashboard-filter-search"
+            searchInputClassName="teacher-submissions-search-input"
+            searchDisabled={submissionsBusy}
+            onReset={onResetFilters}
+            popoverAriaLabel="Фильтры работ студентов"
+            disabled={submissionsBusy}
+            resetDisabled={submissionsBusy}
+            renderReset={({ closeAndReset, disabled: resetDis }) => (
+              <Button
+                type="button"
+                variant="secondary"
+                className="teacher-submissions-reset-btn teacher-dashboard-filter-reset-btn"
+                onClick={closeAndReset}
+                disabled={resetDis}
+              >
+                Сбросить фильтры
+              </Button>
+            )}
+          >
+            <div className="filter-popover__field">
+              <label className="filter-popover__label" htmlFor="teacher-submissions-assignment-filter">
                 Предмет
               </label>
               <select
@@ -2073,15 +2014,15 @@ const SubmissionsSection = ({
                 aria-disabled={submissionsBusy}
               >
                 <option value="all">Все предметы</option>
-                {assignmentOptions.map(assignment => (
+                {assignmentOptions.map((assignment) => (
                   <option key={assignment.id} value={assignment.id}>
                     {assignment.title}
                   </option>
                 ))}
               </select>
             </div>
-            <div className="teacher-filter-field">
-              <label className="teacher-filter-popover__label" htmlFor="teacher-submissions-group-filter">
+            <div className="filter-popover__field">
+              <label className="filter-popover__label" htmlFor="teacher-submissions-group-filter">
                 Группа
               </label>
               <select
@@ -2100,8 +2041,8 @@ const SubmissionsSection = ({
                 ))}
               </select>
             </div>
-            <div className="teacher-filter-field">
-              <label className="teacher-filter-popover__label" htmlFor="teacher-submissions-status-filter">
+            <div className="filter-popover__field">
+              <label className="filter-popover__label" htmlFor="teacher-submissions-status-filter">
                 Статус
               </label>
               <select
@@ -2117,8 +2058,8 @@ const SubmissionsSection = ({
                 <option value="graded">Зачтены</option>
               </select>
             </div>
-            <div className="teacher-filter-field">
-              <label className="teacher-filter-popover__label" htmlFor="teacher-submissions-deadline-filter">
+            <div className="filter-popover__field">
+              <label className="filter-popover__label" htmlFor="teacher-submissions-deadline-filter">
                 Срок
               </label>
               <select
@@ -2136,15 +2077,7 @@ const SubmissionsSection = ({
                 <option value="due_week">Дедлайн на неделе</option>
               </select>
             </div>
-          </TeacherFilterPopover>
-          <Button
-            variant="secondary"
-            className="teacher-submissions-reset-btn teacher-dashboard-filter-reset-btn"
-            onClick={onResetFilters}
-            disabled={submissionsBusy}
-          >
-            Сбросить фильтры
-          </Button>
+          </DashboardFilterToolbar>
         </div>
         {submissionsBusy && (
           <p className="teacher-submissions-loading-note" role="status" aria-live="polite">

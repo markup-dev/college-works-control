@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/** Очередь заданий Laravel: jobs, пакеты job_batches, журнал failed_jobs. */
 return new class extends Migration
 {
     /**

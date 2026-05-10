@@ -4,6 +4,7 @@ import Button from '../../UI/Button/Button';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import { useNotification } from '../../../context/NotificationContext';
 import { DEFAULT_ALLOWED_FORMATS, normalizeAllowedFormats } from '../../../utils';
+import { resolveAssignmentSubjectId, resolveAssignmentSubjectName } from '../../../utils/filterHelpers';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './AssignmentModal.scss';
 
@@ -159,8 +160,8 @@ const AssignmentModal = ({
       const base = {
         ...buildEmptyFormData(),
         title: assignment.title || '',
-        subjectId: assignment.subjectId || assignment.subjectRelation?.id || null,
-        subject: assignment.subject || assignment.subjectRelation?.name || '',
+        subjectId: resolveAssignmentSubjectId(assignment),
+        subject: resolveAssignmentSubjectName(assignment),
         studentGroups: normalizeGroupSelection(
           Array.isArray(assignment.studentGroups) && assignment.studentGroups.length > 0
             ? assignment.studentGroups

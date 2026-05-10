@@ -6,10 +6,14 @@ use App\Models\Assignment;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Уведомление студенту о новом задании: запись в БД для колокольчика и при включённой почте — письмо со ссылкой на дашборд.
+ * Параметр конструктора viaChannels позволяет сервису отправить только БД или только почту отдельными вызовами.
+ */
 class AssignmentAnnouncedNotification extends Notification
 {
     /**
-     * @param  list<string>|null  $viaChannels  Если задано — только эти каналы (для отдельной отправки БД и почты).
+     * @param  list<string>|null  $viaChannels  Если задано — уведомление идёт только по перечисленным каналам (database, mail).
      */
     public function __construct(
         public Assignment $assignment,

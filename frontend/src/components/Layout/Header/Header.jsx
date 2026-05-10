@@ -11,6 +11,32 @@ const Header = ({ user, onLogout }) => {
   const [messagesUnreadTotal, setMessagesUnreadTotal] = useState(0);
   const [notificationsUnreadTotal, setNotificationsUnreadTotal] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
+  const [platformBanner, setPlatformBanner] = useState(null);
+
+  const refreshPlatformBanner = useCallback(async () => {
+    if (!user) {
+      setPlatformBanner(null);
+      return;
+    }
+    try {
+      const { data } = await api.get('/platform-banner');
+      setPlatformBanner(data?.active ? data : null);
+    } catch {
+      setPlatformBanner(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void refreshPlatformBanner();
+  }, [refreshPlatformBanner]);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      void refreshPlatformBanner();
+    };
+    window.addEventListener('app:platform-banner-refresh', onRefresh);
+    return () => window.removeEventListener('app:platform-banner-refresh', onRefresh);
+  }, [refreshPlatformBanner]);
 
   const closeNav = useCallback(() => setNavOpen(false), []);
 
@@ -151,12 +177,23 @@ const Header = ({ user, onLogout }) => {
   const linkClassPanel = ({ isActive }) =>
     `header__link header__link--panel ${isActive ? 'header__link--active' : ''}`;
 
+  const dashboardPath =
+    user?.role === 'admin' ? '/admin/dashboard' : `/${user?.role || ''}`;
+
   const isMessagesPage = /^\/messages\/?$/.test(location.pathname || '');
 
   return (
     <header
       className={['header', isMessagesPage ? 'header--messages-narrow' : ''].filter(Boolean).join(' ')}
     >
+      {platformBanner?.text ? (
+        <div
+          className={`platform-banner platform-banner--${platformBanner.color || 'yellow'}`}
+          role="status"
+        >
+          {platformBanner.text}
+        </div>
+      ) : null}
       <div className="header__content">
         <div className="header__left">
           <h1 className="header__title">
@@ -168,7 +205,7 @@ const Header = ({ user, onLogout }) => {
         </div>
 
         <nav className="header__nav header__nav--desktop" aria-label="Основная навигация">
-          <NavLink to={`/${user?.role || ''}`} className={linkClassDesktop}>
+          <NavLink to={dashboardPath} className={linkClassDesktop}>
             Дашборд
           </NavLink>
           {(user?.role === 'student' || user?.role === 'teacher') && (
@@ -201,7 +238,7 @@ const Header = ({ user, onLogout }) => {
               </NavLink>
             </>
           )}
-          <NavLink to="/profile" className={linkClassDesktop}>
+          <NavLink to={user?.role === 'admin' ? '/admin/profile' : '/profile'} className={linkClassDesktop}>
             Профиль
           </NavLink>
         </nav>
@@ -263,7 +300,7 @@ const Header = ({ user, onLogout }) => {
             </div>
             <p className="header__panel-user">Привет, {getFirstName(user)}!</p>
             <nav className="header__nav header__nav--panel" aria-label="Разделы">
-              <NavLink to={`/${user?.role || ''}`} className={linkClassPanel} onClick={closeNav}>
+              <NavLink to={dashboardPath} className={linkClassPanel} onClick={closeNav}>
                 Дашборд
               </NavLink>
               {(user?.role === 'student' || user?.role === 'teacher') && (
@@ -296,7 +333,11 @@ const Header = ({ user, onLogout }) => {
                   </NavLink>
                 </>
               )}
-              <NavLink to="/profile" className={linkClassPanel} onClick={closeNav}>
+              <NavLink
+                to={user?.role === 'admin' ? '/admin/profile' : '/profile'}
+                className={linkClassPanel}
+                onClick={closeNav}
+              >
                 Профиль
               </NavLink>
             </nav>

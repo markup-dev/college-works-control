@@ -6,13 +6,14 @@ use App\Models\SystemLog;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
+/** Примеры записей system_logs под демо-сценарии (создание пользователя, действия преподавателя и т.п.). */
 class SystemLogSeeder extends Seeder
 {
     public function run(): void
     {
         $admin = User::whereIn('login', ['Administrator', 'admin'])->orderByDesc('id')->first();
-        $teacherJs = User::where('login', 'teacher_kartseva')->first();
-        $teacherPhp = User::where('login', 'teacher_karevskiy')->first();
+        $teacherJs = User::where('email', 'kartseva@college.ru')->first();
+        $teacherPhp = User::where('email', 'karevskiy@college.ru')->first();
         $studentForReturnLog = User::where('login', 'zabiriucenko_ka')->first()
             ?: User::where('role', 'student')->orderBy('id')->first();
         if (!$admin || !$teacherJs || !$teacherPhp || !$studentForReturnLog) {
@@ -22,7 +23,7 @@ class SystemLogSeeder extends Seeder
         SystemLog::firstOrCreate([
             'user_id' => $admin->id,
             'action' => 'Создание пользователя',
-            'details' => 'Создан пользователь teacher_karevskiy с ролью teacher',
+            'details' => 'Создан пользователь ' . $teacherPhp->login . ' с ролью teacher',
         ], [
             'created_at' => now()->subDays(5),
         ]);

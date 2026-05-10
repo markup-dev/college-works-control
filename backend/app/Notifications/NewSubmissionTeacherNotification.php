@@ -6,6 +6,9 @@ use App\Models\Submission;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Преподавателю: студент сдал работу (новая сдача на проверке); в тексте — ФИО и группа для быстрой идентификации.
+ */
 class NewSubmissionTeacherNotification extends Notification
 {
     public function __construct(public Submission $submission) {}

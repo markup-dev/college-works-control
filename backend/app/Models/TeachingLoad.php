@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Назначение «преподаватель ведёт предмет у группы»: одна строка на тройку (teacher, subject, group), со статусом активности.
+ */
 class TeachingLoad extends Model
 {
     use HasFactory;

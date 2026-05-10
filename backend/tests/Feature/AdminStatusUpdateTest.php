@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Group;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -15,7 +16,12 @@ class AdminStatusUpdateTest extends TestCase
     public function test_admin_can_deactivate_user(): void
     {
         $admin = $this->createUser('admin');
-        $student = $this->createUser('student');
+        $group = Group::create([
+            'name' => 'Т-' . uniqid(),
+            'specialty' => null,
+            'status' => 'active',
+        ]);
+        $student = $this->createUser('student', $group->id);
 
         Sanctum::actingAs($admin);
 
@@ -33,11 +39,26 @@ class AdminStatusUpdateTest extends TestCase
         ]);
     }
 
+    public function test_inactive_user_cannot_access_protected_api(): void
+    {
+        $student = $this->createUser('student');
+        $student->forceFill(['is_active' => false])->save();
+        $student->refresh();
+
+        Sanctum::actingAs($student);
+
+        $this->getJson('/api/profile')
+            ->assertForbidden()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('error', 'Учётная запись отключена');
+    }
+
     public function test_admin_can_deactivate_subject(): void
     {
         $admin = $this->createUser('admin');
         $subject = Subject::create([
-            'name' => 'Математика',
+            'name' => 'Математика ' . uniqid(),
+            'code' => 'MTH' . substr(uniqid(), -8),
             'status' => 'active',
         ]);
 
@@ -58,7 +79,7 @@ class AdminStatusUpdateTest extends TestCase
         ]);
     }
 
-    private function createUser(string $role): User
+    private function createUser(string $role, ?int $groupId = null): User
     {
         return User::create([
             'login' => $role . '_' . uniqid(),
@@ -68,7 +89,7 @@ class AdminStatusUpdateTest extends TestCase
             'first_name' => 'Иван',
             'middle_name' => 'Иванович',
             'role' => $role,
-            'group_id' => null,
+            'group_id' => $role === 'student' ? $groupId : null,
             'department' => null,
             'phone' => '+7 (999) 123-45-67',
             'is_active' => true,

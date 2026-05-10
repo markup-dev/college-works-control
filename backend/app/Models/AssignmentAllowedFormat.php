@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Разрешённый формат файла для сдачи (расширение/MIME-логика на уровне API), привязка к заданию.
+ */
 class AssignmentAllowedFormat extends Model
 {
     protected $fillable = [

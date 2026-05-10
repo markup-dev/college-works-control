@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import Button from '../../UI/Button/Button';
+import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import { formatDate } from '../../../utils';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
@@ -146,8 +147,6 @@ const TeacherStudentsSection = () => {
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [broadcastBody, setBroadcastBody] = useState(BROADCAST_DEFAULT_TEXT);
   const [broadcastSending, setBroadcastSending] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const filterPopoverRef = useRef(null);
 
   useBodyScrollLock(broadcastOpen);
 
@@ -337,34 +336,6 @@ const TeacherStudentsSection = () => {
   }, [broadcastOpen]);
 
   useEffect(() => {
-    if (!isFilterOpen) {
-      return undefined;
-    }
-
-    const handleOutsideClick = (event) => {
-      if (filterPopoverRef.current && !filterPopoverRef.current.contains(event.target)) {
-        setIsFilterOpen(false);
-      }
-    };
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setIsFilterOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isFilterOpen]);
-
-  useEffect(() => {
-    setIsFilterOpen(false);
-  }, [view]);
-
-  useEffect(() => {
     if (view === 'group' && selectedGroup?.id) {
       loadGroup(selectedGroup.id);
     }
@@ -493,76 +464,64 @@ const TeacherStudentsSection = () => {
             Должники — это студенты, которые не отправили работу на проверку. Можно выбрать студентов и отправить массовое напоминание.
           </p>
           <div className="teacher-students-section__filters filters-section">
-            <div className="controls-row teacher-dashboard-filter-row">
-              <div className="search-box teacher-dashboard-filter-search">
-                <input
-                  type="search"
-                  className="search-input"
-                  placeholder="Поиск по ФИО или логину…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="teacher-filter-toolbar" ref={filterPopoverRef}>
-                <button
-                  type="button"
-                  className={`teacher-filter-trigger${isFilterOpen ? ' teacher-filter-trigger--open' : ''}`}
-                  onClick={() => setIsFilterOpen((prev) => !prev)}
-                  aria-expanded={isFilterOpen}
-                  aria-controls="teacher-groups-filter-popover"
-                >
-                  Фильтр
-                </button>
-                {isFilterOpen && (
-                  <div className="teacher-filter-popover" id="teacher-groups-filter-popover" role="dialog" aria-label="Фильтры">
-                    <div className="teacher-filter-field">
-                      <label className="teacher-filter-popover__label" htmlFor="teacher-groups-subject-filter">
-                        Предмет
-                      </label>
-                      <select
-                        id="teacher-groups-subject-filter"
-                        className="filter-select subject-filter"
-                        value={subjectFilter}
-                        onChange={(e) => setSubjectFilter(e.target.value)}
-                      >
-                        <option value="all">Все предметы</option>
-                        {(groupData?.filters?.subjects || []).map((subject) => (
-                          <option key={subject.id} value={subject.id}>{subject.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="teacher-filter-field">
-                      <label className="teacher-filter-popover__label" htmlFor="teacher-groups-assignment-filter">
-                        Задание
-                      </label>
-                      <select
-                        id="teacher-groups-assignment-filter"
-                        className="filter-select assignment-filter"
-                        value={assignmentFilter}
-                        onChange={(e) => setAssignmentFilter(e.target.value)}
-                      >
-                        <option value="all">Все задания</option>
-                        {(groupData?.filters?.assignments || []).map((assignment) => (
-                          <option key={assignment.id} value={assignment.id}>{assignment.title}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <label className="teacher-students-section__checkbox-filter teacher-students-section__checkbox-filter--in-popover">
-                      <input type="checkbox" checked={debtOnly} onChange={(e) => setDebtOnly(e.target.checked)} />
-                      Только должники
-                    </label>
-                  </div>
+            <div className="teacher-dashboard-filter-row teacher-dashboard-filter-row--unified">
+              <DashboardFilterToolbar
+                popoverAlign="end"
+                searchValue={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Поиск по ФИО или логину…"
+                searchInputType="search"
+                searchBoxClassName="search-box teacher-dashboard-filter-search"
+                onReset={resetCurrentFilters}
+                popoverAriaLabel="Фильтры группы"
+                renderReset={({ closeAndReset }) => (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="teacher-dashboard-filter-reset-btn"
+                    onClick={closeAndReset}
+                  >
+                    Сбросить фильтры
+                  </Button>
                 )}
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="teacher-dashboard-filter-reset-btn"
-                onClick={resetCurrentFilters}
               >
-                Сбросить фильтры
-              </Button>
+                <div className="filter-popover__field">
+                  <label className="filter-popover__label" htmlFor="teacher-groups-subject-filter">
+                    Предмет
+                  </label>
+                  <select
+                    id="teacher-groups-subject-filter"
+                    className="filter-select subject-filter"
+                    value={subjectFilter}
+                    onChange={(e) => setSubjectFilter(e.target.value)}
+                  >
+                    <option value="all">Все предметы</option>
+                    {(groupData?.filters?.subjects || []).map((subject) => (
+                      <option key={subject.id} value={subject.id}>{subject.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="filter-popover__field">
+                  <label className="filter-popover__label" htmlFor="teacher-groups-assignment-filter">
+                    Задание
+                  </label>
+                  <select
+                    id="teacher-groups-assignment-filter"
+                    className="filter-select assignment-filter"
+                    value={assignmentFilter}
+                    onChange={(e) => setAssignmentFilter(e.target.value)}
+                  >
+                    <option value="all">Все задания</option>
+                    {(groupData?.filters?.assignments || []).map((assignment) => (
+                      <option key={assignment.id} value={assignment.id}>{assignment.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <label className="teacher-students-section__checkbox-filter teacher-students-section__checkbox-filter--in-popover">
+                  <input type="checkbox" checked={debtOnly} onChange={(e) => setDebtOnly(e.target.checked)} />
+                  Только должники
+                </label>
+              </DashboardFilterToolbar>
             </div>
           </div>
         </>
@@ -570,17 +529,16 @@ const TeacherStudentsSection = () => {
 
       {view === 'groups' && (
         <div className="teacher-students-section__filters filters-section">
-          <div className="controls-row teacher-dashboard-filter-row">
-            <div className="search-box teacher-dashboard-filter-search">
-              <input
-                type="search"
-                className="search-input"
-                placeholder="Поиск по группе…"
-                value={groupSearch}
-                onChange={(e) => setGroupSearch(e.target.value)}
-                autoComplete="off"
-              />
-            </div>
+          <div className="teacher-dashboard-filter-row teacher-dashboard-filter-row--unified">
+            <DashboardFilterToolbar
+              showFilterPanel={false}
+              showResetButton={false}
+              searchValue={groupSearch}
+              onSearchChange={setGroupSearch}
+              searchPlaceholder="Поиск по группе…"
+              searchInputType="search"
+              searchBoxClassName="search-box teacher-dashboard-filter-search"
+            />
           </div>
         </div>
       )}
@@ -588,86 +546,74 @@ const TeacherStudentsSection = () => {
       {view === 'student' && (
         <>
           <div className="teacher-students-section__filters filters-section">
-            <div className="controls-row teacher-dashboard-filter-row">
-              <div className="search-box teacher-dashboard-filter-search">
-                <input
-                  type="search"
-                  className="search-input"
-                  placeholder="Поиск по названию задания…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="teacher-filter-toolbar" ref={filterPopoverRef}>
-                <button
-                  type="button"
-                  className={`teacher-filter-trigger${isFilterOpen ? ' teacher-filter-trigger--open' : ''}`}
-                  onClick={() => setIsFilterOpen((prev) => !prev)}
-                  aria-expanded={isFilterOpen}
-                  aria-controls="teacher-student-filter-popover"
-                >
-                  Фильтр
-                </button>
-                {isFilterOpen && (
-                  <div className="teacher-filter-popover" id="teacher-student-filter-popover" role="dialog" aria-label="Фильтры">
-                    <div className="teacher-filter-field">
-                      <label className="teacher-filter-popover__label" htmlFor="teacher-student-subject-filter">
-                        Предмет
-                      </label>
-                      <select
-                        id="teacher-student-subject-filter"
-                        className="filter-select subject-filter"
-                        value={subjectFilter}
-                        onChange={(e) => setSubjectFilter(e.target.value)}
-                      >
-                        <option value="all">Все предметы</option>
-                        {(studentData?.filters?.subjects || []).map((subject) => (
-                          <option key={subject.id} value={subject.id}>{subject.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="teacher-filter-field">
-                      <label className="teacher-filter-popover__label" htmlFor="teacher-student-status-filter">
-                        Статус
-                      </label>
-                      <select
-                        id="teacher-student-status-filter"
-                        className="filter-select status-filter"
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                      >
-                        {STATUS_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="teacher-filter-field">
-                      <label className="teacher-filter-popover__label" htmlFor="teacher-student-period-filter">
-                        Период
-                      </label>
-                      <select
-                        id="teacher-student-period-filter"
-                        className="filter-select deadline-filter"
-                        value={periodDays}
-                        onChange={(e) => setPeriodDays(e.target.value)}
-                      >
-                        {PERIOD_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+            <div className="teacher-dashboard-filter-row teacher-dashboard-filter-row--unified">
+              <DashboardFilterToolbar
+                popoverAlign="end"
+                searchValue={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Поиск по названию задания…"
+                searchInputType="search"
+                searchBoxClassName="search-box teacher-dashboard-filter-search"
+                onReset={resetCurrentFilters}
+                popoverAriaLabel="Фильтры заданий студента"
+                renderReset={({ closeAndReset }) => (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="teacher-dashboard-filter-reset-btn"
+                    onClick={closeAndReset}
+                  >
+                    Сбросить фильтры
+                  </Button>
                 )}
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="teacher-dashboard-filter-reset-btn"
-                onClick={resetCurrentFilters}
               >
-                Сбросить фильтры
-              </Button>
+                <div className="filter-popover__field">
+                  <label className="filter-popover__label" htmlFor="teacher-student-subject-filter">
+                    Предмет
+                  </label>
+                  <select
+                    id="teacher-student-subject-filter"
+                    className="filter-select subject-filter"
+                    value={subjectFilter}
+                    onChange={(e) => setSubjectFilter(e.target.value)}
+                  >
+                    <option value="all">Все предметы</option>
+                    {(studentData?.filters?.subjects || []).map((subject) => (
+                      <option key={subject.id} value={subject.id}>{subject.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="filter-popover__field">
+                  <label className="filter-popover__label" htmlFor="teacher-student-status-filter">
+                    Статус
+                  </label>
+                  <select
+                    id="teacher-student-status-filter"
+                    className="filter-select status-filter"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    {STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="filter-popover__field">
+                  <label className="filter-popover__label" htmlFor="teacher-student-period-filter">
+                    Период
+                  </label>
+                  <select
+                    id="teacher-student-period-filter"
+                    className="filter-select deadline-filter"
+                    value={periodDays}
+                    onChange={(e) => setPeriodDays(e.target.value)}
+                  >
+                    {PERIOD_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </DashboardFilterToolbar>
             </div>
           </div>
           {selectedStudent?.id ? (

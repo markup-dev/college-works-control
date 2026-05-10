@@ -6,18 +6,38 @@ export const normalizeGroupName = (value) => (
     .toUpperCase()
 );
 
-const getSubjectName = (item) => String(
-  item?.subject
-  || item?.subjectName
-  || item?.subjectRelation?.name
-  || ''
-).trim();
+const getSubjectName = (item) => {
+  const rel = item?.subject;
+  if (rel && typeof rel === 'object' && !Array.isArray(rel) && rel.name != null) {
+    return String(rel.name).trim();
+  }
+  return String(
+    item?.subjectName
+    || item?.subjectRelation?.name
+    || (typeof item?.subject === 'string' ? item.subject : '')
+    || ''
+  ).trim();
+};
 
-const getSubjectId = (item) => Number(
-  item?.subjectId
-  ?? item?.subject_id
-  ?? item?.subjectRelation?.id
-);
+const getSubjectId = (item) => {
+  const rel = item?.subject;
+  if (rel && typeof rel === 'object' && !Array.isArray(rel) && rel.id != null) {
+    return Number(rel.id);
+  }
+  return Number(
+    item?.subjectId
+    ?? item?.subject_id
+    ?? item?.subjectRelation?.id
+  );
+};
+
+export const resolveAssignmentSubjectName = getSubjectName;
+
+/** @returns {number|null} */
+export const resolveAssignmentSubjectId = (item) => {
+  const n = getSubjectId(item);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
 
 const getTeacherName = (item) => String(
   item?.teacher

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
+import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import './FiltersSection.scss';
 
 const FiltersSection = ({
@@ -16,112 +17,47 @@ const FiltersSection = ({
   onTeacherFilterChange,
   availableTeachers,
   onResetFilters,
-}) => {
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const popoverRef = useRef(null);
+}) => (
+  <div className="filters-section">
+    <DashboardFilterToolbar
+      searchValue={searchTerm}
+      onSearchChange={onSearchChange}
+      searchPlaceholder="Поиск по названию, предмету, преподавателю..."
+      searchInputType="text"
+      onReset={onResetFilters}
+      popoverAriaLabel="Фильтры по предмету и преподавателю"
+    >
+      <SubjectFilter
+        subjectFilter={subjectFilter}
+        onSubjectFilterChange={onSubjectFilterChange}
+        availableSubjects={availableSubjects}
+      />
+      <TeacherFilter
+        teacherFilter={teacherFilter}
+        onTeacherFilterChange={onTeacherFilterChange}
+        availableTeachers={availableTeachers}
+      />
+    </DashboardFilterToolbar>
 
-  useEffect(() => {
-    if (!filtersOpen) {
-      return undefined;
-    }
-    const onDoc = (e) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
-        setFiltersOpen(false);
-      }
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        setFiltersOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [filtersOpen]);
-
-  const handleResetClick = () => {
-    setFiltersOpen(false);
-    onResetFilters();
-  };
-
-  return (
-    <div className="filters-section">
-      <div className="search-toolbar">
-        <SearchBox searchTerm={searchTerm} onSearchChange={onSearchChange} />
-
-        <div className="filters-toolbar" ref={popoverRef}>
-          <div className="filters-toolbar__actions">
-            <button
-              type="button"
-              className={`filter-panel-trigger ${filtersOpen ? 'filter-panel-trigger--open' : ''}`}
-              aria-expanded={filtersOpen}
-              aria-controls="student-filter-popover"
-              onClick={() => setFiltersOpen((o) => !o)}
-            >
-              Фильтр
-            </button>
-            <button type="button" className="reset-filters-btn" onClick={handleResetClick}>
-              Сбросить фильтры
-            </button>
-          </div>
-
-          {filtersOpen && (
-            <div
-              id="student-filter-popover"
-              className="filter-popover"
-              role="dialog"
-              aria-label="Фильтры по предмету и преподавателю"
-            >
-              <SubjectFilter
-                subjectFilter={subjectFilter}
-                onSubjectFilterChange={onSubjectFilterChange}
-                availableSubjects={availableSubjects}
-              />
-              <TeacherFilter
-                teacherFilter={teacherFilter}
-                onTeacherFilterChange={onTeacherFilterChange}
-                availableTeachers={availableTeachers}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="filters-row">
-        <div className="filters-container">
-          {filters.map((filter) => (
-            <FilterButton
-              key={filter.key}
-              filter={filter}
-              count={filterCounts[filter.key]}
-              overdueCount={overdueCount}
-              isActive={activeFilter === filter.key}
-              onClick={() => onFilterChange(filter.key)}
-            />
-          ))}
-        </div>
+    <div className="filters-row">
+      <div className="filters-container">
+        {filters.map((filter) => (
+          <FilterButton
+            key={filter.key}
+            filter={filter}
+            count={filterCounts[filter.key]}
+            overdueCount={overdueCount}
+            isActive={activeFilter === filter.key}
+            onClick={() => onFilterChange(filter.key)}
+          />
+        ))}
       </div>
     </div>
-  );
-};
-
-const SearchBox = ({ searchTerm, onSearchChange }) => (
-  <div className="search-box">
-    <input
-      type="text"
-      placeholder="Поиск по названию, предмету, преподавателю..."
-      value={searchTerm}
-      onChange={(e) => onSearchChange(e.target.value)}
-      className="search-input"
-    />
   </div>
 );
 
 const SubjectFilter = ({ subjectFilter, onSubjectFilterChange, availableSubjects }) => (
-  <div className="filter-select subject-filter">
+  <div className="filter-popover__field filter-select subject-filter">
     <label className="filter-popover__label" htmlFor="student-filter-subject">
       Предмет
     </label>
@@ -142,7 +78,7 @@ const SubjectFilter = ({ subjectFilter, onSubjectFilterChange, availableSubjects
 );
 
 const TeacherFilter = ({ teacherFilter, onTeacherFilterChange, availableTeachers }) => (
-  <div className="filter-select teacher-filter">
+  <div className="filter-popover__field filter-select teacher-filter">
     <label className="filter-popover__label" htmlFor="student-filter-teacher">
       Преподаватель
     </label>

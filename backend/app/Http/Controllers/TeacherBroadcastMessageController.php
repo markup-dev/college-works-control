@@ -8,12 +8,17 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Массовая рассылка сообщений преподавателем: одно сообщение уходит в личные диалоги со студентами.
+ * Доступны только студенты, с которыми установлена «связь» (группа/задание/сдача — см. User::canCommunicateWith).
+ */
 class TeacherBroadcastMessageController extends Controller
 {
     private const MAX_RECIPIENTS = 50;
 
     public function store(Request $request)
     {
+        // Только преподаватель; маршрут дублирует роль, проверка — защита при смене конфигурации.
         $teacher = $request->user();
         if ($teacher->role !== 'teacher') {
             abort(403);
@@ -38,6 +43,7 @@ class TeacherBroadcastMessageController extends Controller
         $sent = 0;
         $skipped = 0;
 
+        // Для каждого id: свой диалог с преподавателем, либо пропуск при отсутствии права общаться.
         foreach ($ids as $otherId) {
             if ($otherId === (int) $teacher->id) {
                 $skipped++;
@@ -59,6 +65,7 @@ class TeacherBroadcastMessageController extends Controller
             }
 
             try {
+                // Та же схема, что в личных сообщениях: канонический порядок user_one/user_two.
                 DB::transaction(function () use ($teacher, $other, $body) {
                     [$one, $two] = Conversation::orderedUserIds((int) $teacher->id, (int) $other->id);
                     $conversation = Conversation::query()->firstOrCreate([

@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Сообщение в переписке: текст, отправитель, время прочтения получателем (read_at).
+ */
 class Message extends Model
 {
     protected $fillable = [

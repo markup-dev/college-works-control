@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useAuth } from './AuthContext';
 import api from '../services/api';
 import { getAllowedFormatsFromAssignment, PAGINATION_DEFAULTS } from '../utils';
+import { resolveAssignmentSubjectId, resolveAssignmentSubjectName } from '../utils/filterHelpers';
 
 const formatAssignmentTeacherDisplay = (teacher) => {
   if (teacher == null) {
@@ -30,7 +31,8 @@ const formatAssignmentTeacherDisplay = (teacher) => {
 
 export const normalizeStudentAssignment = (assignment) => ({
   ...assignment,
-  subject: assignment.subject || assignment.subjectRelation?.name || '',
+  subject: resolveAssignmentSubjectName(assignment),
+  subjectId: resolveAssignmentSubjectId(assignment),
   teacher: formatAssignmentTeacherDisplay(assignment.teacher),
   studentGroups: assignment.studentGroups || assignment.groups?.map((g) => g.name) || [],
   allowedFormats: getAllowedFormatsFromAssignment(assignment),

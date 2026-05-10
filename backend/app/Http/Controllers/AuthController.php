@@ -2,16 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\SystemLog;
 use App\Models\User;
+use App\Services\SystemSettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Вход, выход, профиль и смена пароля по API (Sanctum).
+ * Логин по полю «логин или email»; опциональная проверка выбранной роли на форме входа.
+ */
 class AuthController extends Controller
 {
     public function login(Request $request)
     {
+        // Не различаем «нет пользователя» и «неверный пароль» в тексте ошибки — меньше подсказок для перебора.
         $validated = $request->validate(
             [
                 'login' => [
@@ -50,6 +57,7 @@ class AuthController extends Controller
             ]);
         }
 
+        // Опционально: на клиенте выбрали «войти как студент», а аккаунт преподавателя — отказ.
         if (!empty($validated['role']) && $user->role !== $validated['role']) {
             throw ValidationException::withMessages([
                 'role' => ["Этот аккаунт не является {$validated['role']}"],
@@ -64,10 +72,17 @@ class AuthController extends Controller
 
         $user->update(['last_login' => now()]);
 
+        SystemLog::create([
+            'user_id' => $user->id,
+            'action' => 'login',
+            'details' => 'Вход в систему',
+        ]);
+
         $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
             'success' => true,
+            // studentGroup подставляет название группы в ответе без отдельного запроса.
             'user' => $user->load(['studentGroup']),
             'token' => $token,
         ]);
@@ -89,6 +104,7 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
+        // Совместимость с фронтом: «patronymic» трактуем как middle_name.
         if ($request->filled('patronymic') && !$request->has('middle_name')) {
             $request->merge(['middle_name' => $request->input('patronymic')]);
         }
@@ -109,8 +125,8 @@ class AuthController extends Controller
                 'first_name' => ['sometimes', 'required', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
                 'middle_name' => ['nullable', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
                 'phone' => ['nullable', 'string', 'regex:/^(\+7\s?\(?\d{3}\)?\s?\d{3}[- ]?\d{2}[- ]?\d{2}|8\(\d{3}\)\d{3}-\d{2}-\d{2})$/'],
-                'notifications' => ['nullable', 'array'],
-                'notifications.email' => ['nullable', 'boolean'],
+                'notification_settings' => ['nullable', 'array'],
+                'notification_settings.email' => ['nullable', 'boolean'],
                 'grade_scale' => ['nullable', 'array', 'max:20'],
                 'grade_scale.*.label' => ['required_with:grade_scale', 'string', 'max:3', 'regex:/^[1-5][+-]?$/u'],
                 'grade_scale.*.min_score' => ['required_with:grade_scale', 'integer', 'min:0', 'max:100'],
@@ -136,11 +152,12 @@ class AuthController extends Controller
                 'department.max' => 'Поле "Кафедра/отделение" не должно превышать 100 символов.',
             ]
         );
-        if (array_key_exists('notifications', $validated)) {
-            if (array_key_exists('email', $validated['notifications'])) {
-                $validated['email_notifications_enabled'] = (bool) $validated['notifications']['email'];
+        // notification_settings в API → колонка email_notifications_enabled (не путать с Laravel notifications()).
+        if (array_key_exists('notification_settings', $validated)) {
+            if (array_key_exists('email', $validated['notification_settings'])) {
+                $validated['email_notifications_enabled'] = (bool) $validated['notification_settings']['email'];
             }
-            unset($validated['notifications']);
+            unset($validated['notification_settings']);
         }
         if (array_key_exists('last_name', $validated)) {
             $validated['last_name'] = trim($validated['last_name']);
@@ -152,6 +169,7 @@ class AuthController extends Controller
             $validated['middle_name'] = !empty($validated['middle_name']) ? trim($validated['middle_name']) : null;
         }
         if (array_key_exists('grade_scale', $validated)) {
+            // Шкала оценок задаётся только преподавателем; студентам поле игнорируем.
             if ($user->role !== 'teacher') {
                 unset($validated['grade_scale']);
             } else {
@@ -168,16 +186,51 @@ class AuthController extends Controller
 
     public function changePassword(Request $request)
     {
+        // Правила сложности читаются из системных настроек (админка).
+        $policy = SystemSettingsService::passwordPolicySlice();
+        $min = max(8, min(128, (int) ($policy['min_length'] ?? 12)));
+
+        $regexInner = '';
+        if (! empty($policy['require_lowercase'])) {
+            $regexInner .= '(?=.*[a-z])';
+        }
+        if (! empty($policy['require_uppercase'])) {
+            $regexInner .= '(?=.*[A-Z])';
+        }
+        if (! empty($policy['require_digits'])) {
+            $regexInner .= '(?=.*\d)';
+        }
+        if (! empty($policy['require_special'])) {
+            $regexInner .= '(?=.*[^A-Za-z0-9])';
+        }
+
+        $newPasswordRules = [
+            'required', 'string', 'min:'.$min, 'max:128', 'different:current_password', 'confirmed',
+        ];
+        if ($regexInner !== '') {
+            $newPasswordRules[] = 'regex:~^'.$regexInner.'.+$~';
+        }
+        if (! empty($policy['exclude_similar'])) {
+            $newPasswordRules[] = function (string $attribute, mixed $value, \Closure $fail): void {
+                if (! is_string($value) || $value === '') {
+                    return;
+                }
+                if (preg_match('/[0O1lI5S]/', $value)) {
+                    $fail('Не используйте похожие символы: 0, O, 1, l, I, 5, S.');
+                }
+            };
+        }
+
         $validated = $request->validate(
             [
                 'current_password' => ['required', 'string'],
-                'new_password' => ['required', 'string', 'min:8', 'max:128', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/', 'different:current_password', 'confirmed'],
+                'new_password' => $newPasswordRules,
             ],
             [
                 'current_password.required' => 'Введите текущий пароль.',
                 'new_password.required' => 'Введите новый пароль.',
-                'new_password.min' => 'Новый пароль должен содержать минимум 8 символов.',
-                'new_password.regex' => 'Пароль должен содержать заглавную, строчную букву и цифру.',
+                'new_password.min' => "Новый пароль должен содержать минимум {$min} символов.",
+                'new_password.regex' => 'Пароль не соответствует требованиям сложности.',
                 'new_password.different' => 'Новый пароль не должен совпадать с текущим.',
                 'new_password.confirmed' => 'Подтверждение пароля не совпадает.',
             ]
@@ -185,7 +238,7 @@ class AuthController extends Controller
 
         $user = $request->user();
 
-        if (!Hash::check($validated['current_password'], $user->password)) {
+        if (! Hash::check($validated['current_password'], $user->password)) {
             throw ValidationException::withMessages([
                 'current_password' => ['Текущий пароль указан неверно'],
             ]);

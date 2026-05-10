@@ -2,7 +2,6 @@ import React from 'react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { StudentProvider } from './StudentContext';
 import { TeacherProvider } from './TeacherContext';
-import { AdminProvider } from './AdminContext';
 import { NotificationProvider } from './NotificationContext';
 
 const RoleBasedProvider = ({ children }) => {
@@ -18,7 +17,7 @@ const RoleBasedProvider = ({ children }) => {
     case 'teacher':
       return <TeacherProvider>{children}</TeacherProvider>;
     case 'admin':
-      return <AdminProvider>{children}</AdminProvider>;
+      return <>{children}</>;
     default:
       return <>{children}</>;
   }

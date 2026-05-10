@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 
+/** Точка входа: демо-данные в порядке зависимостей (пользователи → предметы → задания → сдачи → логи). */
 class DatabaseSeeder extends Seeder
 {
     public function run(): void

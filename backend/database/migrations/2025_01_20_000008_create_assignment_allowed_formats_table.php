@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/** Разрешённые расширения файлов для сдачи по конкретному заданию. */
 return new class extends Migration
 {
     public function up(): void

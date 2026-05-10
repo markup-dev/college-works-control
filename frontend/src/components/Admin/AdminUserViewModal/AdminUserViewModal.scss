@@ -1,0 +1,96 @@
+@import '../../../styles/base/variables';
+
+.admin-user-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem 1.25rem;
+    align-items: start;
+
+    @media (max-width: 520px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  &__field--full {
+    grid-column: 1 / -1;
+  }
+
+  &__label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: $text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  &__value {
+    font-size: 0.95rem;
+    color: $text-primary;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  &__value--muted {
+    color: $text-secondary;
+  }
+
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+
+  &__status-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__status--active .admin-user-view__status-dot {
+    background: #10b981;
+  }
+
+  &__status--password .admin-user-view__status-dot {
+    background: #eab308;
+  }
+
+  &__status--blocked .admin-user-view__status-dot {
+    background: #dc2626;
+  }
+
+  &__status--active {
+    color: #065f46;
+  }
+
+  &__status--password {
+    color: #a16207;
+  }
+
+  &__status--blocked {
+    color: #991b1b;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.65rem;
+    margin-top: 0.15rem;
+    border-top: 1px solid rgba($primary-color, 0.12);
+  }
+}

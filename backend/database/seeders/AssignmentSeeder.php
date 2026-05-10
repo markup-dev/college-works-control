@@ -9,12 +9,13 @@ use App\Models\TeachingLoad;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
+/** Демо-задания, связи с группами, teaching_loads и критерии — для сценариев преподавателя и студента. */
 class AssignmentSeeder extends Seeder
 {
     public function run(): void
     {
-        $teacherJs = User::where('login', 'teacher_kartseva')->first();
-        $teacherPhp = User::where('login', 'teacher_karevskiy')->first();
+        $teacherJs = User::where('email', 'kartseva@college.ru')->first();
+        $teacherPhp = User::where('email', 'karevskiy@college.ru')->first();
         if (!$teacherJs || !$teacherPhp) {
             return;
         }

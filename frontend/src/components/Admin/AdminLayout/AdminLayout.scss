@@ -1,0 +1,71 @@
+@import '../../../styles/base/variables';
+@import '../../../styles/base/mixins';
+
+.admin-layout {
+  display: flex;
+  min-height: calc(100vh - 80px);
+  max-width: 1400px;
+  margin: 0 auto;
+  gap: 0;
+
+  @include mobile {
+    flex-direction: column;
+  }
+
+  &__sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    padding: 1.25rem 1rem;
+    background: $background-primary;
+    border-right: 1px solid $border-color;
+
+    @include mobile {
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid $border-color;
+    }
+  }
+
+  &__brand {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: $text-primary;
+    margin-bottom: 1rem;
+    letter-spacing: 0.02em;
+  }
+
+  &__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  &__link {
+    display: block;
+    padding: 0.5rem 0.65rem;
+    border-radius: $border-radius;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: $text-secondary;
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    &:hover {
+      background: rgba(44, 90, 160, 0.08);
+      color: $primary-color;
+    }
+
+    &--active {
+      background: $background-white;
+      color: $primary-color;
+      box-shadow: $shadow-sm;
+    }
+  }
+
+  &__main {
+    flex: 1;
+    min-width: 0;
+    padding: 1.25rem 1.5rem 2rem;
+    background: $background-white;
+  }
+}

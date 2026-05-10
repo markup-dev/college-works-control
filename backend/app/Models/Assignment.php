@@ -8,6 +8,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Задание преподавателя: дедлайн, тип сдачи, привязка к группам и предмету; критерии, форматы файлов и материалы — отдельные таблицы.
+ * Appends собирают вложенные структуры для API; syncCompletionStatus переводит в archived при полной сдаче и оценке всех студентов целевых групп.
+ */
 class Assignment extends Model
 {
     use HasFactory;
@@ -43,7 +47,7 @@ class Assignment extends Model
         return $this->belongsTo(User::class, 'teacher_id');
     }
 
-    public function subjectRelation(): BelongsTo
+    public function subject(): BelongsTo
     {
         return $this->belongsTo(Subject::class, 'subject_id');
     }

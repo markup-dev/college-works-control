@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/** Диалог 1:1 между двумя пользователями и метки архива по сторонам. */
 return new class extends Migration
 {
     public function up(): void

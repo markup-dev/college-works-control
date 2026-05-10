@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Черновик/шаблон задания преподавателя (без дедлайна и статуса у студентов): структура как у Assignment, публикация создаёт реальное задание.
+ */
 class AssignmentTemplate extends Model
 {
     use HasFactory;
@@ -28,7 +31,7 @@ class AssignmentTemplate extends Model
         return $this->belongsTo(User::class, 'teacher_id');
     }
 
-    public function subjectRelation(): BelongsTo
+    public function subject(): BelongsTo
     {
         return $this->belongsTo(Subject::class, 'subject_id');
     }

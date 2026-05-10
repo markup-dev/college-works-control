@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/** Связь задание ↔ группа: кому выдано задание (many-to-many). */
 return new class extends Migration
 {
     public function up(): void

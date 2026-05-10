@@ -4,15 +4,21 @@ namespace Database\Seeders;
 
 use App\Models\Group;
 use App\Models\User;
+use App\Services\UserLoginAllocator;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
+/** Демо-пользователи (админ, преподаватели, студенты); логины генерируются через UserLoginAllocator при отсутствии явного login. */
 class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        $teacherJs = $this->upsertUser([
-            'login' => 'teacher_kartseva',
+        $allocator = app(UserLoginAllocator::class);
+        $reserved = [];
+
+        $loginKartseva = $allocator->allocateFromNames('Карцева', 'Мария', 'Сергеевна', $reserved);
+        $reserved[] = mb_strtolower($loginKartseva);
+        $this->upsertUser([
+            'login' => $loginKartseva,
             'email' => 'kartseva@college.ru',
             'last_name' => 'Карцева',
             'first_name' => 'Мария',
@@ -22,8 +28,10 @@ class UserSeeder extends Seeder
             'phone' => '+7 (999) 444-55-66',
         ]);
 
-        $teacherPhp = $this->upsertUser([
-            'login' => 'teacher_karevskiy',
+        $loginKarevskiy = $allocator->allocateFromNames('Каревский', 'Максим', 'Андреевич', $reserved);
+        $reserved[] = mb_strtolower($loginKarevskiy);
+        $this->upsertUser([
+            'login' => $loginKarevskiy,
             'email' => 'karevskiy@college.ru',
             'last_name' => 'Каревский',
             'first_name' => 'Максим',
@@ -33,8 +41,14 @@ class UserSeeder extends Seeder
             'phone' => '+7 (999) 555-77-88',
         ]);
 
-        $group029 = Group::updateOrCreate(['name' => 'ИСП-029'], ['status' => 'active']);
-        $group0029 = Group::updateOrCreate(['name' => 'ИСП-0029'], ['status' => 'active']);
+        $group029 = Group::updateOrCreate(
+            ['name' => 'ИСП-029'],
+            ['status' => 'active', 'specialty' => 'Программная инженерия']
+        );
+        $group0029 = Group::updateOrCreate(
+            ['name' => 'ИСП-0029'],
+            ['status' => 'active', 'specialty' => 'Программная инженерия']
+        );
 
         $studentsGroup029 = [
             ['Беляков', 'Сергей', 'Александрович'],
@@ -82,8 +96,8 @@ class UserSeeder extends Seeder
             ['Носов', 'Антон', 'Павлович'],
         ];
 
-        $this->seedStudents($studentsGroup029, '029', $group029->id, 1);
-        $this->seedStudents($studentsGroup0029, '0029', $group0029->id, 1);
+        $this->seedStudents($allocator, $reserved, $studentsGroup029, '029', $group029->id, 1);
+        $this->seedStudents($allocator, $reserved, $studentsGroup0029, '0029', $group0029->id, 1);
 
         $this->upsertUser([
             'login' => 'Administrator',
@@ -96,20 +110,22 @@ class UserSeeder extends Seeder
         ]);
     }
 
-    private function seedStudents(array $students, string $groupTag, int $groupId, int $startIndex = 1): void
-    {
+    /**
+     * @param  list<string>  $reserved
+     * @param  list<array{0: string, 1: string, 2: string}>  $students
+     */
+    private function seedStudents(
+        UserLoginAllocator $allocator,
+        array &$reserved,
+        array $students,
+        string $groupTag,
+        int $groupId,
+        int $startIndex = 1,
+    ): void {
         $counter = $startIndex;
-        $usedLogins = [];
         foreach ($students as [$lastName, $firstName, $middleName]) {
-            $baseLogin = Str::lower(Str::ascii($lastName . '_' . Str::substr($firstName, 0, 1) . Str::substr($middleName, 0, 1)));
-            $baseLogin = preg_replace('/[^a-z0-9_]/', '', $baseLogin) ?: sprintf('student_%s', $groupTag);
-            $login = $baseLogin;
-            $suffix = 2;
-            while (in_array($login, $usedLogins, true)) {
-                $login = $baseLogin . '_' . $suffix;
-                $suffix++;
-            }
-            $usedLogins[] = $login;
+            $login = $allocator->allocateFromNames($lastName, $firstName, $middleName, $reserved);
+            $reserved[] = mb_strtolower($login);
 
             $email = sprintf('%s@college.ru', $login);
             $phone = sprintf('+7 (910) %03d-%02d-%02d', 100 + $counter, 10 + intdiv($counter, 10), 20 + ($counter % 10));

@@ -4,7 +4,7 @@ import Button from '../../UI/Button/Button';
 import './AssignmentBankCard.scss';
 
 const AssignmentBankCard = ({ template, onOpenTemplate, onDelete, onPublish }) => {
-  const subject = template.subjectRelation?.name || '—';
+  const subject = template.subject?.name || '—';
   const critCount = Array.isArray(template.criteria) ? template.criteria.length : 0;
   const matCount = Array.isArray(template.materialFiles) ? template.materialFiles.length : 0;
   const preview =

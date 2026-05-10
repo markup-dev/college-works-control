@@ -1,10 +1,19 @@
 <?php
 
+use App\Http\Controllers\PlatformBannerController;
+use App\Http\Controllers\Admin\AdminAssignmentController;
+use App\Http\Controllers\Admin\BroadcastController;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\GroupController as AdminGroupController;
+use App\Http\Controllers\Admin\SubjectController as AdminSubjectController;
+use App\Http\Controllers\Admin\SystemLogController;
+use App\Http\Controllers\Admin\SystemSettingsController;
+use App\Http\Controllers\Admin\TeachingLoadController;
+use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AssignmentController;
 use App\Http\Controllers\AssignmentTemplateController;
 use App\Http\Controllers\SubmissionController;
-use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\TeacherBroadcastMessageController;
@@ -15,13 +24,14 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
 // Защищённые маршруты (требуют авторизации)
-Route::middleware(['auth:sanctum', 'throttle:api_user'])->group(function () {
+Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(function () {
 
     // Аутентификация
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::put('/profile', [AuthController::class, 'updateProfile']);
     Route::put('/profile/password', [AuthController::class, 'changePassword']);
+    Route::get('/platform-banner', [PlatformBannerController::class, 'show']);
 
     // Задания
     Route::get('/assignments', [AssignmentController::class, 'index']);
@@ -88,38 +98,63 @@ Route::middleware(['auth:sanctum', 'throttle:api_user'])->group(function () {
 
     // Админ-панель — только для администраторов
     Route::middleware('role:admin')->prefix('admin')->group(function () {
-        Route::get('/stats', [AdminController::class, 'stats']);
+        Route::get('/settings', [SystemSettingsController::class, 'systemSettings']);
+        Route::put('/settings', [SystemSettingsController::class, 'updateSystemSettings']);
 
-        Route::get('/users', [AdminController::class, 'users']);
-        Route::post('/users', [AdminController::class, 'createUser']);
-        Route::put('/users/{user}', [AdminController::class, 'updateUser']);
-        Route::delete('/users/{user}', [AdminController::class, 'deleteUser']);
-        Route::get('/groups', [AdminController::class, 'groups']);
-        Route::post('/groups', [AdminController::class, 'createGroup']);
-        Route::put('/groups/{group}', [AdminController::class, 'updateGroup']);
-        Route::delete('/groups/{group}', [AdminController::class, 'deleteGroup']);
+        Route::get('/stats', [DashboardController::class, 'stats']);
 
-        Route::get('/subjects', [AdminController::class, 'subjects']);
-        Route::post('/subjects', [AdminController::class, 'createSubject']);
-        Route::put('/subjects/{subject}', [AdminController::class, 'updateSubject']);
-        Route::delete('/subjects/{subject}', [AdminController::class, 'deleteSubject']);
+        Route::get('/users', [AdminUserController::class, 'users']);
+        Route::post('/users', [AdminUserController::class, 'createUser']);
+        Route::post('/users/{user}/reset-credentials', [AdminUserController::class, 'resetUserCredentials']);
+        Route::put('/users/{user}', [AdminUserController::class, 'updateUser']);
+        Route::delete('/users/{user}', [AdminUserController::class, 'deleteUser']);
+        Route::get('/groups', [AdminGroupController::class, 'groups']);
+        Route::get('/groups/{group}', [AdminGroupController::class, 'showGroup']);
+        Route::post('/groups', [AdminGroupController::class, 'createGroup']);
+        Route::put('/groups/{group}', [AdminGroupController::class, 'updateGroup']);
+        Route::delete('/groups/{group}', [AdminGroupController::class, 'deleteGroup']);
 
-        Route::get('/teaching-loads', [AdminController::class, 'teachingLoads']);
-        Route::post('/teaching-loads', [AdminController::class, 'createTeachingLoad']);
-        Route::put('/teaching-loads/{teachingLoad}', [AdminController::class, 'updateTeachingLoad']);
-        Route::delete('/teaching-loads/{teachingLoad}', [AdminController::class, 'deleteTeachingLoad']);
+        Route::get('/subjects', [AdminSubjectController::class, 'subjects']);
+        Route::get('/subjects/{subject}', [AdminSubjectController::class, 'showSubject']);
+        Route::post('/subjects', [AdminSubjectController::class, 'createSubject']);
+        Route::put('/subjects/{subject}', [AdminSubjectController::class, 'updateSubject']);
+        Route::delete('/subjects/{subject}', [AdminSubjectController::class, 'deleteSubject']);
 
-        Route::get('/logs', [AdminController::class, 'logs']);
+        Route::get('/teaching-loads/matrix', [TeachingLoadController::class, 'teachingLoadsMatrix']);
+        Route::post('/teaching-loads/batch', [TeachingLoadController::class, 'createTeachingLoadsBatch']);
+        Route::put('/teaching-loads/sync-pair', [TeachingLoadController::class, 'syncTeachingLoadsForPair']);
+        Route::get('/teaching-loads', [TeachingLoadController::class, 'teachingLoads']);
+        Route::get('/teaching-loads/{teachingLoad}/detail', [TeachingLoadController::class, 'teachingLoadDetail']);
+        Route::put('/teaching-loads/{teachingLoad}/transfer-teacher', [TeachingLoadController::class, 'transferTeachingLoadTeacher']);
+        Route::post('/teaching-loads', [TeachingLoadController::class, 'createTeachingLoad']);
+        Route::put('/teaching-loads/{teachingLoad}', [TeachingLoadController::class, 'updateTeachingLoad']);
+        Route::delete('/teaching-loads/{teachingLoad}', [TeachingLoadController::class, 'deleteTeachingLoad']);
+
+        Route::get('/homework', [AdminAssignmentController::class, 'adminAssignments']);
+        Route::get('/assignments', [AdminAssignmentController::class, 'adminAssignments']);
+        Route::get('/assignments/{assignment}/eligible-teachers', [AdminAssignmentController::class, 'eligibleTeachersForAdminAssignment']);
+        Route::get('/assignments/{assignment}', [AdminAssignmentController::class, 'showAdminAssignment']);
+        Route::put('/assignments/{assignment}', [AdminAssignmentController::class, 'updateAdminAssignment']);
+        Route::put('/assignments/{assignment}/teacher', [AdminAssignmentController::class, 'updateAdminAssignmentTeacher']);
+        Route::delete('/assignments/{assignment}', [AdminAssignmentController::class, 'deleteAdminAssignment']);
+
+        Route::get('/broadcasts', [BroadcastController::class, 'index']);
+        Route::post('/broadcasts', [BroadcastController::class, 'store'])->middleware('throttle:6,1');
+        Route::post('/broadcasts/{broadcast}/resend', [BroadcastController::class, 'resend'])->middleware('throttle:6,1');
+        Route::get('/broadcasts/{broadcast}', [BroadcastController::class, 'show']);
+
+        Route::get('/logs/export', [SystemLogController::class, 'exportLogsCsv']);
+        Route::get('/logs', [SystemLogController::class, 'logs']);
 
         Route::middleware('throttle:admin_bulk')->group(function () {
-            Route::post('/users/import/preview', [AdminController::class, 'previewUsersImport']);
-            Route::post('/users/import', [AdminController::class, 'importUsers']);
-            Route::post('/groups/create-with-students', [AdminController::class, 'createGroupWithStudents']);
-            Route::post('/groups/import/preview', [AdminController::class, 'previewGroupsImport']);
-            Route::post('/groups/import', [AdminController::class, 'importGroups']);
-            Route::post('/groups/{group}/students/bulk', [AdminController::class, 'bulkAttachStudentsToGroup']);
-            Route::post('/subjects/import/preview', [AdminController::class, 'previewSubjectsImport']);
-            Route::post('/subjects/import', [AdminController::class, 'importSubjects']);
+            Route::post('/users/import/preview', [AdminUserController::class, 'previewUsersImport']);
+            Route::post('/users/import', [AdminUserController::class, 'importUsers']);
+            Route::post('/groups/create-with-students', [AdminGroupController::class, 'createGroupWithStudents']);
+            Route::post('/groups/import/preview', [AdminGroupController::class, 'previewGroupsImport']);
+            Route::post('/groups/import', [AdminGroupController::class, 'importGroups']);
+            Route::post('/groups/{group}/students/bulk', [AdminGroupController::class, 'bulkAttachStudentsToGroup']);
+            Route::post('/subjects/import/preview', [AdminSubjectController::class, 'previewSubjectsImport']);
+            Route::post('/subjects/import', [AdminSubjectController::class, 'importSubjects']);
         });
     });
 });

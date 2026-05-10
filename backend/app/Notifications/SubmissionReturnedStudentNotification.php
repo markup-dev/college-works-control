@@ -6,6 +6,9 @@ use App\Models\Submission;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Студенту: работа возвращена на доработку; детали комментария — на дашборде (письмо только подталкивает открыть страницу).
+ */
 class SubmissionReturnedStudentNotification extends Notification
 {
     public function __construct(public Submission $submission) {}

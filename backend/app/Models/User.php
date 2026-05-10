@@ -12,6 +12,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
+/**
+ * Пользователь платформы (Sanctum): роли, группа студента, нагрузка преподавателя, шкала оценок (JSON), связи для заданий и сдач.
+ * notification_settings — виртуальный атрибут для API; канал уведомлений Laravel — трейт Notifiable.
+ */
 class User extends Authenticatable
 {
     use HasFactory, Notifiable, HasApiTokens;
@@ -36,7 +40,7 @@ class User extends Authenticatable
 
     protected $appends = [
         'full_name',
-        'notifications',
+        'notification_settings',
     ];
 
     protected $hidden = [
@@ -103,7 +107,7 @@ class User extends Authenticatable
         ])));
     }
 
-    public function getNotificationsAttribute(): array
+    public function getNotificationSettingsAttribute(): array
     {
         return [
             'email' => (bool) $this->email_notifications_enabled,

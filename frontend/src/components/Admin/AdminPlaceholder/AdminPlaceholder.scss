@@ -1,0 +1,32 @@
+@import '../../../styles/base/variables';
+
+.admin-placeholder {
+  padding: 0;
+
+  &__card {
+    max-width: 520px;
+  }
+
+  &__title {
+    margin: 0 0 0.75rem;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: $text-primary;
+  }
+
+  &__text {
+    margin: 0 0 1rem;
+    color: $text-secondary;
+    line-height: 1.5;
+  }
+
+  &__back {
+    font-weight: 600;
+    color: $primary-color;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}

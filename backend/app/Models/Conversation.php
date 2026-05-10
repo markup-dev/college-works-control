@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Переписка «один к одному»: ключ (user_one_id, user_two_id) при создании всегда через orderedUserIds — меньший id в user_one_id (совпадает с уникальным индексом в БД).
+ * Поля _archived_at скрывают диалог у соответствующего участника без удаления записи.
+ */
 class Conversation extends Model
 {
     protected $fillable = [

@@ -30,6 +30,7 @@ const roleConfig = {
     accent: '#0f7b6c',
     badge: 'Администратор',
     tips: [
+      'Панель администратора открывается из пункта «Дашборд» в шапке',
       'При необходимости включите дублирование уведомлений на email в блоке ниже'
     ]
   }
@@ -43,8 +44,8 @@ const getInitialProfileState = (user) => ({
   email: user?.email || '',
   phone: user?.phone || '',
   gradeScale: normalizeGradeScale(user?.gradeScale),
-  notifications: {
-    email: user?.notifications?.email ?? true
+  notificationSettings: {
+    email: user?.notificationSettings?.email ?? true
   }
 });
 
@@ -223,7 +224,7 @@ const Profile = () => {
       login: (profileData.login || '').trim(),
       email: (profileData.email || '').trim(),
       phone: (profileData.phone || '').trim(),
-      notifications: profileData.notifications
+      notificationSettings: profileData.notificationSettings
     };
 
     if (user?.role === 'teacher') {
@@ -445,11 +446,11 @@ const Profile = () => {
                   <input
                     type="checkbox"
                     className="profile-notification-toggle__checkbox"
-                    checked={profileData.notifications.email}
+                    checked={profileData.notificationSettings.email}
                     onChange={(e) =>
                       setProfileData((prev) => ({
                         ...prev,
-                        notifications: { email: e.target.checked }
+                        notificationSettings: { email: e.target.checked }
                       }))
                     }
                     aria-labelledby="profile-email-notif-label"

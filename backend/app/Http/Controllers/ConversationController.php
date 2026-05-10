@@ -12,6 +12,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
+/**
+ * Переписка студент ↔ преподаватель: список собеседников, диалоги, сообщения, архив с двух сторон.
+ * Доступ к переписке завязан на User::canCommunicateWith и флаги архива по каждому участнику.
+ */
 class ConversationController extends Controller
 {
     /**
@@ -22,6 +26,7 @@ class ConversationController extends Controller
         $user = $request->user();
 
         if ($user->role === 'student') {
+            // Студент видит преподавателей своей группы и тех, кто выдавал задания на эту группу.
             $teacherIds = collect();
             if ($user->group_id) {
                 $group = Group::query()->find($user->group_id);
@@ -51,6 +56,7 @@ class ConversationController extends Controller
 
         $groupIds = $user->attachedTeachingGroupIds();
 
+        // Преподаватель: студенты с «закреплённых» групп + те, с кем уже была сдача работ по его заданиям.
         $fromGroups = User::query()
             ->where('role', 'student')
             ->where('is_active', true)
@@ -105,6 +111,7 @@ class ConversationController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
+        // Активные беседы — без своей стороны архива; archived — только помеченные текущим пользователем.
         $scope = $request->query('scope', 'active');
         if (! in_array($scope, ['active', 'archived'], true)) {
             $scope = 'active';
@@ -207,6 +214,7 @@ class ConversationController extends Controller
             ]);
 
             $conversation->touch();
+            // Первое сообщение снимает архив с нашей стороны, чтобы диалог снова попал в активные.
             if ((int) $conversation->user_one_id === (int) $me->id) {
                 $conversation->forceFill(['user_one_archived_at' => null])->save();
             } else {
@@ -234,6 +242,7 @@ class ConversationController extends Controller
             return response()->json(['message' => 'Доступ запрещён'], 403);
         }
 
+        // При открытии истории помечаем входящие непрочитанные как прочитанные.
         Message::query()
             ->where('conversation_id', $conversation->id)
             ->where('sender_id', '!=', $user->id)
@@ -278,6 +287,7 @@ class ConversationController extends Controller
         ]);
 
         $conversation->touch();
+        // Новое сообщение возвращает диалог из архива на стороне отправителя.
         if ((int) $conversation->user_one_id === (int) $user->id) {
             $conversation->forceFill(['user_one_archived_at' => null])->save();
         } else {
