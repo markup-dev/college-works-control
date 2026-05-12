@@ -2,9 +2,15 @@ import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { formatDateTime } from '../../../utils/dateHelpers';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
+import EmptyState from '../../UI/EmptyState/EmptyState';
+import EntityCard from '../../UI/EntityCard/EntityCard';
+import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
+import LoadingState from '../../UI/LoadingState/LoadingState';
 import Modal from '../../UI/Modal/Modal';
+import ModalSection from '../../UI/Modal/ModalSection';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
@@ -12,16 +18,6 @@ import './AdminBroadcastManagement.scss';
 
 const LIST_PER_PAGE = 20;
 const GROUPS_LIMIT = 100;
-
-const formatTs = (iso) => {
-  if (!iso) return '—';
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
-  } catch {
-    return iso;
-  }
-};
 
 const AdminBroadcastManagement = () => {
   const { showSuccess, showError } = useNotification();
@@ -205,9 +201,11 @@ const AdminBroadcastManagement = () => {
       {tab === 'compose' && (
         <div className="admin-broadcast-management__form">
           {composeError && (
-            <div className="admin-broadcast-management__banner admin-broadcast-management__banner--error" role="alert">
-              {composeError}
-            </div>
+            <ErrorBanner
+              className="admin-broadcast-management__error"
+              title="Ошибка отправки"
+              message={composeError}
+            />
           )}
 
           <div className="admin-broadcast-management__field">
@@ -302,12 +300,13 @@ const AdminBroadcastManagement = () => {
       {tab === 'history' && (
         <>
           {historyError && (
-            <div className="admin-broadcast-management__banner admin-broadcast-management__banner--error" role="alert">
-              {historyError}
-              <Button type="button" size="small" variant="outline" onClick={() => void fetchHistory()}>
-                Повторить
-              </Button>
-            </div>
+            <ErrorBanner
+              className="admin-broadcast-management__error"
+              title="Ошибка загрузки истории"
+              message={historyError}
+              actionLabel="Повторить"
+              onAction={() => void fetchHistory()}
+            />
           )}
 
           <DashboardFilterToolbar
@@ -324,12 +323,19 @@ const AdminBroadcastManagement = () => {
           <div
             className={`admin-broadcast-management__grid-wrap${historyLoading ? ' admin-broadcast-management__grid-wrap--loading' : ''}`}
           >
-            {!historyLoading && historyRows.length === 0 ? (
-              <p className="admin-broadcast-management__empty">Записей пока нет</p>
+            {historyLoading && historyRows.length === 0 ? (
+              <LoadingState message="Загрузка истории..." className="admin-broadcast-management__state" />
+            ) : !historyLoading && historyRows.length === 0 ? (
+              <EmptyState
+                title="Записей пока нет"
+                message="Отправленные рассылки появятся здесь."
+                className="admin-broadcast-management__state"
+              />
             ) : (
               <div className="admin-broadcast-management__grid">
                 {historyRows.map((row) => (
-                  <button
+                  <EntityCard
+                    as="button"
                     key={row.id}
                     type="button"
                     className="admin-broadcast-management__card"
@@ -337,13 +343,13 @@ const AdminBroadcastManagement = () => {
                   >
                     <h3 className="admin-broadcast-management__card-subject">{row.subject}</h3>
                     <p className="admin-broadcast-management__card-meta">
-                      {formatTs(row.createdAt)}
+                      {formatDateTime(row.createdAt)}
                       <br />
                       {row.audienceLabel} · {row.recipientCount} получ.
                       <br />
                       От: {row.admin?.shortName ?? '—'}
                     </p>
-                  </button>
+                  </EntityCard>
                 ))}
               </div>
             )}
@@ -368,21 +374,26 @@ const AdminBroadcastManagement = () => {
         }}
         title={detail?.subject || 'Рассылка'}
         size="medium"
+        contentClassName="admin-broadcast-management__modal"
       >
         {detailLoading ? (
-          <p className="admin-broadcast-management__hint">Загрузка…</p>
+          <LoadingState message="Загрузка..." className="admin-broadcast-management__state" />
         ) : detail ? (
           <>
-            <p className="admin-broadcast-management__modal-meta">
-              {detail.audienceLabel}
-              <br />
-              Получателей: {detail.recipientCount} · {formatTs(detail.createdAt)}
-              <br />
-              Отправил: {detail.admin?.shortName ?? '—'}
-              {detail.copyEmail ? ' · копии на email' : ''}
-            </p>
-            <div className="admin-broadcast-management__modal-body">{detail.body}</div>
-            <div className="admin-broadcast-management__modal-actions">
+            <ModalSection title="Информация" variant="soft">
+              <p className="admin-broadcast-management__modal-meta">
+                {detail.audienceLabel}
+                <br />
+                Получателей: {detail.recipientCount} · {formatDateTime(detail.createdAt)}
+                <br />
+                Отправил: {detail.admin?.shortName ?? '—'}
+                {detail.copyEmail ? ' · копии на email' : ''}
+              </p>
+            </ModalSection>
+            <ModalSection title="Текст рассылки">
+              <div className="admin-broadcast-management__modal-body">{detail.body}</div>
+            </ModalSection>
+            <div className="admin-broadcast-management__modal-controls">
               <Button type="button" variant="secondary" onClick={() => setDetail(null)}>
                 Закрыть
               </Button>

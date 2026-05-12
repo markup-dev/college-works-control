@@ -1,81 +1,9 @@
-/* Self-contained shell so this modal always stacks above the page (no dependency on AssignmentModal import). */
-.modal-overlay.publish-bank-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.48);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 5100;
-  padding: 1.25rem;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.publish-bank-modal .modal-content {
-  background: #fff;
+.publish-bank-modal {
   border: 1px solid #e6edf7;
-  border-radius: 14px;
-  width: 100%;
   max-width: 520px;
-  max-height: min(92vh, 100dvh - 2.5rem);
-  margin: auto;
-  overflow: auto;
-  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.22);
 }
 
-.publish-bank-modal .modal-header {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.8rem;
-  padding: 1rem 1.1rem;
-  border-bottom: 1px solid #e5ebf4;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-
-  h3 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: #1f2937;
-    font-weight: 700;
-  }
-}
-
-.publish-bank-modal .modal-subtitle {
-  margin: 8px 0 0;
-  font-size: 0.875rem;
-  color: #475569;
-  line-height: 1.45;
-}
-
-.publish-bank-modal .modal-close {
-  flex-shrink: 0;
-  background: #f3f6fb;
-  border: 1px solid transparent;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  color: #64748b;
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  transition: all 0.2s ease;
-
-  &:hover {
-    color: #334155;
-    border-color: #d6dfed;
-    background: #ffffff;
-  }
-}
-
-.publish-bank-modal .modal-body {
+.publish-bank-modal__body {
   padding: 0.95rem 1.1rem 1rem;
   position: relative;
   z-index: 1;
@@ -125,16 +53,11 @@
   }
 }
 
-.publish-bank-modal .modal-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
+.publish-bank-modal__actions {
   display: flex;
+  width: 100%;
   justify-content: flex-end;
   gap: 10px;
-  padding: 16px 1.1rem;
-  border-top: 1px solid #e5e7eb;
-  background: #fff;
 }
 
 /* Group dropdown (same patterns as AssignmentModal, scoped to avoid leaking). */

@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
+import Modal from '../../UI/Modal/Modal';
 import { formatDate, getGradeLabelForScore, validateScore, validateGradingComment } from '../../../utils';
 import { useAuth } from '../../../context/AuthContext';
 import { useNotification } from '../../../context/NotificationContext';
-import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './GradingModal.scss';
 
 const GradingModal = ({ 
@@ -21,8 +20,6 @@ const GradingModal = ({
   const { showError } = useNotification();
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useBodyScrollLock(isOpen);
 
   useEffect(() => {
     if (!isOpen) {
@@ -130,24 +127,44 @@ const GradingModal = ({
     };
   };
 
-  return createPortal(
-    (
-      <div className="modal-overlay teacher-grading-modal" onClick={onClose}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <div className="modal-header__titles">
-              <h3>Оценка работы</h3>
-              <p>{submission.studentName}{submission.group ? ` • ${submission.group}` : ''}</p>
-            </div>
-            <button type="button" className="modal-close" onClick={onClose}>×</button>
-          </div>
-
-          <form onSubmit={handleSubmit} aria-busy={isSubmitting}>
-            <div className="modal-body">
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Оценка работы"
+      subtitle={`${submission.studentName}${submission.group ? ` • ${submission.group}` : ''}`}
+      size="large"
+      className="teacher-grading-modal"
+      contentClassName="teacher-grading-modal__body"
+      footer={(
+        <div className="teacher-grading-modal__actions">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onBackToDetails}
+          >
+            Назад к деталям
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button
+            type="submit"
+            form="teacher-grading-form"
+            variant="primary"
+            loading={isSubmitting}
+            disabled={isSubmitting}
+          >
+            Сохранить оценку
+          </Button>
+        </div>
+      )}
+    >
+          <form id="teacher-grading-form" onSubmit={handleSubmit} aria-busy={isSubmitting}>
               <SubmissionInfo submission={submission} assignment={assignment} maxScore={maxScore} />
 
               <div className="grading-form">
-                <div className="form-group">
+                <div className="teacher-grading-modal__field">
                   <label htmlFor="score">
                     Оценка (0-{maxScore} баллов): *
                   </label>
@@ -189,7 +206,7 @@ const GradingModal = ({
                 </div>
 
                 {hasCriteria && (
-                  <div className="form-group">
+                  <div className="teacher-grading-modal__field">
                     <label className="criteria-mode-toggle">
                       <input
                         type="checkbox"
@@ -202,7 +219,7 @@ const GradingModal = ({
                 )}
 
                 {useCriteriaScoring && (
-                  <div className="form-group">
+                  <div className="teacher-grading-modal__field">
                     <label>Баллы по критериям:</label>
                     <div className="criteria-score-list">
                       {gradeData.criterionScores.map((criterion, index) => (
@@ -225,7 +242,7 @@ const GradingModal = ({
                   </div>
                 )}
 
-                <div className="form-group">
+                <div className="teacher-grading-modal__field">
                   <label htmlFor="comment">Комментарий и рекомендации:</label>
                   <textarea
                     id="comment"
@@ -256,28 +273,8 @@ const GradingModal = ({
                   </ul>
                 </div>
               </div>
-            </div>
-
-            <div className="modal-actions">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={onBackToDetails}
-              >
-                ← Назад к деталям
-              </Button>
-              <Button type="button" variant="secondary" onClick={onClose}>
-                Отмена
-              </Button>
-              <Button type="submit" variant="primary" loading={isSubmitting} disabled={isSubmitting}>
-                Сохранить оценку
-              </Button>
-            </div>
           </form>
-        </div>
-      </div>
-    ),
-    document.body,
+    </Modal>
   );
 };
 

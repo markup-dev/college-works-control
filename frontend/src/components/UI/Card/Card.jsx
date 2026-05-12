@@ -8,22 +8,23 @@ const Card = ({
   hoverable = false,
   bordered = true,
   shadow = 'medium',
+  as: Component = 'div',
   ...props 
 }) => {
   return (
-    <div 
+    <Component
       className={`
-        card 
-        card--${padding} 
-        ${hoverable ? 'card--hoverable' : ''}
-        ${bordered ? 'card--bordered' : ''}
-        card--shadow-${shadow}
+        ui-card
+        ui-card--${padding}
+        ${hoverable ? 'ui-card--hoverable' : ''}
+        ${bordered ? 'ui-card--bordered' : ''}
+        ui-card--shadow-${shadow}
         ${className}
       `}
       {...props}
     >
       {children}
-    </div>
+    </Component>
   );
 };
 

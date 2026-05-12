@@ -1,9 +1,14 @@
 @import '../../../styles/base/variables';
 
 .admin-broadcast-management {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1.25rem;
+
+  @media (max-width: 768px) {
+    gap: 1rem;
+  }
 
   &__head {
     display: flex;
@@ -15,9 +20,10 @@
 
   &__title {
     margin: 0;
-    font-size: 1.2rem;
+    font-size: 1.5rem;
     font-weight: 700;
-    color: $text-primary;
+    color: #1e293b;
+    letter-spacing: -0.01em;
   }
 
   &__hint {
@@ -55,20 +61,10 @@
     }
   }
 
-  &__banner {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    padding: 0.75rem 1rem;
-    border-radius: $border-radius-lg;
-    font-size: 0.92rem;
-
-    &--error {
-      background: #fff5f5;
-      border: 1px solid #f1d0d0;
-      color: #7f1d1d;
-    }
+  &__error {
+    width: 100%;
+    max-width: 44rem;
+    margin: 0;
   }
 
   &__form {
@@ -145,12 +141,10 @@
     }
   }
 
-  &__empty {
-    margin: 0;
-    padding: 2rem 0.5rem;
-    text-align: center;
-    color: $text-secondary;
-    font-size: 0.95rem;
+  &__state {
+    background: #ffffff;
+    border: 1px solid #eef2f8;
+    border-radius: 20px;
   }
 
   &__grid {
@@ -160,18 +154,7 @@
   }
 
   &__card {
-    border: 1px solid $border-color;
-    border-radius: $border-radius-lg;
-    padding: 0.85rem 1rem;
-    background: #fff;
     text-align: left;
-    cursor: pointer;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-
-    &:hover {
-      border-color: rgba($primary-color, 0.45);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    }
   }
 
   &__card-subject {
@@ -193,17 +176,23 @@
     font-size: 0.92rem;
     line-height: 1.5;
     color: $text-primary;
-    margin: 0 0 1rem;
+    margin: 0;
   }
 
   &__modal-meta {
     font-size: 0.85rem;
     color: $text-secondary;
-    margin: 0 0 1rem;
+    margin: 0;
     line-height: 1.45;
   }
 
-  &__modal-actions {
+  &__modal {
+    display: grid;
+    gap: 14px;
+    background: #fcfdff;
+  }
+
+  &__modal-controls {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;

@@ -1,4 +1,4 @@
-.card {
+.ui-card {
   background: white;
   border-radius: 12px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -52,7 +52,7 @@
 }
 
 @media (max-width: 768px) {
-  .card {
+  .ui-card {
     &--medium {
       padding: 16px;
     }

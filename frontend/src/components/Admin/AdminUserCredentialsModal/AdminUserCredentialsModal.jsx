@@ -1,5 +1,6 @@
 import React from 'react';
 import Modal from '../../UI/Modal/Modal';
+import ModalSection from '../../UI/Modal/ModalSection';
 import Button from '../../UI/Button/Button';
 import { useNotification } from '../../../context/NotificationContext';
 import './AdminUserCredentialsModal.scss';
@@ -37,61 +38,65 @@ const AdminUserCredentialsModal = ({ isOpen, onClose, login, plainPassword, cred
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Учётные данные" size="medium">
-      <div className="admin-user-credentials">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Учётные данные"
+      size="medium"
+      contentClassName="admin-user-credentials"
+      footer={(
+        <Button type="button" variant="primary" onClick={onClose}>
+          Закрыть
+        </Button>
+      )}
+    >
         {credentialsSent ? (
           <p className="admin-user-credentials__note admin-user-credentials__note--ok">
-            Письмо с логином и паролем отправлено на указанный email (если отправка почты настроена на сервере).
+            Логин и временный пароль отправлены на email пользователя.
           </p>
         ) : (
           <p className="admin-user-credentials__note admin-user-credentials__note--muted">
-            Отправка на почту отключена при создании или email недоступен. Сохраните данные и передайте их пользователю
-            вручную.
+            Email недоступен или отправка отключена. Передайте данные пользователю самостоятельно.
           </p>
         )}
 
-        <div className="admin-user-credentials__row">
-          <span className="admin-user-credentials__label">Логин</span>
-          <div className="admin-user-credentials__value-row">
-            <span className="admin-user-credentials__value">{login || '—'}</span>
-            <Button
-              type="button"
-              size="small"
-              variant="outline"
-              onClick={() => onCopy('Логин', login)}
-              disabled={!login}
-            >
-              Копировать
-            </Button>
+        <ModalSection title="Данные для входа" variant="soft">
+          <div className="admin-user-credentials__row">
+            <span className="admin-user-credentials__label">Логин</span>
+            <div className="admin-user-credentials__value-row">
+              <span className="admin-user-credentials__value">{login || '—'}</span>
+              <Button
+                type="button"
+                size="small"
+                variant="outline"
+                onClick={() => onCopy('Логин', login)}
+                disabled={!login}
+              >
+                Копировать
+              </Button>
+            </div>
           </div>
-        </div>
 
-        <div className="admin-user-credentials__row">
-          <span className="admin-user-credentials__label">Временный пароль</span>
-          <div className="admin-user-credentials__value-row">
-            <span className="admin-user-credentials__value">{plainPassword || '—'}</span>
-            <Button
-              type="button"
-              size="small"
-              variant="outline"
-              onClick={() => onCopy('Пароль', plainPassword)}
-              disabled={!plainPassword}
-            >
-              Копировать
-            </Button>
+          <div className="admin-user-credentials__row">
+            <span className="admin-user-credentials__label">Временный пароль</span>
+            <div className="admin-user-credentials__value-row">
+              <span className="admin-user-credentials__value">{plainPassword || '—'}</span>
+              <Button
+                type="button"
+                size="small"
+                variant="outline"
+                onClick={() => onCopy('Пароль', plainPassword)}
+                disabled={!plainPassword}
+              >
+                Копировать
+              </Button>
+            </div>
           </div>
-        </div>
+        </ModalSection>
 
-        <p className="admin-user-credentials__note">
+        <p className="admin-user-credentials__note admin-user-credentials__note--security">
           Рекомендуется сменить пароль после первого входа. Не храните пароль в открытом виде дольше необходимого.
         </p>
-
-        <div className="admin-user-credentials__actions">
-          <Button type="button" variant="primary" onClick={onClose}>
-            Закрыть
-          </Button>
-        </div>
-      </div>
     </Modal>
   );
 };

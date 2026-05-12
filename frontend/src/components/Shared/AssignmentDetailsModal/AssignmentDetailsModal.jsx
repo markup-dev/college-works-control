@@ -1,6 +1,7 @@
 import React from 'react';
 import Modal from '../../UI/Modal/Modal';
 import Button from '../../UI/Button/Button';
+import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import { 
   formatDate, 
   getAssignmentStatusInfo, 
@@ -92,9 +93,9 @@ const AssignmentDetailsModal = ({
             )}
           </div>
           <div className="assignment-details-modal__badges">
-            <span className={`status-badge status-badge--${statusInfo.variant}`}>
+            <StatusBadge tone={statusInfo.variant}>
               {statusInfo.label}
-            </span>
+            </StatusBadge>
             {mode === 'student' && isRetakeAssignment && (
               <span className={`retake-badge ${retakeUsed ? 'retake-badge--used' : ''}`}>
                 {retakeUsed ? 'Пересдача использована' : 'Пересдача'}
@@ -457,10 +458,10 @@ const SubmissionProgress = ({ stats }) => (
 
       <div className="progress-details">
         {stats.graded > 0 && (
-          <span className="graded-count">✓ {stats.graded} проверено</span>
+          <span className="graded-count">{stats.graded} проверено</span>
         )}
         {stats.pending > 0 && (
-          <span className="pending-count">⏳ {stats.pending} ожидают</span>
+          <span className="pending-count">{stats.pending} ожидают</span>
         )}
       </div>
     </div>

@@ -36,10 +36,13 @@ const ConfirmModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="small">
-      <div className="confirm-modal">
-        {message && <p className="confirm-modal__message">{message}</p>}
-        <div className="confirm-modal__actions">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      size="small"
+      footer={(
+        <>
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             {cancelText}
           </Button>
@@ -51,7 +54,11 @@ const ConfirmModal = ({
           >
             {confirmText}
           </Button>
-        </div>
+        </>
+      )}
+    >
+      <div className="confirm-modal">
+        {message && <p className="confirm-modal__message">{message}</p>}
       </div>
     </Modal>
   );

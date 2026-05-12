@@ -3,10 +3,16 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { formatDateLong } from '../../../utils/dateHelpers';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
-import Card from '../../UI/Card/Card';
+import EmptyState from '../../UI/EmptyState/EmptyState';
+import EntityCard from '../../UI/EntityCard/EntityCard';
+import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
+import LoadingState from '../../UI/LoadingState/LoadingState';
+import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import Modal from '../../UI/Modal/Modal';
+import ModalSection from '../../UI/Modal/ModalSection';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
 import './AdminAssignmentManagement.scss';
@@ -34,16 +40,18 @@ const STATUS_PACK_OPTIONS = [
 
 const statusBadge = (row) => {
   if (row.displayOverdue) {
-    return { key: 'overdue', label: 'Просрочено' };
+    return { tone: 'danger', label: 'Просрочено' };
   }
   if (row.status === 'archived') {
-    return { key: 'archived', label: 'Закрыто' };
+    return { tone: 'neutral', label: 'Закрыто' };
   }
   if (row.status === 'inactive') {
-    return { key: 'inactive', label: 'Приостановлено' };
+    return { tone: 'warning', label: 'Приостановлено' };
   }
-  return { key: 'active', label: 'Активно' };
+  return { tone: 'success', label: 'Активно' };
 };
+
+const assignmentStatusLabel = (status) => statusBadge({ status }).label;
 
 const AdminAssignmentManagement = () => {
   const { showSuccess, showError } = useNotification();
@@ -67,8 +75,6 @@ const AdminAssignmentManagement = () => {
   const [subjects, setSubjects] = useState([]);
   const [groups, setGroups] = useState([]);
 
-  const [openMenuId, setOpenMenuId] = useState(null);
-
   const [detailId, setDetailId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -91,6 +97,27 @@ const AdminAssignmentManagement = () => {
 
   useEffect(() => {
     if (searchParams.get('filter') === 'overdue_checks') {
+      setStatusPack('stale_review');
+    }
+    const gid = searchParams.get('group_id');
+    if (gid) {
+      const n = Number(gid);
+      if (Number.isFinite(n) && n > 0) {
+        setGroupId(String(n));
+      }
+    }
+    const tid = searchParams.get('teacher_id');
+    if (tid) {
+      const n = Number(tid);
+      if (Number.isFinite(n) && n > 0) {
+        setTeacherId(String(n));
+      }
+    }
+    const st = searchParams.get('status');
+    if (st === 'overdue') {
+      setStatusPack('overdue');
+    }
+    if (st === 'stale_review') {
       setStatusPack('stale_review');
     }
   }, [searchParams]);
@@ -171,7 +198,7 @@ const AdminAssignmentManagement = () => {
       });
     } catch (e) {
       setRows([]);
-      setError(firstApiErrorMessage(e, 'Не удалось загрузить задания'));
+      setError(firstApiErrorMessage(e?.response?.data) || 'Не удалось загрузить задания');
     } finally {
       setLoading(false);
     }
@@ -184,17 +211,6 @@ const AdminAssignmentManagement = () => {
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, teacherId, subjectId, groupId, statusPack, sort]);
-
-  useEffect(() => {
-    if (openMenuId == null) return undefined;
-    const onDown = (e) => {
-      if (!e.target.closest?.('.admin-assignment-card__menu-root')) {
-        setOpenMenuId(null);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [openMenuId]);
 
   useEffect(() => {
     if (detailId == null) {
@@ -233,7 +249,8 @@ const AdminAssignmentManagement = () => {
         const { data } = await api.get(`/admin/assignments/${reassignRow.id}/eligible-teachers`);
         const list = Array.isArray(data?.data) ? data.data : [];
         if (!cancelled) {
-          setEligibleTeachers(list);
+          const currentTeacherId = reassignRow?.teacher?.id ?? reassignRow?.teacherId ?? reassignRow?.teacher_id;
+          setEligibleTeachers(list.filter((teacher) => Number(teacher.id) !== Number(currentTeacherId)));
           setReassignTeacherId('');
         }
       } catch {
@@ -271,7 +288,6 @@ const AdminAssignmentManagement = () => {
     setEditDescription('');
     setEditDeadline(row.deadline || '');
     setEditStatus(row.status || 'active');
-    setOpenMenuId(null);
     (async () => {
       try {
         const { data } = await api.get(`/admin/assignments/${row.id}`);
@@ -307,7 +323,7 @@ const AdminAssignmentManagement = () => {
         setDetail(data);
       }
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось сохранить'));
+      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось сохранить');
     } finally {
       setEditSubmitting(false);
     }
@@ -332,7 +348,7 @@ const AdminAssignmentManagement = () => {
         setDetail(data);
       }
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось сменить преподавателя'));
+      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось сменить преподавателя');
     } finally {
       setReassignSubmitting(false);
     }
@@ -354,7 +370,7 @@ const AdminAssignmentManagement = () => {
       if (detailId === did) setDetailId(null);
       void fetchList();
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось удалить'));
+      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось удалить');
     } finally {
       setDeleteSubmitting(false);
     }
@@ -373,8 +389,8 @@ const AdminAssignmentManagement = () => {
         <div>
           <h1 className="admin-assignment-management__title">Задания</h1>
           <p className="admin-assignment-management__hint">
-            Обзор выданных заданий (не путать с банком заготовок преподавателя: банк хранит шаблоны и не отображается
-            здесь). Фильтр «На проверке &gt; 3 дн.» совпадает с виджетом «На контроле» на дашборде.
+            Задания, которые уже выданы студентам: дедлайны, группы и ход сдач. Фильтр «На проверке &gt; 3 дн.» показывает
+            те же работы, что и блок «На контроле» на главной странице.
           </p>
         </div>
       </div>
@@ -455,18 +471,23 @@ const AdminAssignmentManagement = () => {
       </DashboardFilterToolbar>
 
       {error && (
-        <div className="admin-assignment-management__banner admin-assignment-management__banner--error" role="alert">
-          <span>{error}</span>
-          <Button type="button" variant="secondary" onClick={() => void fetchList()}>
-            Повторить
-          </Button>
-        </div>
+        <ErrorBanner
+          className="admin-assignment-management__error"
+          title="Ошибка загрузки заданий"
+          message={error}
+          actionLabel="Повторить"
+          onAction={() => void fetchList()}
+        />
       )}
 
       <div className={`admin-assignment-management__grid-wrap${loading ? ' admin-assignment-management__grid-wrap--loading' : ''}`}>
-        {loading && <p className="admin-assignment-management__empty">Загрузка…</p>}
+        {loading && <LoadingState message="Загрузка заданий..." className="admin-assignment-management__state" />}
         {!loading && rows.length === 0 && !error && (
-          <p className="admin-assignment-management__empty">Задания не найдены</p>
+          <EmptyState
+            title="Задания не найдены"
+            message="Попробуйте изменить параметры поиска или фильтрации"
+            className="admin-assignment-management__state"
+          />
         )}
         {!loading && rows.length > 0 && (
           <div className="admin-assignment-management__grid">
@@ -475,92 +496,61 @@ const AdminAssignmentManagement = () => {
               const gNames = row.groups?.map((g) => g.name).join(', ') || '—';
               const st = row.stats || {};
               return (
-                <Card key={row.id} className="admin-assignment-card" padding="medium" shadow="small" bordered>
+                <EntityCard
+                  key={row.id}
+                  className="admin-assignment-card"
+                  padding="medium"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailId(row.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setDetailId(row.id);
+                    }
+                  }}
+                >
                   <div className="admin-assignment-card__head">
                     <h3 className="admin-assignment-card__title">{row.title}</h3>
-                    <div className="admin-assignment-card__menu-root">
-                      <button
-                        type="button"
-                        className="admin-assignment-card__menu-btn"
-                        aria-expanded={openMenuId === row.id}
-                        aria-label="Меню"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuId((id) => (id === row.id ? null : row.id));
-                        }}
-                      >
-                        ⋯
-                      </button>
-                      {openMenuId === row.id && (
-                        <div className="admin-assignment-card__menu" role="menu">
-                          <button
-                            type="button"
-                            className="admin-assignment-card__menu-item"
-                            role="menuitem"
-                            onClick={() => {
-                              setDetailId(row.id);
-                              setOpenMenuId(null);
-                            }}
-                          >
-                            Просмотр
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-assignment-card__menu-item"
-                            role="menuitem"
-                            onClick={() => openEdit(row)}
-                          >
-                            Редактировать
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-assignment-card__menu-item"
-                            role="menuitem"
-                            onClick={() => {
-                              setReassignRow(row);
-                              setOpenMenuId(null);
-                            }}
-                          >
-                            Сменить преподавателя
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-assignment-card__menu-item admin-assignment-card__menu-item--danger"
-                            role="menuitem"
-                            onClick={() => {
-                              setDeleteTarget(row);
-                              setDeleteConfirmTitle('');
-                              setOpenMenuId(null);
-                            }}
-                          >
-                            Удалить
-                          </button>
-                        </div>
-                      )}
-                    </div>
                   </div>
                   <div className="admin-assignment-card__meta">
-                    <span>{row.teacher?.short_name ?? '—'}</span>
+                    <span>{row.teacher?.shortName ?? '—'}</span>
                     <span>
                       {row.subject ? `${row.subject.name}${row.subject.code ? ` (${row.subject.code})` : ''}` : '—'}
                     </span>
                     <span>{gNames}</span>
                   </div>
                   <div className="admin-assignment-card__badges">
-                    <span className={`admin-assignment-card__badge admin-assignment-card__badge--${b.key}`}>{b.label}</span>
+                    <StatusBadge tone={b.tone}>{b.label}</StatusBadge>
                   </div>
                   <div className="admin-assignment-card__stats">
-                    <span>Дедлайн: {row.deadline || '—'}</span>
+                    <span>Дедлайн: {formatDateLong(row.deadline)}</span>
                     <span>
                       Сдано: {st.submitted ?? 0}/{st.totalStudents ?? 0} · Проверено: {st.graded ?? 0} · Ждут:{' '}
                       {st.pendingReview ?? 0}
                     </span>
                     {st.avgScore != null ? <span>Средний балл: {st.avgScore}</span> : null}
                   </div>
-                  <button type="button" className="admin-assignment-card__open" onClick={() => setDetailId(row.id)}>
-                    Открыть карточку
-                  </button>
-                </Card>
+                  <div className="admin-assignment-card__actions" onClick={(e) => e.stopPropagation()}>
+                    <Button type="button" variant="outline" size="small" onClick={() => openEdit(row)}>
+                      Редактировать
+                    </Button>
+                    <Button type="button" variant="outline" size="small" onClick={() => setReassignRow(row)}>
+                      Сменить преподавателя
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="small"
+                      onClick={() => {
+                        setDeleteTarget(row);
+                        setDeleteConfirmTitle('');
+                      }}
+                    >
+                      Удалить
+                    </Button>
+                  </div>
+                </EntityCard>
               );
             })}
           </div>
@@ -583,12 +573,43 @@ const AdminAssignmentManagement = () => {
         onClose={() => !detailLoading && setDetailId(null)}
         title={a?.title || 'Задание'}
         size="large"
+        contentClassName="admin-assignment-detail"
+        footer={!detailLoading && a ? (
+          <>
+            <Button type="button" variant="secondary" onClick={() => setDetailId(null)}>
+              Закрыть
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                const fromList = rows.find((r) => r.id === detailId);
+                if (fromList) {
+                  openEdit(fromList);
+                } else {
+                  openEdit({
+                    id: detailId,
+                    title: a.title,
+                    deadline: a.deadline,
+                    status: a.status,
+                    displayOverdue: false,
+                    stats: {},
+                    groups: a.groups,
+                    subject: a.subject,
+                    teacher: a.teacher,
+                  });
+                }
+              }}
+            >
+              Редактировать
+            </Button>
+          </>
+        ) : null}
       >
-        {detailLoading && <p>Загрузка…</p>}
+        {detailLoading && <LoadingState message="Загрузка..." className="admin-assignment-management__state" />}
         {!detailLoading && a && (
-          <div className="admin-assignment-detail">
-            <div className="admin-assignment-detail__section">
-              <h4 className="admin-assignment-detail__section-title">Информация</h4>
+          <>
+            <ModalSection title="Информация">
               <dl className="admin-assignment-detail__dl">
                 <div className="admin-assignment-detail__row">
                   <dt className="admin-assignment-detail__dt">Предмет</dt>
@@ -598,7 +619,7 @@ const AdminAssignmentManagement = () => {
                 </div>
                 <div className="admin-assignment-detail__row">
                   <dt className="admin-assignment-detail__dt">Преподаватель</dt>
-                  <dd className="admin-assignment-detail__dd">{a.teacher?.short_name ?? '—'}</dd>
+                  <dd className="admin-assignment-detail__dd">{a.teacher?.shortName ?? '—'}</dd>
                 </div>
                 <div className="admin-assignment-detail__row">
                   <dt className="admin-assignment-detail__dt">Группы</dt>
@@ -606,16 +627,15 @@ const AdminAssignmentManagement = () => {
                 </div>
                 <div className="admin-assignment-detail__row">
                   <dt className="admin-assignment-detail__dt">Статус</dt>
-                  <dd className="admin-assignment-detail__dd">{a.status}</dd>
+                  <dd className="admin-assignment-detail__dd">{assignmentStatusLabel(a.status)}</dd>
                 </div>
                 <div className="admin-assignment-detail__row">
                   <dt className="admin-assignment-detail__dt">Дедлайн</dt>
-                  <dd className="admin-assignment-detail__dd">{a.deadline || '—'}</dd>
+                  <dd className="admin-assignment-detail__dd">{formatDateLong(a.deadline)}</dd>
                 </div>
               </dl>
-            </div>
-            <div className="admin-assignment-detail__section">
-              <h4 className="admin-assignment-detail__section-title">Сдачи</h4>
+            </ModalSection>
+            <ModalSection title="Сдачи" variant="soft">
               <div className="admin-assignment-detail__bar">
                 <div className="admin-assignment-detail__bar-fill" style={{ width: `${pct}%` }} />
               </div>
@@ -648,9 +668,7 @@ const AdminAssignmentManagement = () => {
               )}
               {Array.isArray(detail?.notSubmitted) && detail.notSubmitted.length > 0 && (
                 <>
-                  <h4 className="admin-assignment-detail__section-title" style={{ marginTop: '0.75rem' }}>
-                    Не сдали
-                  </h4>
+                  <div className="admin-assignment-detail__sub-title">Не сдали</div>
                   <ul className="admin-assignment-detail__not-list">
                     {detail.notSubmitted.map((s) => (
                       <li key={s.id}>
@@ -661,37 +679,8 @@ const AdminAssignmentManagement = () => {
                   </ul>
                 </>
               )}
-            </div>
-            <div className="admin-assignment-detail__actions">
-              <Button type="button" variant="secondary" onClick={() => setDetailId(null)}>
-                Закрыть
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => {
-                  const fromList = rows.find((r) => r.id === detailId);
-                  if (fromList) {
-                    openEdit(fromList);
-                  } else {
-                    openEdit({
-                      id: detailId,
-                      title: a.title,
-                      deadline: a.deadline,
-                      status: a.status,
-                      displayOverdue: false,
-                      stats: {},
-                      groups: a.groups,
-                      subject: a.subject,
-                      teacher: a.teacher,
-                    });
-                  }
-                }}
-              >
-                Редактировать
-              </Button>
-            </div>
-          </div>
+            </ModalSection>
+          </>
         )}
       </Modal>
 
@@ -700,9 +689,19 @@ const AdminAssignmentManagement = () => {
         onClose={() => !editSubmitting && setEditRow(null)}
         title="Редактирование задания"
         size="medium"
+        contentClassName="admin-assignment-form"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={() => setEditRow(null)} disabled={editSubmitting}>
+              Отмена
+            </Button>
+            <Button type="button" variant="primary" loading={editSubmitting} onClick={() => void submitEdit()}>
+              Сохранить
+            </Button>
+          </>
+        )}
       >
-        <div className="admin-assignment-form">
-          <p className="admin-assignment-form__frozen">Предмет и группы изменить нельзя (как в ТЗ).</p>
+        <ModalSection title="Данные задания">
           <label className="admin-assignment-form__label" htmlFor="aam-edit-title">
             Название
           </label>
@@ -729,16 +728,7 @@ const AdminAssignmentManagement = () => {
             <option value="inactive">Приостановлено</option>
             <option value="archived">Закрыто</option>
           </select>
-          <p className="admin-assignment-form__hint">Преподаватель получит уведомление об изменении, если оно предусмотрено системой.</p>
-          <div className="admin-assignment-form__actions">
-            <Button type="button" variant="secondary" onClick={() => setEditRow(null)} disabled={editSubmitting}>
-              Отмена
-            </Button>
-            <Button type="button" variant="primary" loading={editSubmitting} onClick={() => void submitEdit()}>
-              Сохранить
-            </Button>
-          </div>
-        </div>
+        </ModalSection>
       </Modal>
 
       <Modal
@@ -746,10 +736,21 @@ const AdminAssignmentManagement = () => {
         onClose={() => !reassignSubmitting && setReassignRow(null)}
         title="Сменить преподавателя"
         size="medium"
+        contentClassName="admin-assignment-form"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={() => setReassignRow(null)} disabled={reassignSubmitting}>
+              Отмена
+            </Button>
+            <Button type="button" variant="primary" loading={reassignSubmitting} onClick={() => void submitReassign()}>
+              Сменить
+            </Button>
+          </>
+        )}
       >
-        <div className="admin-assignment-form">
-          <p className="admin-assignment-form__frozen">
-            Доступны только преподаватели с активным назначением на этот предмет по всем группам задания.
+        <ModalSection title="Новый преподаватель">
+          <p className="admin-assignment-form__note">
+            Выберите преподавателя, который ведёт этот предмет у выбранных групп.
           </p>
           <label className="admin-assignment-form__label" htmlFor="aam-reassign-t">
             Новый преподаватель
@@ -762,15 +763,10 @@ const AdminAssignmentManagement = () => {
               </option>
             ))}
           </select>
-          <div className="admin-assignment-form__actions">
-            <Button type="button" variant="secondary" onClick={() => setReassignRow(null)} disabled={reassignSubmitting}>
-              Отмена
-            </Button>
-            <Button type="button" variant="primary" loading={reassignSubmitting} onClick={() => void submitReassign()}>
-              Сменить
-            </Button>
-          </div>
-        </div>
+          {eligibleTeachers.length === 0 && (
+            <p className="admin-assignment-form__note">Подходящих преподавателей пока нет.</p>
+          )}
+        </ModalSection>
       </Modal>
 
       <Modal
@@ -778,8 +774,19 @@ const AdminAssignmentManagement = () => {
         onClose={() => !deleteSubmitting && setDeleteTarget(null)}
         title="Удалить задание"
         size="medium"
+        contentClassName="admin-assignment-form"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleteSubmitting}>
+              Отмена
+            </Button>
+            <Button type="button" variant="danger" loading={deleteSubmitting} onClick={() => void submitDelete()}>
+              Удалить
+            </Button>
+          </>
+        )}
       >
-        <div className="admin-assignment-form">
+        <ModalSection title="Подтверждение удаления" variant="danger">
           <p className="admin-assignment-form__hint">
             Будут удалены задание и все сданные работы. Введите название задания для подтверждения.
           </p>
@@ -793,15 +800,7 @@ const AdminAssignmentManagement = () => {
             onChange={(e) => setDeleteConfirmTitle(e.target.value)}
             autoComplete="off"
           />
-          <div className="admin-assignment-form__actions">
-            <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleteSubmitting}>
-              Отмена
-            </Button>
-            <Button type="button" variant="danger" loading={deleteSubmitting} onClick={() => void submitDelete()}>
-              Удалить
-            </Button>
-          </div>
-        </div>
+        </ModalSection>
       </Modal>
     </div>
   );

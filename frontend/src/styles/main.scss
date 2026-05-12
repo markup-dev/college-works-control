@@ -2,6 +2,10 @@
 @import 'base/mixins';
 @import 'base/reset';
 @import 'base/typography';
-@import 'base/buttons';
-@import 'base/cards';
 @import 'utilities/page-reveal';
+
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  appearance: none;
+  display: none;
+}

@@ -17,6 +17,7 @@ const FiltersSection = ({
   onTeacherFilterChange,
   availableTeachers,
   onResetFilters,
+  filtersResetDisabled = false,
 }) => (
   <div className="filters-section">
     <DashboardFilterToolbar
@@ -25,6 +26,7 @@ const FiltersSection = ({
       searchPlaceholder="Поиск по названию, предмету, преподавателю..."
       searchInputType="text"
       onReset={onResetFilters}
+      resetDisabled={filtersResetDisabled}
       popoverAriaLabel="Фильтры по предмету и преподавателю"
     >
       <SubjectFilter
@@ -57,7 +59,7 @@ const FiltersSection = ({
 );
 
 const SubjectFilter = ({ subjectFilter, onSubjectFilterChange, availableSubjects }) => (
-  <div className="filter-popover__field filter-select subject-filter">
+  <div className="filter-popover__field">
     <label className="filter-popover__label" htmlFor="student-filter-subject">
       Предмет
     </label>
@@ -65,7 +67,7 @@ const SubjectFilter = ({ subjectFilter, onSubjectFilterChange, availableSubjects
       id="student-filter-subject"
       value={subjectFilter}
       onChange={(e) => onSubjectFilterChange(e.target.value)}
-      className="filter-select-input"
+      className="filter-select"
     >
       <option value="all">Все предметы</option>
       {availableSubjects.map((subject) => (
@@ -78,7 +80,7 @@ const SubjectFilter = ({ subjectFilter, onSubjectFilterChange, availableSubjects
 );
 
 const TeacherFilter = ({ teacherFilter, onTeacherFilterChange, availableTeachers }) => (
-  <div className="filter-popover__field filter-select teacher-filter">
+  <div className="filter-popover__field">
     <label className="filter-popover__label" htmlFor="student-filter-teacher">
       Преподаватель
     </label>
@@ -86,7 +88,7 @@ const TeacherFilter = ({ teacherFilter, onTeacherFilterChange, availableTeachers
       id="student-filter-teacher"
       value={teacherFilter}
       onChange={(e) => onTeacherFilterChange(e.target.value)}
-      className="filter-select-input"
+      className="filter-select"
     >
       <option value="all">Все преподаватели</option>
       {availableTeachers.map((teacher) => (

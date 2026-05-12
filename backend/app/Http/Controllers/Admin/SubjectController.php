@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Admin\Concerns\LogsAdminActions;
 use App\Http\Controllers\Controller;
 use App\Models\Assignment;
+use App\Models\Submission;
 use App\Models\Subject;
 use App\Models\TeachingLoad;
 use App\Services\Admin\AdminCsvImportService;

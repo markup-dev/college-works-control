@@ -47,7 +47,7 @@
   color: #64748b;
 }
 
-.assignment-bank-card.card--hoverable {
+.assignment-bank-card.ui-card--hoverable {
   cursor: default;
 }
 
@@ -76,7 +76,7 @@
   margin-top: auto;
   padding-top: 4px;
 
-  .btn {
+  .ui-button {
     flex: 1 1 140px;
     min-width: 0;
   }

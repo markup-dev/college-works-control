@@ -50,7 +50,22 @@ const InputModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="medium">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      size="medium"
+      footer={(
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>
+            Отмена
+          </Button>
+          <Button variant="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
+            Подтвердить
+          </Button>
+        </>
+      )}
+    >
       <div className="input-modal">
         {message && <p className="input-modal__message">{message}</p>}
         <div className="input-modal__input">
@@ -73,14 +88,6 @@ const InputModal = ({
               autoFocus
             />
           )}
-        </div>
-        <div className="input-modal__actions">
-          <Button variant="secondary" onClick={onClose} disabled={submitting}>
-            Отмена
-          </Button>
-          <Button variant="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
-            Подтвердить
-          </Button>
         </div>
       </div>
     </Modal>

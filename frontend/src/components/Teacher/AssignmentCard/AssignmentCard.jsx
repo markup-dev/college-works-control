@@ -1,6 +1,7 @@
 import React from 'react';
 import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
+import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import { 
   getAssignmentStatusInfo, 
   formatDate,
@@ -146,9 +147,9 @@ const AssignmentCard = React.memo(({
         </div>
         
         <div className="assignment-status">
-          <span className={`status-badge status-badge--${statusInfo.variant}`}>
+          <StatusBadge tone={statusInfo.variant}>
             {statusInfo.label}
-          </span>
+          </StatusBadge>
           {deadlineUrgency ? (
             <span className={`deadline-urgency-badge deadline-urgency-badge--${deadlineUrgency.tone}`}>
               {deadlineUrgency.label}

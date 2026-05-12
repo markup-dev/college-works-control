@@ -102,7 +102,9 @@ class TeachingLoadController extends Controller
                             ->where('name', 'like', "%{$term}%")
                             ->orWhere('code', 'like', "%{$term}%");
                     })
-                    ->orWhereHas('group', fn ($groupQuery) => $groupQuery->where('name', 'like', "%{$term}%"));
+                    ->orWhereHas('group', fn ($groupQuery) => $groupQuery
+                        ->where('name', 'like', "%{$term}%")
+                        ->orWhere('specialty', 'like', "%{$term}%"));
             });
         }
 

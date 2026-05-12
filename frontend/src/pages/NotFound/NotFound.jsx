@@ -36,7 +36,7 @@ const NotFound = () => {
 
           <div className="error-visual">
             <div className="lost-astronaut">
-              <div className="astronaut">👨‍🚀</div>
+              <div className="astronaut">404</div>
               <div className="floating-dots">
                 <div className="dot dot-1"></div>
                 <div className="dot dot-2"></div>
@@ -46,16 +46,14 @@ const NotFound = () => {
           </div>
 
           <div className="error-actions">
-            <Link to="/welcome" className="btn-primary btn-large">
-              <span className="btn-icon">🏠</span>
-              <span className="btn-text">На главную</span>
+            <Link to="/welcome" className="not-found-button not-found-button--primary">
+              <span className="not-found-button__text">На главную</span>
             </Link>
             <button 
-              className="btn-outline btn-large"
+              className="not-found-button not-found-button--outline"
               onClick={() => window.history.back()}
             >
-              <span className="btn-icon">↩️</span>
-              <span className="btn-text">Вернуться назад</span>
+              <span className="not-found-button__text">Вернуться назад</span>
             </button>
           </div>
 
@@ -63,10 +61,10 @@ const NotFound = () => {
             <p>Если проблема повторяется, свяжитесь с поддержкой</p>
             <div className="help-links">
               <a href="mailto:support@university.ru" className="help-link">
-                📧 support@university.ru
+                support@university.ru
               </a>
               <a href="tel:+78001234567" className="help-link">
-                📞 8 (800) 123-45-67
+                8 (800) 123-45-67
               </a>
             </div>
           </div>

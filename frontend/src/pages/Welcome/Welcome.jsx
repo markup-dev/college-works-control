@@ -153,14 +153,14 @@ const Welcome = () => {
 
           <div className='hero-actions'>
             <button
-              className='btn-primary btn-large btn-glow'
+              className='welcome-button welcome-button--primary welcome-button--large welcome-button--glow'
               onClick={handleGetStarted}
             >
-              <span className='btn-text'>Начать работу</span>
-              <span className='btn-icon'>→</span>
+              <span className='welcome-button__text'>Начать работу</span>
+              <span className='welcome-button__icon'>→</span>
             </button>
             <button
-              className='btn-outline btn-large'
+              className='welcome-button welcome-button--outline welcome-button--large'
               onClick={() =>
                 document
                   .getElementById('features')
@@ -189,26 +189,26 @@ const Welcome = () => {
 
         <div className='hero-visual'>
           <div className='floating-cards'>
-            <div className='floating-card card-1'>
-              <div className='card-icon'>
+            <div className='floating-card floating-card--first'>
+              <div className='floating-card__icon'>
                 <img src={heroCard1} alt='' aria-hidden />
               </div>
-              <div className='card-title'>Задания</div>
-              <div className='card-subtitle'>Учебные материалы</div>
+              <div className='floating-card__title'>Задания</div>
+              <div className='floating-card__subtitle'>Учебные материалы</div>
             </div>
-            <div className='floating-card card-2'>
-              <div className='card-icon'>
+            <div className='floating-card floating-card--second'>
+              <div className='floating-card__icon'>
                 <img src={heroCard2} alt='' aria-hidden />
               </div>
-              <div className='card-title'>Аналитика</div>
-              <div className='card-subtitle'>Статистика успеваемости</div>
+              <div className='floating-card__title'>Аналитика</div>
+              <div className='floating-card__subtitle'>Статистика успеваемости</div>
             </div>
-            <div className='floating-card card-3'>
-              <div className='card-icon'>
+            <div className='floating-card floating-card--third'>
+              <div className='floating-card__icon'>
                 <img src={heroCard3} alt='' aria-hidden />
               </div>
-              <div className='card-title'>Группы</div>
-              <div className='card-subtitle'>Учебные коллективы</div>
+              <div className='floating-card__title'>Группы</div>
+              <div className='floating-card__subtitle'>Учебные коллективы</div>
             </div>
           </div>
         </div>
@@ -307,11 +307,11 @@ const Welcome = () => {
               тысячам студентов и преподавателей
             </p>
             <button
-              className='btn-primary btn-xlarge btn-glow'
+              className='welcome-button welcome-button--primary welcome-button--xlarge welcome-button--glow'
               onClick={handleGetStarted}
             >
-              <span className='btn-text'>Начать использовать платформу</span>
-              <span className='btn-icon cta-btn-icon'>
+              <span className='welcome-button__text'>Начать использовать платформу</span>
+              <span className='welcome-button__icon welcome-button__icon--cta'>
                 <img src={studentCtaIcon} alt='' aria-hidden />
               </span>
             </button>

@@ -6,7 +6,11 @@ import { useNotification } from '../../../context/NotificationContext';
 import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
-import Card from '../../UI/Card/Card';
+import EmptyState from '../../UI/EmptyState/EmptyState';
+import EntityCard from '../../UI/EntityCard/EntityCard';
+import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
+import LoadingState from '../../UI/LoadingState/LoadingState';
+import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
@@ -15,6 +19,7 @@ import AdminEditUserModal from '../AdminEditUserModal/AdminEditUserModal';
 import AdminUserCredentialsModal from '../AdminUserCredentialsModal/AdminUserCredentialsModal';
 import AdminUserPasswordResetModal from '../AdminUserPasswordResetModal/AdminUserPasswordResetModal';
 import AdminUserViewModal from '../AdminUserViewModal/AdminUserViewModal';
+import AdminUserWarningsModal from '../AdminUserWarningsModal/AdminUserWarningsModal';
 import AdminUsersImportModal from '../AdminUsersImportModal/AdminUsersImportModal';
 import './AdminUserManagement.scss';
 
@@ -77,38 +82,22 @@ const accountStatusPresentation = (row) => {
   return { label: 'Активен', tone: 'active' };
 };
 
-const groupLineForUser = (row) => {
+const secondLineOnUserCard = (row) => {
+  if (row.role === 'admin') {
+    return null;
+  }
   if (row.role === 'teacher') {
-    const list = row.teacherGroups;
-    if (Array.isArray(list) && list.length) {
-      return list.join(', ');
-    }
-    return '—';
+    const d = (row.department || '').trim();
+    return { label: 'Кафедра', value: d || '—' };
   }
-  if (row.role === 'student') {
-    return row.studentGroup?.name || 'Без группы';
-  }
-  return '—';
-};
-
-const cardMenuItems = (row, currentUserId) => {
-  const items = [
-    { type: 'action', id: 'view', label: 'Просмотр профиля' },
-    { type: 'action', id: 'edit', label: 'Редактировать' },
-    { type: 'action', id: 'reset', label: 'Сбросить пароль' },
-    { type: 'action', id: 'resend', label: 'Отправить доступ повторно на почту' },
-    { type: 'sep' },
-    { type: 'action', id: 'block', label: row.isActive ? 'Заблокировать' : 'Разблокировать' },
-    { type: 'sep' },
-  ];
-  if (currentUserId == null || Number(row.id) !== Number(currentUserId)) {
-    items.push({ type: 'action', id: 'delete', label: 'Удалить', danger: true });
-  }
-  return items;
+  return {
+    label: 'Группа',
+    value: row.studentGroup?.name || 'Без группы',
+  };
 };
 
 const AdminUserManagement = () => {
-  const { showInfo, showSuccess, showError } = useNotification();
+  const { showSuccess, showError } = useNotification();
   const { user: authUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -119,7 +108,6 @@ const AdminUserManagement = () => {
   const [groupId, setGroupId] = useState('');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
-  const [openMenuId, setOpenMenuId] = useState(null);
 
   const [groups, setGroups] = useState([]);
   const [users, setUsers] = useState([]);
@@ -137,6 +125,10 @@ const AdminUserManagement = () => {
   const [deleteTargetRow, setDeleteTargetRow] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
 
+  const [warningsUser, setWarningsUser] = useState(null);
+  const [warningsDetail, setWarningsDetail] = useState(null);
+  const [warningsLoading, setWarningsLoading] = useState(false);
+
   const currentUserId = authUser?.id != null ? Number(authUser.id) : null;
 
   useEffect(() => {
@@ -152,6 +144,7 @@ const AdminUserManagement = () => {
       consumed = true;
     }
     if (st.filterGroupId != null && st.filterGroupId !== '') {
+      setRole('student');
       setGroupId(String(st.filterGroupId));
       consumed = true;
     }
@@ -182,15 +175,16 @@ const AdminUserManagement = () => {
   }, [debouncedSearch, role, accountStatus, groupId, sort]);
 
   useEffect(() => {
-    if (openMenuId == null) return undefined;
-    const onDown = (e) => {
-      if (!e.target.closest?.('.admin-user-card__menu-root')) {
-        setOpenMenuId(null);
+    setGroupId((prev) => {
+      if (role === 'teacher' || role === 'admin') {
+        return '';
       }
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [openMenuId]);
+      if (role !== 'student' && prev === 'none') {
+        return '';
+      }
+      return prev;
+    });
+  }, [role]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -228,8 +222,38 @@ const AdminUserManagement = () => {
   }, [page, debouncedSearch, role, accountStatus, groupId, sort]);
 
   useEffect(() => {
-    fetchUsers();
+    void fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    if (!warningsUser) {
+      setWarningsDetail(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setWarningsLoading(true);
+      setWarningsDetail(null);
+      try {
+        const { data } = await api.get(`/admin/users/${warningsUser.id}/warnings-detail`);
+        if (!cancelled) {
+          setWarningsDetail(data);
+        }
+      } catch (e) {
+        showError(firstApiErrorMessage(e.response?.data) || 'Не удалось загрузить предупреждения');
+        if (!cancelled) {
+          setWarningsUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setWarningsLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [warningsUser, showError]);
 
   const resetFilters = useCallback(() => {
     setSearch('');
@@ -250,44 +274,41 @@ const AdminUserManagement = () => {
     [search, role, accountStatus, groupId, sort]
   );
 
-  const handleCardMenuAction = useCallback(
-    async (actionId, row) => {
-      setOpenMenuId(null);
-      switch (actionId) {
-        case 'view':
-          setViewUserRow(row);
-          break;
-        case 'edit':
-          setEditUserRow(row);
-          break;
-        case 'reset':
-          setResetModal({ row, variant: 'reset' });
-          break;
-        case 'resend':
-          setResetModal({ row, variant: 'resend' });
-          break;
-        case 'block':
-          try {
-            await api.put(`/admin/users/${row.id}`, { isActive: !row.isActive });
-            showSuccess(row.isActive ? 'Пользователь заблокирован' : 'Пользователь разблокирован');
-            await fetchUsers();
-          } catch (e) {
-            showError(firstApiErrorMessage(e.response?.data) || 'Не удалось изменить статус');
-          }
-          break;
-        case 'delete':
-          if (currentUserId != null && Number(row.id) === currentUserId) {
-            showError('Нельзя удалить собственную учётную запись.');
-            return;
-          }
-          setDeleteTargetRow(row);
-          break;
-        default:
-          break;
-      }
-    },
-    [currentUserId, fetchUsers, showError, showSuccess]
-  );
+  const handleViewModalEdit = useCallback(() => {
+    if (!viewUserRow) return;
+    setEditUserRow(viewUserRow);
+    setViewUserRow(null);
+  }, [viewUserRow]);
+
+  const handleViewModalReset = useCallback(() => {
+    if (!viewUserRow) return;
+    setResetModal(viewUserRow);
+  }, [viewUserRow]);
+
+  const handleViewModalToggleBlock = useCallback(async () => {
+    if (!viewUserRow) return;
+    if (currentUserId != null && Number(viewUserRow.id) === currentUserId && viewUserRow.isActive) {
+      showError('Нельзя заблокировать собственную учётную запись.');
+      return;
+    }
+    try {
+      await api.put(`/admin/users/${viewUserRow.id}`, { isActive: !viewUserRow.isActive });
+      showSuccess(viewUserRow.isActive ? 'Пользователь заблокирован' : 'Пользователь разблокирован');
+      await fetchUsers();
+      setViewUserRow(null);
+    } catch (e) {
+      showError(firstApiErrorMessage(e.response?.data) || 'Не удалось изменить статус');
+    }
+  }, [viewUserRow, currentUserId, fetchUsers, showError, showSuccess]);
+
+  const handleViewModalDelete = useCallback(() => {
+    if (!viewUserRow) return;
+    if (currentUserId != null && Number(viewUserRow.id) === currentUserId) {
+      showError('Нельзя удалить собственную учётную запись.');
+      return;
+    }
+    setDeleteTargetRow(viewUserRow);
+  }, [viewUserRow, currentUserId, showError]);
 
   const handleResetCredentialsSuccess = useCallback(
     (data) => {
@@ -330,12 +351,13 @@ const AdminUserManagement = () => {
       </div>
 
       {error && (
-        <div className="admin-user-management__banner admin-user-management__banner--error" role="alert">
-          {error}
-          <Button type="button" size="small" variant="outline" className="admin-user-management__retry" onClick={fetchUsers}>
-            Повторить
-          </Button>
-        </div>
+        <ErrorBanner
+          className="admin-user-management__error"
+          title="Ошибка загрузки пользователей"
+          message={error}
+          actionLabel="Повторить"
+          onAction={fetchUsers}
+        />
       )}
 
       <DashboardFilterToolbar
@@ -368,28 +390,30 @@ const AdminUserManagement = () => {
             ))}
           </select>
         </div>
-        <div className="filter-popover__field">
-          <label className="filter-popover__label" htmlFor="admin-users-group">
-            Группа
-          </label>
-          <select
-            id="admin-users-group"
-            className="filter-select"
-            value={groupId}
-            onChange={(e) => {
-              setGroupId(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">Все группы</option>
-            <option value="none">Без группы</option>
-            {groups.map((g) => (
-              <option key={g.id} value={String(g.id)}>
-                {g.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {(role === '' || role === 'student') && (
+          <div className="filter-popover__field">
+            <label className="filter-popover__label" htmlFor="admin-users-group">
+              Группа
+            </label>
+            <select
+              id="admin-users-group"
+              className="filter-select"
+              value={groupId}
+              onChange={(e) => {
+                setGroupId(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">Все группы</option>
+              {role === 'student' && <option value="none">Без группы</option>}
+              {groups.map((g) => (
+                <option key={g.id} value={String(g.id)}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="filter-popover__field">
           <label className="filter-popover__label" htmlFor="admin-users-acc-status">
             Статус
@@ -433,139 +457,130 @@ const AdminUserManagement = () => {
       </DashboardFilterToolbar>
 
       <div className="admin-user-management__actions-row">
-        <Button type="button" size="small" onClick={() => setCreateUserOpen(true)}>
+        <Button type="button" size="small" variant="primary" onClick={() => setCreateUserOpen(true)}>
           + Новый пользователь
         </Button>
-        <Button type="button" size="small" variant="outline" onClick={() => setImportOpen(true)}>
+        <Button type="button" size="small" variant="secondary" onClick={() => setImportOpen(true)}>
           Импорт CSV
         </Button>
       </div>
 
-      <div className={`admin-user-management__grid-wrap ${loading ? 'admin-user-management__grid-wrap--loading' : ''}`}>
+      <div className={`admin-user-management__grid-wrap ${loading && users.length === 0 ? 'admin-user-management__grid-wrap--loading' : ''}`}>
         {loading && users.length === 0 ? (
-          <p className="admin-user-management__hint">Загрузка…</p>
+          <LoadingState message="Загрузка пользователей..." className="admin-user-management__state" />
         ) : users.length === 0 ? (
-          <p className="admin-user-management__hint">Пользователи не найдены</p>
+          <EmptyState
+            title="Пользователи не найдены"
+            message="Попробуйте изменить параметры поиска или фильтрации"
+            className="admin-user-management__state"
+          />
         ) : (
           <div className="admin-user-management__card-grid" role="list">
-            {users.map((row) => {
+            {users.map((row, index) => {
               const st = accountStatusPresentation(row);
               const phone = formatPhoneDisplay(row.phone);
               const warnings = Array.isArray(row.adminWarnings) ? row.adminWarnings : [];
+              const cardSecondLine = secondLineOnUserCard(row);
               return (
-                <Card
+                <EntityCard
                   key={row.id}
-                  className="admin-user-card"
+                  className="admin-user-card app-reveal-item"
+                  style={{ animationDelay: `${index * 0.03}s` }}
                   padding="small"
-                  shadow="small"
                   role="listitem"
+                  interactive
                 >
-                  <div className="admin-user-card__top">
-                    <div className="admin-user-card__avatar" aria-hidden>
-                      {userInitials(row)}
-                    </div>
-                    <div className="admin-user-card__title-block">
-                      <div className="admin-user-card__lastname">{row.lastName || '—'}</div>
-                      <div className="admin-user-card__first-middle">
-                        {[row.firstName, row.middleName].filter(Boolean).join(' ') || '—'}
+                  <button
+                    type="button"
+                    className="admin-user-card__open-profile-hit"
+                    tabIndex={-1}
+                    aria-label={`Открыть профиль: ${[row.lastName, row.firstName].filter(Boolean).join(' ')}`}
+                    onClick={() => setViewUserRow(row)}
+                  />
+                  <div className="admin-user-card__body">
+                    <div className="admin-user-card__top">
+                      <div className="admin-user-card__avatar" aria-hidden>
+                        {userInitials(row)}
+                      </div>
+                      <div className="admin-user-card__title-block">
+                        <div className="admin-user-card__lastname">{row.lastName || '—'}</div>
+                        <div className="admin-user-card__first-middle">
+                          {[row.firstName, row.middleName].filter(Boolean).join(' ') || '—'}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="admin-user-card__row admin-user-card__row--labeled">
-                    <span className="admin-user-card__label">Роль</span>
-                    <span className="admin-user-card__value">{roleLabel(row.role)}</span>
-                  </div>
-
-                  <div className="admin-user-card__row admin-user-card__row--labeled">
-                    <span className="admin-user-card__label">Группа</span>
-                    <span className="admin-user-card__value admin-user-card__multiline">{groupLineForUser(row)}</span>
-                  </div>
-
-                  <div className="admin-user-card__row admin-user-card__row--labeled">
-                    <span className="admin-user-card__label">Email</span>
-                    <span className="admin-user-card__value admin-user-card__ellipsis" title={row.email || ''}>
-                      {row.email || '—'}
-                    </span>
-                  </div>
-
-                  <div className="admin-user-card__row admin-user-card__row--labeled">
-                    <span className="admin-user-card__label">Телефон</span>
-                    <span className="admin-user-card__value">{phone || 'Не указан'}</span>
-                  </div>
-
-                  <div className={`admin-user-card__status admin-user-card__status--${st.tone}`}>
-                    <span className="admin-user-card__status-dot" aria-hidden />
-                    <span>{st.label}</span>
-                  </div>
-
-                  {warnings.length > 0 && (
-                    <div className="admin-user-card__warnings">
-                      {warnings.map((w) => (
-                        <button
-                          key={`${row.id}-${w.key}-${w.text}`}
-                          type="button"
-                          className="admin-user-card__warn-line"
-                          onClick={() =>
-                            showInfo('Детали предупреждения — модалка 2.10 в следующем этапе.')
-                          }
-                        >
-                          {w.text}
-                        </button>
-                      ))}
+                    <div className="admin-user-card__row admin-user-card__row--labeled">
+                      <span className="admin-user-card__label">Роль</span>
+                      <span className="admin-user-card__value">{roleLabel(row.role)}</span>
                     </div>
-                  )}
 
-                  <div className="admin-user-card__menu-root">
-                    <button
-                      type="button"
-                      className="admin-user-card__kebab"
-                      aria-label="Меню действий"
-                      aria-expanded={openMenuId === row.id}
-                      onClick={() => setOpenMenuId((id) => (id === row.id ? null : row.id))}
-                    >
-                      <span className="admin-user-card__kebab-dot" />
-                      <span className="admin-user-card__kebab-dot" />
-                      <span className="admin-user-card__kebab-dot" />
-                    </button>
-                    {openMenuId === row.id && (
-                      <ul className="admin-user-card__menu" role="menu">
-                        {cardMenuItems(row, currentUserId).map((item, idx) =>
-                          item.type === 'sep' ? (
-                            <li key={`sep-${row.id}-${idx}`} role="separator" className="admin-user-card__menu-sep" />
-                          ) : (
-                            <li key={item.id} role="none">
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className={`admin-user-card__menu-item ${item.danger ? 'admin-user-card__menu-item--danger' : ''}`}
-                                onClick={() => void handleCardMenuAction(item.id, row)}
-                              >
-                                {item.label}
-                              </button>
-                            </li>
-                          )
-                        )}
-                      </ul>
+                    {cardSecondLine && (
+                      <div className="admin-user-card__row admin-user-card__row--labeled">
+                        <span className="admin-user-card__label">{cardSecondLine.label}</span>
+                        <span className="admin-user-card__value admin-user-card__multiline">{cardSecondLine.value}</span>
+                      </div>
                     )}
+
+                    <div className="admin-user-card__row admin-user-card__row--labeled">
+                      <span className="admin-user-card__label">Email</span>
+                      <span className="admin-user-card__value admin-user-card__ellipsis" title={row.email || ''}>
+                        {row.email || '—'}
+                      </span>
+                    </div>
+
+                    <div className="admin-user-card__row admin-user-card__row--labeled">
+                      <span className="admin-user-card__label">Телефон</span>
+                      <span className="admin-user-card__value">{phone || 'Не указан'}</span>
+                    </div>
+
+                    <StatusBadge tone={st.tone} className="admin-user-card__status">
+                      {st.label}
+                    </StatusBadge>
+
+                    {warnings.length > 0 && (
+                      <div className="admin-user-card__warnings">
+                        <button
+                          type="button"
+                          className="admin-user-card__warn-summary"
+                          onClick={() => setWarningsUser(row)}
+                          aria-label={`Предупреждения: ${warnings.map((w) => w.text).join(', ')}`}
+                        >
+                          <span className="admin-user-card__warn-icon" aria-hidden>
+                            !
+                          </span>
+                          <span className="admin-user-card__warn-summary-text">
+                            <span className="admin-user-card__warn-summary-title">
+                              {warnings.length === 1 ? 'Предупреждение' : `Предупреждения (${warnings.length})`}
+                            </span>
+                            <span className="admin-user-card__warn-summary-hint">
+                              {warnings.map((w) => w.text).join(' · ')}
+                            </span>
+                          </span>
+                        </button>
+                      </div>
+                    )}
+
                   </div>
-                </Card>
+                </EntityCard>
               );
             })}
           </div>
         )}
       </div>
 
-      <Pagination
-        className="admin-user-management__pagination"
-        currentPage={meta.currentPage}
-        lastPage={meta.lastPage}
-        total={meta.total}
-        fallbackCount={users.length}
-        disabled={loading}
-        onPrev={() => setPage((p) => Math.max(1, p - 1))}
-        onNext={() => setPage((p) => p + 1)}
-      />
+      {users.length > 0 && (
+        <Pagination
+          className="admin-user-management__pagination"
+          currentPage={meta.currentPage}
+          lastPage={meta.lastPage}
+          total={meta.total}
+          fallbackCount={users.length}
+          disabled={loading}
+          onPrev={() => setPage((p) => Math.max(1, p - 1))}
+          onNext={() => setPage((p) => p + 1)}
+        />
+      )}
 
       <AdminCreateUserModal
         isOpen={createUserOpen}
@@ -585,12 +600,22 @@ const AdminUserManagement = () => {
         credentialsSent={credentialsPayload?.credentialsSent}
       />
 
-      <AdminUserViewModal isOpen={viewUserRow != null} onClose={() => setViewUserRow(null)} user={viewUserRow} />
+      <AdminUserViewModal
+        isOpen={viewUserRow != null}
+        onClose={() => setViewUserRow(null)}
+        user={viewUserRow}
+        currentUserId={currentUserId}
+        onEdit={handleViewModalEdit}
+        onResetPassword={handleViewModalReset}
+        onToggleBlock={handleViewModalToggleBlock}
+        onDelete={handleViewModalDelete}
+      />
 
       <AdminEditUserModal
         isOpen={editUserRow != null}
         onClose={() => setEditUserRow(null)}
         userRow={editUserRow}
+        currentUserId={currentUserId}
         groups={groups}
         onSaved={() => {
           showSuccess('Данные пользователя сохранены');
@@ -601,12 +626,22 @@ const AdminUserManagement = () => {
       <AdminUserPasswordResetModal
         isOpen={resetModal != null}
         onClose={() => setResetModal(null)}
-        userRow={resetModal?.row}
-        variant={resetModal?.variant ?? 'reset'}
+        userRow={resetModal}
         onSuccess={handleResetCredentialsSuccess}
       />
 
       <AdminUsersImportModal isOpen={importOpen} onClose={() => setImportOpen(false)} onImported={handleUsersImported} />
+
+      <AdminUserWarningsModal
+        isOpen={warningsUser != null}
+        onClose={() => {
+          setWarningsUser(null);
+          setWarningsDetail(null);
+        }}
+        loading={warningsLoading}
+        detail={warningsDetail}
+        userRow={warningsUser}
+      />
 
       <ConfirmModal
         isOpen={deleteTargetRow != null}
@@ -624,6 +659,7 @@ const AdminUserManagement = () => {
           try {
             await api.delete(`/admin/users/${deleteTargetRow.id}`);
             showSuccess('Пользователь удалён');
+            setViewUserRow((v) => (v && Number(v.id) === Number(deleteTargetRow.id) ? null : v));
             await fetchUsers();
           } catch (e) {
             showError(firstApiErrorMessage(e.response?.data) || 'Не удалось удалить пользователя');

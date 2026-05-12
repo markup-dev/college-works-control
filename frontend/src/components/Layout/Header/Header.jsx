@@ -3,6 +3,7 @@ import { NavLink, Link, useLocation } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import logo from '../../../assets/logo-border-gradient.svg';
+import { ADMIN_APP_NAV_WITHOUT_DASHBOARD } from '../../../config/adminNavItems';
 import './Header.scss';
 
 const Header = ({ user, onLogout }) => {
@@ -303,6 +304,30 @@ const Header = ({ user, onLogout }) => {
               <NavLink to={dashboardPath} className={linkClassPanel} onClick={closeNav}>
                 Дашборд
               </NavLink>
+              {user?.role === 'admin' && (
+                <>
+                  <p className="header__panel-section-label" id="header-panel-admin-section">
+                    Администрирование
+                  </p>
+                  <div
+                    className="header__panel-subnav"
+                    role="group"
+                    aria-labelledby="header-panel-admin-section"
+                  >
+                    {ADMIN_APP_NAV_WITHOUT_DASHBOARD.map(({ to, label, end }) => (
+                      <NavLink
+                        key={to}
+                        to={to}
+                        end={!!end}
+                        className={linkClassPanel}
+                        onClick={closeNav}
+                      >
+                        {label}
+                      </NavLink>
+                    ))}
+                  </div>
+                </>
+              )}
               {(user?.role === 'student' || user?.role === 'teacher') && (
                 <>
                   <NavLink to="/notifications" className={linkClassPanel} onClick={closeNav}>

@@ -34,18 +34,18 @@ export const getDaysUntilDeadline = (deadline) => {
 };
 
 export const assignmentFilters = [
-  { key: 'all', label: 'Все задания', icon: '📚' },
-  { key: 'not_submitted', label: 'Не сданы', icon: '⏳' },
-  { key: 'submitted', label: 'На проверке', icon: '📋' },
-  { key: 'graded', label: 'Оцененные', icon: '✅' },
-  { key: 'returned', label: 'Возвращенные', icon: '↩️' },
-  { key: 'urgent', label: 'Срочные', icon: '🔥' }
+  { key: 'all', label: 'Все задания', icon: '' },
+  { key: 'not_submitted', label: 'Не сданы', icon: '' },
+  { key: 'submitted', label: 'На проверке', icon: '' },
+  { key: 'graded', label: 'Оцененные', icon: '' },
+  { key: 'returned', label: 'Возвращенные', icon: '' },
+  { key: 'urgent', label: 'Срочные', icon: '' },
 ];
 
 export const teacherAssignmentFilters = [
-  { key: 'all', label: 'Все задания', icon: '📚' },
-  { key: 'active', label: 'Активные', icon: '🟢' },
-  { key: 'inactive', label: 'Неактивные', icon: '🔴' },
-  { key: 'with_submissions', label: 'С работами', icon: '📋' },
-  { key: 'without_submissions', label: 'Без работ', icon: '⏳' }
+  { key: 'all', label: 'Все задания', icon: '' },
+  { key: 'active', label: 'Активные', icon: '' },
+  { key: 'inactive', label: 'Неактивные', icon: '' },
+  { key: 'with_submissions', label: 'С работами', icon: '' },
+  { key: 'without_submissions', label: 'Без работ', icon: '' },
 ];

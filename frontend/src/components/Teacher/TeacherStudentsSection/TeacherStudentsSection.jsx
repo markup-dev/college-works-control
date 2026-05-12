@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import Button from '../../UI/Button/Button';
+import EmptyState from '../../UI/EmptyState/EmptyState';
+import Modal from '../../UI/Modal/Modal';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import { formatDate } from '../../../utils';
-import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 const BROADCAST_DEFAULT_TEXT =
   'Здравствуйте! Напоминаю о заданиях, которые еще ожидают сдачи. Пожалуйста, проверьте сроки и отправьте работы на проверку. Если нужна помощь — напишите мне в этом чате.';
@@ -147,8 +147,6 @@ const TeacherStudentsSection = () => {
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [broadcastBody, setBroadcastBody] = useState(BROADCAST_DEFAULT_TEXT);
   const [broadcastSending, setBroadcastSending] = useState(false);
-
-  useBodyScrollLock(broadcastOpen);
 
   const loadGroups = useCallback(async () => {
     setLoading(true);
@@ -429,6 +427,34 @@ const TeacherStudentsSection = () => {
     resetGroupFilters();
   };
 
+  const studentsFiltersResetDisabled = useMemo(() => {
+    if (view === 'student') {
+      return (
+        subjectFilter === 'all' &&
+        statusFilter === 'all' &&
+        periodDays === '0' &&
+        debtOnly === true
+      );
+    }
+    if (view === 'group') {
+      return (
+        !search.trim() &&
+        subjectFilter === 'all' &&
+        assignmentFilter === 'all' &&
+        debtOnly === true
+      );
+    }
+    return true;
+  }, [
+    view,
+    search,
+    subjectFilter,
+    assignmentFilter,
+    statusFilter,
+    periodDays,
+    debtOnly,
+  ]);
+
   return (
     <div className="teacher-students-section">
       <div className="section-header teacher-students-section__header">
@@ -473,17 +499,8 @@ const TeacherStudentsSection = () => {
                 searchInputType="search"
                 searchBoxClassName="search-box teacher-dashboard-filter-search"
                 onReset={resetCurrentFilters}
+                resetDisabled={studentsFiltersResetDisabled}
                 popoverAriaLabel="Фильтры группы"
-                renderReset={({ closeAndReset }) => (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="teacher-dashboard-filter-reset-btn"
-                    onClick={closeAndReset}
-                  >
-                    Сбросить фильтры
-                  </Button>
-                )}
               >
                 <div className="filter-popover__field">
                   <label className="filter-popover__label" htmlFor="teacher-groups-subject-filter">
@@ -491,7 +508,7 @@ const TeacherStudentsSection = () => {
                   </label>
                   <select
                     id="teacher-groups-subject-filter"
-                    className="filter-select subject-filter"
+                    className="filter-select"
                     value={subjectFilter}
                     onChange={(e) => setSubjectFilter(e.target.value)}
                   >
@@ -507,7 +524,7 @@ const TeacherStudentsSection = () => {
                   </label>
                   <select
                     id="teacher-groups-assignment-filter"
-                    className="filter-select assignment-filter"
+                    className="filter-select"
                     value={assignmentFilter}
                     onChange={(e) => setAssignmentFilter(e.target.value)}
                   >
@@ -555,17 +572,8 @@ const TeacherStudentsSection = () => {
                 searchInputType="search"
                 searchBoxClassName="search-box teacher-dashboard-filter-search"
                 onReset={resetCurrentFilters}
+                resetDisabled={studentsFiltersResetDisabled}
                 popoverAriaLabel="Фильтры заданий студента"
-                renderReset={({ closeAndReset }) => (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="teacher-dashboard-filter-reset-btn"
-                    onClick={closeAndReset}
-                  >
-                    Сбросить фильтры
-                  </Button>
-                )}
               >
                 <div className="filter-popover__field">
                   <label className="filter-popover__label" htmlFor="teacher-student-subject-filter">
@@ -573,7 +581,7 @@ const TeacherStudentsSection = () => {
                   </label>
                   <select
                     id="teacher-student-subject-filter"
-                    className="filter-select subject-filter"
+                    className="filter-select"
                     value={subjectFilter}
                     onChange={(e) => setSubjectFilter(e.target.value)}
                   >
@@ -589,7 +597,7 @@ const TeacherStudentsSection = () => {
                   </label>
                   <select
                     id="teacher-student-status-filter"
-                    className="filter-select status-filter"
+                    className="filter-select"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                   >
@@ -604,7 +612,7 @@ const TeacherStudentsSection = () => {
                   </label>
                   <select
                     id="teacher-student-period-filter"
-                    className="filter-select deadline-filter"
+                    className="filter-select"
                     value={periodDays}
                     onChange={(e) => setPeriodDays(e.target.value)}
                   >
@@ -734,9 +742,11 @@ const TeacherStudentsSection = () => {
         <p className="teacher-students-section__muted">Загрузка…</p>
       ) : view === 'groups' ? (
         filteredGroups.length === 0 ? (
-          <div className="empty-state">
-            <p>{groups.length === 0 ? 'Нет закрепленных групп' : 'Группы не найдены'}</p>
-          </div>
+          <EmptyState
+            title={groups.length === 0 ? 'Нет закрепленных групп' : 'Группы не найдены'}
+            asCard={false}
+            className="teacher-students-section__empty"
+          />
         ) : (
           <div className="teacher-students-section__cards">
             {filteredGroups.map((group) => (
@@ -753,9 +763,12 @@ const TeacherStudentsSection = () => {
         )
       ) : view === 'group' ? (
         (groupData?.students || []).length === 0 ? (
-          <div className="empty-state">
-            <p>По выбранным фильтрам студентов не найдено</p>
-          </div>
+          <EmptyState
+            title="Студенты не найдены"
+            message="По выбранным фильтрам студентов не найдено"
+            asCard={false}
+            className="teacher-students-section__empty"
+          />
         ) : (
           <div className="teacher-students-section__students-list">
             {groupData.students.map((student) => (
@@ -810,9 +823,12 @@ const TeacherStudentsSection = () => {
           </div>
         )
       ) : sortedStudentAssignments.length === 0 ? (
-        <div className="empty-state">
-          <p>Нет заданий по выбранным фильтрам</p>
-        </div>
+        <EmptyState
+          title="Нет заданий"
+          message="Нет заданий по выбранным фильтрам"
+          asCard={false}
+          className="teacher-students-section__empty"
+        />
       ) : (
         <div className="teacher-students-section__assignment-list">
           {sortedStudentAssignments.map((row) => (
@@ -862,64 +878,43 @@ const TeacherStudentsSection = () => {
         </div>
       )}
 
-      {broadcastOpen
-        ? createPortal(
-            (
-              <div
-                className="teacher-students-broadcast-overlay"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="teacher-broadcast-title"
-                onClick={() => {
-                  if (!broadcastSending) setBroadcastOpen(false);
-                }}
-              >
-                <div
-                  className="teacher-students-broadcast"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="teacher-students-broadcast__head">
-                    <h2 id="teacher-broadcast-title">Сообщение выбранным студентам</h2>
-                    <button
-                      type="button"
-                      className="teacher-students-broadcast__close"
-                      disabled={broadcastSending}
-                      onClick={() => setBroadcastOpen(false)}
-                      aria-label="Закрыть"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <p className="teacher-students-broadcast__meta">
-                    Получателей в списке: {selectedIds.length} (за один раз — не больше {BROADCAST_MAX_RECIPIENTS}). Каждый
-                    студент увидит текст в «Сообщениях» как обычное входящее.
-                  </p>
-                  <textarea
-                    className="teacher-students-broadcast__textarea"
-                    rows={6}
-                    value={broadcastBody}
-                    onChange={(e) => setBroadcastBody(e.target.value)}
-                    disabled={broadcastSending}
-                  />
-                  <div className="teacher-students-broadcast__actions">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => setBroadcastOpen(false)}
-                      disabled={broadcastSending}
-                    >
-                      Отмена
-                    </Button>
-                    <Button type="button" variant="primary" onClick={sendBroadcast} disabled={broadcastSending}>
-                      {broadcastSending ? 'Отправка…' : 'Отправить'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ),
-            document.body,
-          )
-        : null}
+      <Modal
+        isOpen={broadcastOpen}
+        onClose={() => {
+          if (!broadcastSending) setBroadcastOpen(false);
+        }}
+        title="Сообщение выбранным студентам"
+        size="medium"
+        className="teacher-students-broadcast"
+        contentClassName="teacher-students-broadcast__body"
+        footer={(
+          <div className="teacher-students-broadcast__actions">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setBroadcastOpen(false)}
+              disabled={broadcastSending}
+            >
+              Отмена
+            </Button>
+            <Button type="button" variant="primary" onClick={sendBroadcast} disabled={broadcastSending}>
+              {broadcastSending ? 'Отправка…' : 'Отправить'}
+            </Button>
+          </div>
+        )}
+      >
+        <p className="teacher-students-broadcast__meta">
+          Получателей в списке: {selectedIds.length} (за один раз — не больше {BROADCAST_MAX_RECIPIENTS}). Каждый
+          студент увидит текст в «Сообщениях» как обычное входящее.
+        </p>
+        <textarea
+          className="teacher-students-broadcast__textarea"
+          rows={6}
+          value={broadcastBody}
+          onChange={(e) => setBroadcastBody(e.target.value)}
+          disabled={broadcastSending}
+        />
+      </Modal>
     </div>
   );
 };

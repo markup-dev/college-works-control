@@ -1,0 +1,175 @@
+@import '../../../styles/base/variables';
+
+.admin-edit-user-modal {
+  max-width: 720px;
+
+  &__body {
+    padding: 20px 22px;
+    background: #fcfdff;
+
+    form {
+      display: grid;
+      gap: 14px;
+    }
+  }
+
+  &__error {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+
+    &-icon {
+      width: 24px;
+      height: 24px;
+      background: #fee2e2;
+      color: #b91c1c;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    span:last-child {
+      color: #991b1b;
+      font-size: 0.85rem;
+    }
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem 1.25rem;
+
+    @media (max-width: 560px) {
+      grid-template-columns: 1fr;
+      gap: 0.85rem;
+    }
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+
+    &--full {
+      grid-column: 1 / -1;
+    }
+  }
+
+  &__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+
+    .admin-edit-user-modal__required {
+      color: #ef4444;
+      margin-left: 2px;
+    }
+  }
+
+  &__input,
+  &__select {
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid #d7dfeb;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    color: #1e293b;
+    background: #ffffff;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: #c8d4e5;
+    }
+
+    &:focus {
+      outline: none;
+      border-color: $primary-color;
+      box-shadow: 0 0 0 3px rgba($primary-color, 0.1);
+    }
+
+    &::placeholder {
+      color: #94a3b8;
+    }
+  }
+
+  &__select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.85rem center;
+    background-size: 14px;
+  }
+
+  &__readonly {
+    padding: 0.65rem 0.85rem;
+    background: #f8fafc;
+    border: 1px solid #eef2f8;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    color: #1e293b;
+  }
+
+  &__hint-text {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-top: 0.2rem;
+
+    &--warning {
+      color: #b45309;
+    }
+  }
+
+  &__checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #1e293b;
+
+    input {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: $primary-color;
+    }
+
+    span {
+      cursor: pointer;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    width: 100%;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  @media (max-width: 768px) {
+    .admin-edit-user-modal__body {
+      padding-left: 14px;
+      padding-right: 14px;
+    }
+
+    .admin-edit-user-modal__actions {
+      flex-direction: column-reverse;
+
+      .ui-button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  }
+}

@@ -1,0 +1,56 @@
+.ui-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+
+  &__dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  &__text {
+    min-width: 0;
+  }
+
+  &--default,
+  &--neutral {
+    color: #475569;
+    border-color: #cbd5e1;
+    background: #f8fafc;
+  }
+
+  &--success {
+    color: #047857;
+    border-color: #a7f3d0;
+    background: #ecfdf5;
+  }
+
+  &--warning {
+    color: #b45309;
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  &--danger {
+    color: #b91c1c;
+    border-color: #fecaca;
+    background: #fef2f2;
+  }
+
+  &--info {
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+    background: #eff6ff;
+  }
+}

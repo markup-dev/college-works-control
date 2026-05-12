@@ -55,11 +55,11 @@
 }
 
 .login-form {
-  .form-group {
+  &__group {
     margin-bottom: 24px;
   }
 
-  .form-label {
+  &__label {
     display: block;
     margin-bottom: 8px;
     font-weight: 600;
@@ -67,7 +67,7 @@
     font-size: 14px;
   }
 
-  .form-input {
+  &__input {
     width: 100%;
     padding: 14px 16px;
     border: 2px solid #e1e5e9;
@@ -94,7 +94,7 @@
     }
   }
 
-  .form-select {
+  &__select {
     width: 100%;
     padding: 14px 16px;
     border: 2px solid #e1e5e9;
@@ -218,7 +218,7 @@
   animation: spin 1s linear infinite;
 }
 
-.form-error {
+.login-form__error {
   margin: 16px 0;
   padding: 12px;
   background: #fdf2f2;

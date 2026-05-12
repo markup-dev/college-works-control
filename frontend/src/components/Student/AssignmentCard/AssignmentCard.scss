@@ -105,48 +105,6 @@
   min-width: 120px;
 }
 
-.status-badge {
-  padding: 0.42rem 0.9rem;
-  border-radius: 999px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  white-space: nowrap;
-  justify-content: center;
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
-  
-  &--danger {
-    background: #fee2e2;
-    color: #b91c1c;
-    border: 1px solid #fca5a5;
-  }
-  
-  &--warning {
-    background: #fef3c7;
-    color: #b45309;
-    border: 1px solid #fbbf24;
-  }
-  
-  &--success {
-    background: #dcfce7;
-    color: #15803d;
-    border: 1px solid #86efac;
-  }
-  
-  &--secondary {
-    background: #e2e8f0;
-    color: #334155;
-    border: 1px solid #cbd5e1;
-  }
-}
-
-.status-icon {
-  font-size: 14px;
-}
-
 .urgency-badge {
   padding: 6px 10px;
   border-radius: 8px;
@@ -422,7 +380,7 @@
     display: flex;
     gap: 8px;
     
-    .btn {
+    .ui-button {
       flex: 1;
       justify-content: center;
       text-align: center;
@@ -430,12 +388,12 @@
   }
 }
 
-.assignment-submit-btn--urgent.btn--primary {
+.assignment-submit-btn--urgent.ui-button--primary {
   background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
   box-shadow: 0 2px 4px rgba(249, 115, 22, 0.26);
 }
 
-.assignment-submit-btn--urgent.btn--primary:hover:not(:disabled) {
+.assignment-submit-btn--urgent.ui-button--primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
   box-shadow: 0 8px 20px rgba(234, 88, 12, 0.34);
 }
@@ -460,7 +418,7 @@
     min-width: auto;
   }
   
-  .status-badge {
+  .ui-status-badge {
     min-width: auto;
     flex: 1;
   }
@@ -503,7 +461,7 @@
     min-width: 0;
   }
 
-  .status-badge,
+  .ui-status-badge,
   .retake-badge,
   .urgency-badge {
     width: auto;

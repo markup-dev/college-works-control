@@ -3,61 +3,55 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useAdmin } from '../../../context/AdminContext';
 import api from '../../../services/api';
-import Card from '../../UI/Card/Card';
-import Button from '../../UI/Button/Button';
+import { formatDateTime } from '../../../utils/dateHelpers';
+import EmptyState from '../../UI/EmptyState/EmptyState';
+import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
+import InfoCard from '../../UI/InfoCard/InfoCard';
+import LoadingState from '../../UI/LoadingState/LoadingState';
 import './AdminDashboardHome.scss';
-
-const formatDateTime = (value) => {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 
 const AdminWeekActivityChart = ({ activityWeek }) => {
   if (!activityWeek?.labels?.length) return null;
   const { labels, submissions, messages, logins } = activityWeek;
   const rows = [
     { key: 'logins', label: 'Входы в систему', values: logins || [] },
-    { key: 'sub', label: 'Сдачи работ', values: submissions || [] },
-    { key: 'msg', label: 'Сообщения', values: messages || [] },
+    { key: 'sub', label: 'Сдано работ', values: submissions || [] },
+    { key: 'msg', label: 'Сообщений', values: messages || [] },
   ];
   const max = Math.max(1, ...rows.flatMap((r) => r.values));
 
   return (
     <div className="admin-dashboard-home__chart" aria-label="Активность за неделю">
-      <div className="admin-dashboard-home__chart-axis">
-        {labels.map((lb) => (
-          <span key={lb} className="admin-dashboard-home__chart-day">
-            {lb}
-          </span>
-        ))}
-      </div>
-      {rows.map((row) => (
-        <div key={row.key} className="admin-dashboard-home__chart-row">
-          <span className="admin-dashboard-home__chart-label">{row.label}</span>
-          <div className="admin-dashboard-home__chart-bars">
-            {row.values.map((v, i) => (
-              <div
-                key={`${row.key}-${i}`}
-                className="admin-dashboard-home__chart-bar-wrap"
-                title={`${labels[i]}: ${v}`}
-              >
+      <div className="admin-dashboard-home__chart-bars-container">
+        {rows.map((row) => (
+          <div key={row.key} className="admin-dashboard-home__chart-row">
+            <div className="admin-dashboard-home__chart-row-header">
+              <span className="admin-dashboard-home__chart-row-label">{row.label}</span>
+            </div>
+            <div className="admin-dashboard-home__chart-bars">
+              {row.values.map((v, i) => (
                 <div
-                  className={`admin-dashboard-home__chart-bar admin-dashboard-home__chart-bar--${row.key}`}
-                  style={{ height: `${Math.max(8, (v / max) * 100)}%` }}
-                />
-              </div>
-            ))}
+                  key={`${row.key}-${i}`}
+                  className="admin-dashboard-home__chart-bar-wrap"
+                  title={`${labels[i]}: ${v}`}
+                >
+                  <div
+                    className={`admin-dashboard-home__chart-bar admin-dashboard-home__chart-bar--${row.key}`}
+                    style={{ height: `${Math.max(6, (v / max) * 100)}%` }}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
+        ))}
+        <div className="admin-dashboard-home__chart-axis">
+          {labels.map((lb) => (
+            <span key={lb} className="admin-dashboard-home__chart-day">
+              {lb}
+            </span>
+          ))}
         </div>
-      ))}
+      </div>
     </div>
   );
 };
@@ -105,123 +99,160 @@ const AdminDashboardHome = () => {
       }
     : null;
 
+  const metrics = [
+    {
+      id: 'users',
+      title: 'Пользователей',
+      value: stats?.totalUsers ?? 0,
+      delta: `+${stats?.usersCreatedLast7Days ?? 0} за неделю`,
+      link: '/admin/users',
+      color: 'blue',
+    },
+    {
+      id: 'groups',
+      title: 'Групп',
+      value: stats?.totalGroups ?? 0,
+      hint: `${stats?.groupsActive ?? 0} активных / ${stats?.groupsInactive ?? 0} закрытых`,
+      link: '/admin/groups',
+      color: 'green',
+    },
+    {
+      id: 'assignments',
+      title: 'Активных заданий',
+      value: stats?.assignmentsActive ?? 0,
+      hint: `${stats?.assignmentsOverdue ?? 0} просрочено / ${stats?.assignmentsActiveOnTrack ?? 0} в срок`,
+      link: '/admin/homework',
+      color: 'orange',
+    },
+    {
+      id: 'control',
+      title: 'На контроле',
+      value: stats?.submissionsStaleReview ?? 0,
+      description: 'Работ без проверки более 3 суток',
+      link: '/admin/homework?filter=overdue_checks',
+      color: 'red',
+    },
+  ];
+
+  const quickActions = [
+    { title: 'Создать пользователя', link: '/admin/users', state: { openCreateUser: true }, variant: 'primary' },
+    { title: 'Новая группа', link: '/admin/groups', state: { openCreateGroup: true }, variant: 'secondary' },
+    { title: 'Новый предмет', link: '/admin/subjects', state: { openCreateSubject: true }, variant: 'secondary' },
+    { title: 'Импорт пользователей', link: '/admin/users', state: { openImportUsers: true }, variant: 'secondary' },
+  ];
+
+  const getLogTypeClass = (action) => {
+    if (action.toLowerCase().includes('удал')) return 'log-delete';
+    if (action.toLowerCase().includes('созд')) return 'log-create';
+    if (action.toLowerCase().includes('измен')) return 'log-update';
+    return 'log-default';
+  };
+
   return (
     <div className="admin-dashboard-home">
-      <Card className="admin-dashboard-home__welcome" padding="medium" shadow="small" bordered>
-        <h1 className="admin-dashboard-home__welcome-title">
-          Добро пожаловать{displayName ? `, ${displayName}` : ''}
-        </h1>
-        <p className="admin-dashboard-home__welcome-meta">
-          Последний вход: {formatDateTime(user?.lastLogin)}
-        </p>
-      </Card>
+      <InfoCard className="admin-dashboard-home__welcome">
+        <div className="admin-dashboard-home__welcome-avatar">
+          {displayName?.charAt(0) || 'A'}
+        </div>
+        <div className="admin-dashboard-home__welcome-content">
+          <h1 className="admin-dashboard-home__welcome-title">
+            Добро пожаловать{displayName ? `, ${displayName}` : ''}
+          </h1>
+          <p className="admin-dashboard-home__welcome-meta">
+            Последний вход: {formatDateTime(user?.lastLogin)}
+          </p>
+        </div>
+      </InfoCard>
 
       {statsError && (
-        <div className="admin-dashboard-home__banner admin-dashboard-home__banner--error" role="alert">
-          <span>{statsError}</span>
-          <Button type="button" variant="secondary" onClick={refreshStats} className="admin-dashboard-home__retry">
-            Повторить
-          </Button>
-        </div>
+        <ErrorBanner
+          className="admin-dashboard-home__error"
+          title="Ошибка загрузки статистики"
+          message={statsError}
+          actionLabel="Повторить"
+          onAction={refreshStats}
+        />
       )}
 
       <section className="admin-dashboard-home__widgets" aria-label="Ключевые показатели">
-        {statsLoading && !stats && <p className="admin-dashboard-home__muted">Загрузка метрик…</p>}
-        {stats && (
-          <>
-            <Link className="admin-metric-tile" to="/admin/users">
-              <div className="admin-metric-tile__value">{stats.totalUsers ?? 0}</div>
-              <div className="admin-metric-tile__label">Пользователей</div>
-              <div className="admin-metric-tile__hint">
-                <span className="admin-metric-tile__delta">+{stats.usersCreatedLast7Days ?? 0}</span> за неделю
-              </div>
-            </Link>
-            <Link className="admin-metric-tile" to="/admin/groups">
-              <div className="admin-metric-tile__value">{stats.totalGroups ?? 0}</div>
-              <div className="admin-metric-tile__label">Групп</div>
-              <div className="admin-metric-tile__hint">
-                <span className="admin-metric-tile__pill admin-metric-tile__pill--ok">
-                  активн.: {stats.groupsActive ?? 0}
-                </span>
-                <span className="admin-metric-tile__pill admin-metric-tile__pill--muted">
-                  закр.: {stats.groupsInactive ?? 0}
-                </span>
-              </div>
-            </Link>
-            <Link className="admin-metric-tile" to="/admin/homework">
-              <div className="admin-metric-tile__value">{stats.assignmentsActive ?? 0}</div>
-              <div className="admin-metric-tile__label">Активных заданий</div>
-              <div className="admin-metric-tile__hint">
-                <span className="admin-metric-tile__pill admin-metric-tile__pill--warn">
-                  проср.: {stats.assignmentsOverdue ?? 0}
-                </span>
-                <span className="admin-metric-tile__pill admin-metric-tile__pill--ok">
-                  в срок: {stats.assignmentsActiveOnTrack ?? 0}
-                </span>
-              </div>
-            </Link>
-            <Link className="admin-metric-tile" to="/admin/homework?filter=overdue_checks">
-              <div className="admin-metric-tile__value">{stats.submissionsStaleReview ?? 0}</div>
-              <div className="admin-metric-tile__label">На контроле</div>
-              <div className="admin-metric-tile__cta">Работ без проверки более 3 суток</div>
-            </Link>
-          </>
+        {statsLoading && !stats && (
+          <LoadingState message="Загрузка метрик..." className="admin-dashboard-home__state" />
         )}
+        {stats &&
+          metrics.map((metric) => (
+            <Link key={metric.id} className={`admin-metric-tile admin-metric-tile--${metric.color}`} to={metric.link}>
+              <div className="admin-metric-tile__content">
+                <div className="admin-metric-tile__value">{metric.value}</div>
+                <div className="admin-metric-tile__label">{metric.title}</div>
+                {metric.delta && <div className="admin-metric-tile__delta">{metric.delta}</div>}
+                {metric.hint && <div className="admin-metric-tile__hint">{metric.hint}</div>}
+                {metric.description && <div className="admin-metric-tile__description">{metric.description}</div>}
+              </div>
+            </Link>
+          ))}
       </section>
 
       <section className="admin-dashboard-home__quick" aria-label="Быстрые действия">
         <h2 className="admin-dashboard-home__section-title">Быстрые действия</h2>
         <div className="admin-dashboard-home__quick-grid">
-          <Link className="admin-dashboard-home__quick-link" to="/admin/users" state={{ openCreateUser: true }}>
-            Создать пользователя
-          </Link>
-          <Link className="admin-dashboard-home__quick-link" to="/admin/groups" state={{ openCreateGroup: true }}>
-            Новая группа
-          </Link>
-          <Link className="admin-dashboard-home__quick-link" to="/admin/subjects" state={{ openCreateSubject: true }}>
-            Новый предмет
-          </Link>
-          <Link className="admin-dashboard-home__quick-link" to="/admin/users" state={{ openImportUsers: true }}>
-            Импорт пользователей
-          </Link>
+          {quickActions.map((action) => (
+            <Link 
+              key={action.title} 
+              className={`admin-dashboard-home__quick-link admin-dashboard-home__quick-link--${action.variant}`} 
+              to={action.link} 
+              state={action.state}
+            >
+              {action.title}
+            </Link>
+          ))}
         </div>
       </section>
 
-      <Card className="admin-dashboard-home__panel" padding="medium" shadow="small" bordered>
+      <InfoCard className="admin-dashboard-home__panel">
         <h2 className="admin-dashboard-home__section-title">Активность за неделю</h2>
         {activityWeek ? (
           <AdminWeekActivityChart activityWeek={activityWeek} />
         ) : (
-          <p className="admin-dashboard-home__muted">Нет данных для графика</p>
+          <EmptyState
+            asCard={false}
+            title="Нет данных для графика"
+            message="Активность появится после входов, сообщений или сдачи работ."
+            className="admin-dashboard-home__state"
+          />
         )}
-      </Card>
+      </InfoCard>
 
-      <Card className="admin-dashboard-home__panel" padding="medium" shadow="small" bordered>
+      <InfoCard className="admin-dashboard-home__panel">
         <div className="admin-dashboard-home__panel-head">
           <h2 className="admin-dashboard-home__section-title">Последние события</h2>
           <Link to="/admin/logs" className="admin-dashboard-home__link-all">
             Все события
           </Link>
         </div>
-        {logsLoading && <p className="admin-dashboard-home__muted">Загрузка…</p>}
+        {logsLoading && <LoadingState message="Загрузка событий..." className="admin-dashboard-home__state" />}
         {!logsLoading && logs.length === 0 && (
-          <p className="admin-dashboard-home__muted">Записей пока нет</p>
+          <EmptyState
+            asCard={false}
+            title="Записей пока нет"
+            message="Новые системные события появятся здесь после действий пользователей."
+            className="admin-dashboard-home__state"
+          />
         )}
         <ul className="admin-dashboard-home__feed">
           {logs.map((item) => (
-            <li key={item.id} className="admin-dashboard-home__feed-item">
-              <div className="admin-dashboard-home__feed-action">{item.action}</div>
-              <div className="admin-dashboard-home__feed-meta">
-                <span>{item.user}</span>
-                <span>{formatDateTime(item.timestamp)}</span>
+            <li key={item.id} className={`admin-dashboard-home__feed-item ${getLogTypeClass(item.action)}`}>
+              <div className="admin-dashboard-home__feed-content">
+                <div className="admin-dashboard-home__feed-action">{item.action}</div>
+                <div className="admin-dashboard-home__feed-meta">
+                  <span className="admin-dashboard-home__feed-user">{item.user}</span>
+                  <span className="admin-dashboard-home__feed-time">{formatDateTime(item.timestamp)}</span>
+                </div>
+                {item.details && <div className="admin-dashboard-home__feed-details">{item.details}</div>}
               </div>
-              {item.details && (
-                <div className="admin-dashboard-home__feed-details">{item.details}</div>
-              )}
             </li>
           ))}
         </ul>
-      </Card>
+      </InfoCard>
     </div>
   );
 };

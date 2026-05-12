@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
+import Modal from '../../UI/Modal/Modal';
 import { useNotification } from '../../../context/NotificationContext';
 import { DEFAULT_ALLOWED_FORMATS, normalizeAllowedFormats } from '../../../utils';
 import { resolveAssignmentSubjectId, resolveAssignmentSubjectName } from '../../../utils/filterHelpers';
-import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './AssignmentModal.scss';
 
 const MAX_MATERIAL_FILES = 10;
@@ -227,8 +226,6 @@ const AssignmentModal = ({
     const hasAllFormats = DEFAULT_ALLOWED_FORMATS.every((format) => selectedFormats.includes(format));
     setAcceptAllFormats(hasAllFormats);
   }, [formData.allowedFormats]);
-
-  useBodyScrollLock(isOpen);
 
   if (!isOpen) return null;
 
@@ -478,32 +475,63 @@ const AssignmentModal = ({
     }));
   };
 
-  return createPortal(
-    (
-      <div className="modal-overlay teacher-assignment-modal" onClick={onClose}>
-        <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-header__titles">
-            <h3>
-              {isBankTemplateEdit
-                ? 'Заготовка в банке заданий'
-                : isEdit
-                  ? 'Редактирование задания'
-                  : 'Создание нового задания'}
-            </h3>
-            <p className="modal-header__subtitle">
-              {isBankTemplateEdit
-                ? 'Изменения сохраняются только для банка и не затрагивают уже выданные задания.'
-                : isEdit
-                  ? 'Обновите параметры, материалы и критерии оценки'
-                  : 'Заполните основные поля и настройте формат сдачи'}
-            </p>
-          </div>
-          <button type="button" className="modal-close" onClick={onClose}>×</button>
+  const modalTitle = isBankTemplateEdit
+    ? 'Заготовка в банке заданий'
+    : isEdit
+      ? 'Редактирование задания'
+      : 'Создание нового задания';
+  const modalSubtitle = isBankTemplateEdit
+    ? 'Изменения сохраняются только для банка и не затрагивают уже выданные задания.'
+    : isEdit
+      ? 'Обновите параметры, материалы и критерии оценки'
+      : 'Заполните основные поля и настройте формат сдачи';
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={modalTitle}
+      subtitle={modalSubtitle}
+      size="large"
+      className="teacher-assignment-modal"
+      contentClassName="teacher-assignment-modal__body"
+      footer={(
+        <div className="teacher-assignment-modal__actions">
+          {isEdit && typeof onBack === 'function' && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={() => onBack(formData)}
+            >
+              <span className="back-btn-label">
+                <span className="back-btn-arrow" aria-hidden="true">←</span>
+                Назад
+              </span>
+            </Button>
+          )}
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
+            Отмена
+          </Button>
+          <Button
+            type="submit"
+            form="teacher-assignment-form"
+            variant="primary"
+            loading={isSubmitting}
+            disabled={isSubmitting || hasNoAssignableGroups || hasNoAssignableSubjects}
+          >
+            {isSubmitting
+              ? (isBankTemplateEdit || isEdit ? 'Сохранение…' : 'Создание…')
+              : (isBankTemplateEdit
+                  ? 'Сохранить заготовку'
+                  : isEdit
+                    ? 'Сохранить изменения'
+                    : 'Создать задание')}
+          </Button>
         </div>
-        
-        <form onSubmit={handleSubmit} aria-busy={isSubmitting}>
-          <div className="modal-body">
+      )}
+    >
+        <form id="teacher-assignment-form" onSubmit={handleSubmit} aria-busy={isSubmitting}>
             <div className="assignment-quick-stats">
               <span className="assignment-quick-stats__item">
                 Критериев: <strong>{criteriaCount}</strong>
@@ -542,7 +570,7 @@ const AssignmentModal = ({
                       value={formData.title}
                       onChange={(e) => handleInputChange('title', e.target.value)}
                       placeholder="Введите название задания..."
-                      className="form-input"
+                      className="teacher-assignment-modal__input"
                       required
                     />
                   </FormGroup>
@@ -559,7 +587,7 @@ const AssignmentModal = ({
                           subject: selectedSubject?.name || '',
                         }));
                       }}
-                      className="form-select"
+                      className="teacher-assignment-modal__select"
                       required
                     >
                       <option value="">Выберите предмет</option>
@@ -612,7 +640,7 @@ const AssignmentModal = ({
                     ) : (
                       <div className="group-checkbox-empty">Нет назначенных групп</div>
                     )}
-                    <small className="form-hint">Откройте список и отметьте нужные группы.</small>
+                    <small className="teacher-assignment-modal__hint">Откройте список и отметьте нужные группы.</small>
                   </FormGroup>
                   
                   <FormGroup label="Срок сдачи:" required>
@@ -620,7 +648,7 @@ const AssignmentModal = ({
                       type="date"
                       value={formData.deadline}
                       onChange={(e) => handleInputChange('deadline', e.target.value)}
-                      className="form-input"
+                      className="teacher-assignment-modal__input"
                       required
                       min={new Date().toISOString().split('T')[0]}
                     />
@@ -636,7 +664,7 @@ const AssignmentModal = ({
                     value={formData.description}
                     onChange={(e) => handleInputChange('description', e.target.value)}
                     placeholder="Опишите задание, требования, ожидаемый результат..."
-                    className="form-textarea"
+                    className="teacher-assignment-modal__textarea"
                     rows="4"
                     required
                   />
@@ -719,7 +747,7 @@ const AssignmentModal = ({
                     <select
                       value={formData.submissionType}
                       onChange={(e) => handleInputChange('submissionType', e.target.value)}
-                      className="form-select"
+                      className="teacher-assignment-modal__select"
                     >
                       <option value="file">Файл</option>
                       <option value="demo">Демонстрация</option>
@@ -800,50 +828,13 @@ const AssignmentModal = ({
                 </div>
               </div>
             </div>
-          </div>
-          
-          <div className="modal-actions">
-            {isEdit && typeof onBack === 'function' && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isSubmitting}
-                onClick={() => onBack(formData)}
-              >
-                <span className="back-btn-label">
-                  <span className="back-btn-arrow" aria-hidden="true">←</span>
-                  Назад
-                </span>
-              </Button>
-            )}
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
-              Отмена
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              loading={isSubmitting}
-              disabled={isSubmitting || hasNoAssignableGroups || hasNoAssignableSubjects}
-            >
-              {isSubmitting
-                ? (isBankTemplateEdit || isEdit ? 'Сохранение…' : 'Создание…')
-                : (isBankTemplateEdit
-                    ? 'Сохранить заготовку'
-                    : isEdit
-                      ? 'Сохранить изменения'
-                      : 'Создать задание')}
-            </Button>
-          </div>
         </form>
-      </div>
-    </div>
-    ),
-    document.body,
+    </Modal>
   );
 };
 
 const FormGroup = ({ label, children, required = false }) => (
-  <div className="form-group">
+  <div className="teacher-assignment-modal__field">
     <label>
       {label}
       {required && <span className="required">*</span>}

@@ -7,8 +7,9 @@ import {
   formatRuPhoneDisplay,
   isPhoneCompleteOrEmpty,
 } from '../../../utils/ruPhoneMask';
-import Modal from '../../UI/Modal/Modal';
 import Button from '../../UI/Button/Button';
+import Modal from '../../UI/Modal/Modal';
+import ModalSection from '../../UI/Modal/ModalSection';
 import './AdminCreateUserModal.scss';
 
 const ROLE_OPTIONS = [
@@ -27,17 +28,6 @@ const emptyForm = () => ({
   groupId: '',
   sendCredentials: true,
 });
-
-const Label = ({ htmlFor, required, children }) => (
-  <label className="admin-create-user__label" htmlFor={htmlFor}>
-    {children}
-    {required ? (
-      <span className="admin-create-user__required" aria-hidden="true">
-        *
-      </span>
-    ) : null}
-  </label>
-);
 
 const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
   const [form, setForm] = useState(emptyForm);
@@ -138,155 +128,187 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Новый пользователь" size="large">
-      <form className="admin-create-user" onSubmit={handleSubmit} noValidate>
-        {errorMessage && (
-          <p className="admin-create-user__error" role="alert">
-            {errorMessage}
-          </p>
-        )}
-
-        <div className="admin-create-user__grid">
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-create-last-name" required>
-              Фамилия
-            </Label>
-            <input
-              id="admin-create-last-name"
-              className="admin-create-user__input"
-              value={form.lastName}
-              onChange={(e) => setField('lastName', e.target.value)}
-              autoComplete="family-name"
-              aria-required
-              required
-            />
-          </div>
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-create-first-name" required>
-              Имя
-            </Label>
-            <input
-              id="admin-create-first-name"
-              className="admin-create-user__input"
-              value={form.firstName}
-              onChange={(e) => setField('firstName', e.target.value)}
-              autoComplete="given-name"
-              aria-required
-              required
-            />
-          </div>
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-create-middle-name">Отчество</Label>
-            <input
-              id="admin-create-middle-name"
-              className="admin-create-user__input"
-              value={form.middleName}
-              onChange={(e) => setField('middleName', e.target.value)}
-              autoComplete="additional-name"
-            />
-          </div>
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-create-email" required>
-              Email
-            </Label>
-            <input
-              id="admin-create-email"
-              type="email"
-              className="admin-create-user__input"
-              value={form.email}
-              onChange={(e) => setField('email', e.target.value)}
-              autoComplete="email"
-              aria-required
-              required
-            />
-          </div>
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-create-phone">Телефон</Label>
-            <input
-              id="admin-create-phone"
-              type="tel"
-              inputMode="tel"
-              className="admin-create-user__input"
-              value={form.phone}
-              onChange={handlePhoneChange}
-              onBlur={handlePhoneBlur}
-              placeholder="8 (___) ___-__-__ или +7 (___) ___-__-__"
-              autoComplete="tel"
-            />
-          </div>
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-create-role" required>
-              Роль
-            </Label>
-            <select
-              id="admin-create-role"
-              className="admin-create-user__select"
-              value={form.role}
-              onChange={(e) => {
-                const role = e.target.value;
-                setForm((prev) => ({
-                  ...prev,
-                  role,
-                  groupId: role === 'student' ? prev.groupId : '',
-                }));
-              }}
-              aria-required
-            >
-              {ROLE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {groupRequired && (
-            <div className="admin-create-user__field">
-              <Label htmlFor="admin-create-group" required>
-                Группа
-              </Label>
-              <select
-                id="admin-create-group"
-                className="admin-create-user__select"
-                value={form.groupId}
-                onChange={(e) => setField('groupId', e.target.value)}
-                aria-required
-                required
-              >
-                <option value="">Выберите группу</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={String(g.id)}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        <label className="admin-create-user__checkbox-row">
-          <input
-            type="checkbox"
-            checked={form.sendCredentials}
-            onChange={(e) => setField('sendCredentials', e.target.checked)}
-          />
-          <span>Отправить логин и пароль на email</span>
-        </label>
-
-        <p className="admin-create-user__hint">
-          Логин формируется автоматически из имени и фамилии. Пароль будет сгенерирован; пользователю может
-          потребоваться смена пароля при первом входе.
-        </p>
-
-        <div className="admin-create-user__actions">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Новый пользователь"
+      subtitle="Заполните информацию о пользователе"
+      size="large"
+      className="admin-create-user-modal"
+      contentClassName="admin-create-user-modal__body"
+      footer={(
+        <div className="admin-create-user-modal__actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
             Отмена
           </Button>
-          <Button type="submit" variant="primary" loading={submitting} disabled={!canSubmit || submitting}>
+          <Button
+            type="submit"
+            form="admin-create-user-form"
+            variant="primary"
+            loading={submitting}
+            disabled={!canSubmit || submitting}
+          >
             Создать
           </Button>
         </div>
-      </form>
+      )}
+    >
+          <form id="admin-create-user-form" onSubmit={handleSubmit} noValidate>
+              {errorMessage && (
+                <div className="admin-create-user-modal__error" role="alert">
+                  <span className="admin-create-user-modal__error-icon">!</span>
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              <ModalSection title="Данные пользователя">
+              <div className="admin-create-user-modal__grid">
+                <div className="admin-create-user-modal__field">
+                  <label className="admin-create-user-modal__label" htmlFor="admin-create-last-name">
+                    Фамилия <span className="admin-create-user-modal__required">*</span>
+                  </label>
+                  <input
+                    id="admin-create-last-name"
+                    type="text"
+                    className="admin-create-user-modal__input"
+                    value={form.lastName}
+                    onChange={(e) => setField('lastName', e.target.value)}
+                    placeholder="Введите фамилию"
+                    required
+                  />
+                </div>
+
+                <div className="admin-create-user-modal__field">
+                  <label className="admin-create-user-modal__label" htmlFor="admin-create-first-name">
+                    Имя <span className="admin-create-user-modal__required">*</span>
+                  </label>
+                  <input
+                    id="admin-create-first-name"
+                    type="text"
+                    className="admin-create-user-modal__input"
+                    value={form.firstName}
+                    onChange={(e) => setField('firstName', e.target.value)}
+                    placeholder="Введите имя"
+                    required
+                  />
+                </div>
+
+                <div className="admin-create-user-modal__field">
+                  <label className="admin-create-user-modal__label" htmlFor="admin-create-middle-name">
+                    Отчество
+                  </label>
+                  <input
+                    id="admin-create-middle-name"
+                    type="text"
+                    className="admin-create-user-modal__input"
+                    value={form.middleName}
+                    onChange={(e) => setField('middleName', e.target.value)}
+                    placeholder="Введите отчество"
+                  />
+                </div>
+
+                <div className="admin-create-user-modal__field">
+                  <label className="admin-create-user-modal__label" htmlFor="admin-create-email">
+                    Email <span className="admin-create-user-modal__required">*</span>
+                  </label>
+                  <input
+                    id="admin-create-email"
+                    type="email"
+                    className="admin-create-user-modal__input"
+                    value={form.email}
+                    onChange={(e) => setField('email', e.target.value)}
+                    placeholder="example@mail.ru"
+                    required
+                  />
+                </div>
+
+                <div className="admin-create-user-modal__field">
+                  <label className="admin-create-user-modal__label" htmlFor="admin-create-phone">
+                    Телефон
+                  </label>
+                  <input
+                    id="admin-create-phone"
+                    type="tel"
+                    inputMode="tel"
+                    className="admin-create-user-modal__input"
+                    value={form.phone}
+                    onChange={handlePhoneChange}
+                    onBlur={handlePhoneBlur}
+                    placeholder="+7 (___) ___-__-__"
+                  />
+                </div>
+              </div>
+              </ModalSection>
+
+              <ModalSection title="Параметры доступа" variant="soft">
+              <div className="admin-create-user-modal__grid">
+                <div className="admin-create-user-modal__field">
+                  <label className="admin-create-user-modal__label" htmlFor="admin-create-role">
+                    Роль <span className="admin-create-user-modal__required">*</span>
+                  </label>
+                  <select
+                    id="admin-create-role"
+                    className="admin-create-user-modal__select"
+                    value={form.role}
+                    onChange={(e) => {
+                      const role = e.target.value;
+                      setForm((prev) => ({
+                        ...prev,
+                        role,
+                        groupId: role === 'student' ? prev.groupId : '',
+                      }));
+                    }}
+                    required
+                  >
+                    {ROLE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {groupRequired && (
+                  <div className="admin-create-user-modal__field">
+                    <label className="admin-create-user-modal__label" htmlFor="admin-create-group">
+                      Группа <span className="admin-create-user-modal__required">*</span>
+                    </label>
+                    <select
+                      id="admin-create-group"
+                      className="admin-create-user-modal__select"
+                      value={form.groupId}
+                      onChange={(e) => setField('groupId', e.target.value)}
+                      required
+                    >
+                      <option value="">Выберите группу</option>
+                      {groups.map((g) => (
+                        <option key={g.id} value={String(g.id)}>
+                          {g.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <label className="admin-create-user-modal__checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.sendCredentials}
+                  onChange={(e) => setField('sendCredentials', e.target.checked)}
+                />
+                <span>Отправить логин и пароль на email</span>
+              </label>
+
+              <div className="admin-create-user-modal__hint">
+                <p>Логин формируется автоматически из имени и фамилии.</p>
+                <p>Пароль будет сгенерирован; пользователю может потребоваться смена пароля при первом входе.</p>
+              </div>
+              </ModalSection>
+          </form>
     </Modal>
   );
 };

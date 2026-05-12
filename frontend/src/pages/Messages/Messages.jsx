@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { formatDateTimeCompact } from '../../utils/dateHelpers';
 import checkReadIcon from '../../assets/messages/check-read.svg';
 import checkSentIcon from '../../assets/messages/check-sent.svg';
 import sendArrowIcon from '../../assets/messages/send-arrow.svg';
@@ -875,12 +876,7 @@ const Messages = () => {
                       const prev = idx > 0 ? messages[idx - 1] : null;
                       const sameSenderAsPrev =
                         !own && prev && prev.senderId === m.senderId;
-                      const timeStr = new Date(m.createdAt).toLocaleString('ru-RU', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      });
+                      const timeStr = formatDateTimeCompact(m.createdAt);
 
                       const bubbleBlock = (
                         <>

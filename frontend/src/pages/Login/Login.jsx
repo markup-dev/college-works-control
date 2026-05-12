@@ -143,13 +143,13 @@ const Login = () => {
            </div>
 
           <form className='login-form' onSubmit={handleLogin} noValidate>
-            <div className='form-group'>
-              <label htmlFor='role' className='form-label'>
+            <div className='login-form__group'>
+              <label htmlFor='role' className='login-form__label'>
                 Роль в системе:
               </label>
               <select
                 id='role'
-                className={`form-select ${errors.role ? 'error' : ''}`}
+                className={`login-form__select ${errors.role ? 'error' : ''}`}
                 value={formData.role}
                 onChange={(e) => handleInputChange('role', e.target.value)}
                 disabled={isLoading}
@@ -163,14 +163,14 @@ const Login = () => {
               )}
             </div>
 
-            <div className='form-group'>
-              <label htmlFor='login' className='form-label'>
+            <div className='login-form__group'>
+              <label htmlFor='login' className='login-form__label'>
                 Логин:
               </label>
               <input
                 id='login'
                 type='text'
-                className={`form-input ${errors.login ? 'error' : ''}`}
+                className={`login-form__input ${errors.login ? 'error' : ''}`}
                 value={formData.login}
                 onChange={(e) => handleInputChange('login', e.target.value)}
                 placeholder='Введите ваш логин'
@@ -181,14 +181,14 @@ const Login = () => {
               )}
             </div>
 
-            <div className='form-group'>
-              <label htmlFor='password' className='form-label'>
+            <div className='login-form__group'>
+              <label htmlFor='password' className='login-form__label'>
                 Пароль:
               </label>
               <input
                 id='password'
                 type='password'
-                className={`form-input ${errors.password ? 'error' : ''}`}
+                className={`login-form__input ${errors.password ? 'error' : ''}`}
                 value={formData.password}
                 onChange={(e) => handleInputChange('password', e.target.value)}
                 placeholder='Введите ваш пароль'
@@ -200,7 +200,7 @@ const Login = () => {
             </div>
 
             {(errors.submit || authError) && (
-              <div className='form-error'>
+              <div className='login-form__error'>
                 <span className='login-error-message'>{errors.submit || authError}</span>
               </div>
             )}

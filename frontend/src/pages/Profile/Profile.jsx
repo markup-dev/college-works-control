@@ -4,7 +4,7 @@ import Card from '../../components/UI/Card/Card';
 import Button from '../../components/UI/Button/Button';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
-import { DEFAULT_GRADE_SCALE, getGradeLabelForScore, normalizeGradeScale } from '../../utils';
+import { DEFAULT_GRADE_SCALE, formatDateLong, getGradeLabelForScore, normalizeGradeScale } from '../../utils';
 import './Profile.scss';
 
 const roleConfig = {
@@ -291,27 +291,12 @@ const Profile = () => {
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) {
-      return '—';
-    }
-    try {
-      return new Date(dateString).toLocaleDateString('ru-RU', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric'
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
   const initials = useMemo(() => {
     const fullName = [profileData.lastName, profileData.firstName]
       .filter(Boolean)
       .join(' ');
     if (!fullName) {
-      return '👤';
+      return '?';
     }
     return fullName
       .split(' ')
@@ -344,7 +329,7 @@ const Profile = () => {
               </p>
               <div className="profile-hero__meta">
                 <span>Логин: {profileData.login}</span>
-                <span>На портале с {formatDate(user.registrationDate || user.createdAt)}</span>
+                <span>На портале с {formatDateLong(user.registrationDate || user.createdAt)}</span>
               </div>
             </div>
           </div>

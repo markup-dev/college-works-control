@@ -4,7 +4,10 @@ import DashboardHeader from '../../components/Student/DashboardHeader/DashboardH
 import AssignmentCard from '../../components/Student/AssignmentCard/AssignmentCard';
 import SubmissionModal from '../../components/Student/SubmissionModal/SubmissionModal';
 import ResultsModal from '../../components/Student/ResultsModal/ResultsModal';
-import Card from '../../components/UI/Card/Card';
+import PageShell from '../../components/UI/PageShell/PageShell';
+import LoadingState from '../../components/UI/LoadingState/LoadingState';
+import EmptyState from '../../components/UI/EmptyState/EmptyState';
+import ErrorBanner from '../../components/UI/ErrorBanner/ErrorBanner';
 import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsModal/AssignmentDetailsModal';
 import Pagination from '../../components/UI/Pagination/Pagination';
 import { useAuth } from '../../context/AuthContext';
@@ -240,6 +243,15 @@ const StudentDashboard = () => {
     setTeacherFilter('all');
     setPage(1);
   }, []);
+
+  const filtersResetDisabled = useMemo(
+    () =>
+      !searchTerm.trim() &&
+      activeFilter === 'all' &&
+      subjectFilter === 'all' &&
+      teacherFilter === 'all',
+    [searchTerm, activeFilter, subjectFilter, teacherFilter]
+  );
 
   const loadAttentionAssignments = useCallback(async () => {
     if (!user) {
@@ -508,56 +520,55 @@ const StudentDashboard = () => {
 
   if (error) {
     return (
-      <div className="error-state">
-        <div className="error-icon">⚠️</div>
-        <h3>Ошибка загрузки</h3>
-        <p>{error}</p>
-        <button onClick={loadStudentAssignments}>Повторить попытку</button>
-      </div>
+      <ErrorBanner
+        title="Ошибка загрузки"
+        message={error}
+        actionLabel="Повторить попытку"
+        onAction={loadStudentAssignments}
+      />
     );
   }
 
   return (
     <div className="student-dashboard app-page">
-      <main className="dashboard-main">
-        <div className="dashboard-container">
-          <DashboardHeader
-            searchTerm={searchTerm}
-            onSearchChange={handleSearchChange}
-            activeFilter={activeFilter}
-            filters={assignmentFilters}
-            filterCounts={filterCounts}
-            overdueCount={dashboardStats.overdue}
-            onFilterChange={handleFilterChange}
-            subjectFilter={subjectFilter}
-            onSubjectFilterChange={handleSubjectFilterChange}
-            availableSubjects={availableSubjects}
-            teacherFilter={teacherFilter}
-            onTeacherFilterChange={handleTeacherFilterChange}
-            availableTeachers={availableTeachers}
-            onResetFilters={handleResetFilters}
-            attentionAssignments={attentionAssignments}
-            onOpenAttentionAssignment={handleViewDetails}
-          />
+      <PageShell contentClassName="student-dashboard__content">
+        <DashboardHeader
+          searchTerm={searchTerm}
+          onSearchChange={handleSearchChange}
+          activeFilter={activeFilter}
+          filters={assignmentFilters}
+          filterCounts={filterCounts}
+          overdueCount={dashboardStats.overdue}
+          onFilterChange={handleFilterChange}
+          subjectFilter={subjectFilter}
+          onSubjectFilterChange={handleSubjectFilterChange}
+          availableSubjects={availableSubjects}
+          teacherFilter={teacherFilter}
+          onTeacherFilterChange={handleTeacherFilterChange}
+          availableTeachers={availableTeachers}
+          onResetFilters={handleResetFilters}
+          filtersResetDisabled={filtersResetDisabled}
+          attentionAssignments={attentionAssignments}
+          onOpenAttentionAssignment={handleViewDetails}
+        />
 
-          <DashboardContent
-            isLoading={loading}
-            assignments={filteredAssignments}
-            onSubmitWork={handleSubmitWork}
-            onViewResults={handleViewResults}
-            onResubmit={handleSubmitWork}
-            onViewDetails={handleViewDetails}
-          />
-          <Pagination
-            currentPage={assignmentsMeta.currentPage}
-            lastPage={assignmentsMeta.lastPage}
-            total={assignmentsMeta.total}
-            fallbackCount={assignments.length}
-            onPrev={() => setPage((prev) => Math.max(1, prev - 1))}
-            onNext={() => setPage((prev) => prev + 1)}
-          />
-        </div>
-      </main>
+        <DashboardContent
+          isLoading={loading}
+          assignments={filteredAssignments}
+          onSubmitWork={handleSubmitWork}
+          onViewResults={handleViewResults}
+          onResubmit={handleSubmitWork}
+          onViewDetails={handleViewDetails}
+        />
+        <Pagination
+          currentPage={assignmentsMeta.currentPage}
+          lastPage={assignmentsMeta.lastPage}
+          total={assignmentsMeta.total}
+          fallbackCount={assignments.length}
+          onPrev={() => setPage((prev) => Math.max(1, prev - 1))}
+          onNext={() => setPage((prev) => prev + 1)}
+        />
+      </PageShell>
 
       <SubmissionModal
         assignment={selectedAssignment}
@@ -594,13 +605,6 @@ const StudentDashboard = () => {
   );
 };
 
-const LoadingState = React.memo(() => (
-  <div className="loading-state">
-    <div className="spinner"></div>
-    <p>Загрузка...</p>
-  </div>
-));
-
 const DashboardContent = React.memo(({ 
   isLoading, 
   assignments = [],
@@ -610,23 +614,15 @@ const DashboardContent = React.memo(({
   onViewDetails
 }) => {
   if (isLoading) {
-    return (
-      <div className="loading-state">
-        <div className="spinner"></div>
-        <p>Загрузка заданий...</p>
-      </div>
-    );
+    return <LoadingState message="Загрузка заданий..." />;
   }
 
   if (!assignments || assignments.length === 0) {
     return (
-      <Card className="empty-state">
-        <div className="empty-content">
-          <div className="empty-icon">📚</div>
-          <h3>Задания не найдены</h3>
-          <p>Попробуйте изменить параметры поиска или фильтрации</p>
-        </div>
-      </Card>
+      <EmptyState
+        title="Задания не найдены"
+        message="Попробуйте изменить параметры поиска или фильтрации"
+      />
     );
   }
 

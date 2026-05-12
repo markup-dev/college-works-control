@@ -7,9 +7,13 @@ const Modal = ({
   isOpen, 
   onClose, 
   title, 
+  subtitle = '',
   children, 
+  footer = null,
   size = 'medium',
-  className = '' 
+  className = '',
+  contentClassName = '',
+  footerClassName = '',
 }) => {
   useBodyScrollLock(isOpen);
 
@@ -23,14 +27,22 @@ const Modal = ({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="modal__header">
-            <h2 className="modal__title">{title}</h2>
+            <div className="modal__heading">
+              <h2 className="modal__title">{title}</h2>
+              {subtitle ? <p className="modal__subtitle">{subtitle}</p> : null}
+            </div>
             <button type="button" className="modal__close" onClick={onClose}>
               ×
             </button>
           </div>
-          <div className="modal__content">
+          <div className={`modal__content ${contentClassName}`.trim()}>
             {children}
           </div>
+          {footer ? (
+            <div className={`modal__footer ${footerClassName}`.trim()}>
+              {footer}
+            </div>
+          ) : null}
         </div>
       </div>
     ),

@@ -3,13 +3,19 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { formatDateLong } from '../../../utils/dateHelpers';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
-import Card from '../../UI/Card/Card';
-import Modal from '../../UI/Modal/Modal';
+import EmptyState from '../../UI/EmptyState/EmptyState';
+import EntityCard from '../../UI/EntityCard/EntityCard';
+import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
+import LoadingState from '../../UI/LoadingState/LoadingState';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
+import Modal from '../../UI/Modal/Modal';
+import ModalSection from '../../UI/Modal/ModalSection';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
+import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import './AdminGroupManagement.scss';
 
 const PER_PAGE = 18;
@@ -19,13 +25,6 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'active', label: 'Активна' },
   { value: 'inactive', label: 'Закрыта' },
 ];
-
-const formatIsoDate = (value) => {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-};
 
 const initialsIO = (firstName, middleName) => {
   const a = firstName?.trim()?.[0];
@@ -51,7 +50,6 @@ const AdminGroupManagement = () => {
   const [status, setStatus] = useState('');
   const [specialty, setSpecialty] = useState('');
   const [page, setPage] = useState(1);
-  const [openMenuId, setOpenMenuId] = useState(null);
 
   const [groups, setGroups] = useState([]);
   const [meta, setMeta] = useState({ currentPage: 1, lastPage: 1, total: 0 });
@@ -106,17 +104,6 @@ const AdminGroupManagement = () => {
   useEffect(() => {
     void refreshSpecialtyOptions();
   }, [refreshSpecialtyOptions]);
-
-  useEffect(() => {
-    if (openMenuId == null) return undefined;
-    const onDown = (e) => {
-      if (!e.target.closest?.('.admin-group-card__menu-root')) {
-        setOpenMenuId(null);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [openMenuId]);
 
   const fetchGroups = useCallback(async () => {
     setLoading(true);
@@ -221,7 +208,7 @@ const AdminGroupManagement = () => {
       void refreshSpecialtyOptions();
       void fetchGroups();
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось создать группу'));
+      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось создать группу');
     } finally {
       setCreateSubmitting(false);
     }
@@ -247,7 +234,7 @@ const AdminGroupManagement = () => {
       void fetchGroups();
       if (viewId === editRow.id) setViewId(null);
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось сохранить'));
+      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось сохранить');
     } finally {
       setEditSubmitting(false);
     }
@@ -268,7 +255,7 @@ const AdminGroupManagement = () => {
       void fetchGroups();
       if (viewId === gid) setViewId(null);
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось закрыть группу'));
+      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось закрыть группу');
     } finally {
       setCloseSubmitting(false);
     }
@@ -282,34 +269,33 @@ const AdminGroupManagement = () => {
       setReopenTarget(null);
       void fetchGroups();
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось открыть группу'));
+      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось открыть группу');
       throw e;
     }
   };
 
   return (
     <div className="admin-group-management">
-      <div className="admin-group-management__head">
-        <h1 className="admin-group-management__title">Группы</h1>
+      <div className="admin-group-management__header">
+        <h1 className="admin-group-management__title">Управление группами</h1>
       </div>
-
       <DashboardFilterToolbar
         className="admin-group-management__filter-toolbar"
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Поиск по названию группы…"
+        searchPlaceholder="Поиск по названию группы..."
         onReset={resetFilters}
         resetDisabled={resetDisabled}
         popoverAlign="end"
         popoverAriaLabel="Фильтры групп"
       >
-        <div className="filter-popover__section">
+        <div className="filter-popover__field">
           <label className="filter-popover__label" htmlFor="admin-group-specialty-filter">
             Специальность
           </label>
           <select
             id="admin-group-specialty-filter"
-            className="filter-popover__select"
+            className="filter-select"
             value={specialty}
             onChange={(e) => setSpecialty(e.target.value)}
           >
@@ -320,13 +306,13 @@ const AdminGroupManagement = () => {
             ))}
           </select>
         </div>
-        <div className="filter-popover__section">
+        <div className="filter-popover__field">
           <label className="filter-popover__label" htmlFor="admin-group-status-filter">
             Статус
           </label>
           <select
             id="admin-group-status-filter"
-            className="filter-popover__select"
+            className="filter-select"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >
@@ -338,121 +324,95 @@ const AdminGroupManagement = () => {
           </select>
         </div>
       </DashboardFilterToolbar>
-
-      <div className="admin-group-management__actions-row">
+      <div className="admin-group-management__actions">
         <Button type="button" variant="primary" onClick={openCreate}>
-          Новая группа
+          + Новая группа
         </Button>
       </div>
-
       {error && (
-        <div className="admin-group-management__banner admin-group-management__banner--error" role="alert">
-          <span>{error}</span>
-          <Button type="button" variant="secondary" onClick={() => void fetchGroups()} className="admin-group-management__retry">
-            Повторить
-          </Button>
-        </div>
+        <ErrorBanner
+          className="admin-group-management__error"
+          title="Ошибка загрузки групп"
+          message={error}
+          actionLabel="Повторить"
+          onAction={() => void fetchGroups()}
+        />
       )}
-
-      <div className={`admin-group-management__grid-wrap${loading ? ' admin-group-management__grid-wrap--loading' : ''}`}>
-        {loading && <p className="admin-group-management__hint">Загрузка…</p>}
-        {!loading && groups.length === 0 && !error && (
-          <p className="admin-group-management__hint">Группы не найдены</p>
-        )}
-        {!loading && groups.length > 0 && (
-          <div className="admin-group-management__card-grid">
+      <div className={`groups-grid-wrapper ${loading ? 'groups-grid-wrapper--loading' : ''}`}>
+        {loading && groups.length === 0 ? (
+          <LoadingState message="Загрузка групп..." className="admin-group-management__state" />
+        ) : groups.length === 0 ? (
+          <EmptyState
+            title="Группы не найдены"
+            message="Попробуйте изменить параметры поиска или фильтрации"
+            className="admin-group-management__state"
+          />
+        ) : (
+          <div className="groups-grid">
             {groups.map((row) => {
               const stud = row.studentsCount ?? 0;
               const teach = row.teachersCount ?? 0;
               const isActive = row.status === 'active';
               return (
-                <Card
+                <EntityCard
                   key={row.id}
-                  className="admin-group-card"
+                  className="group-card"
                   padding="medium"
-                  shadow="small"
-                  bordered
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewId(row.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setViewId(row.id);
+                    }
+                  }}
                 >
-                  <div className="admin-group-card__title">{row.name}</div>
-                  <div className="admin-group-card__specialty">{row.specialty || 'Специальность не указана'}</div>
-                  <div className="admin-group-card__meta">
-                    <span>
-                      Студентов: {stud}
-                    </span>
-                    <span>
-                      Преподавателей: {teach}
-                    </span>
+                  <div className="group-card__header">
+                    <div className="group-card__title">{row.name}</div>
                   </div>
-                  <div className={`admin-group-card__status admin-group-card__status--${isActive ? 'active' : 'inactive'}`}>
+                  <div className="group-card__specialty">{row.specialty || 'Специальность не указана'}</div>
+                  <div className="group-card__stats">
+                    <div className="group-card__stat">
+                      <span className="group-card__stat-label">Студентов</span>
+                      <span className="group-card__stat-value">{stud}</span>
+                    </div>
+                    <div className="group-card__stat">
+                      <span className="group-card__stat-label">Преподавателей</span>
+                      <span className="group-card__stat-value">{teach}</span>
+                    </div>
+                  </div>
+                  <StatusBadge tone={isActive ? 'success' : 'neutral'} className="group-card__status">
                     {isActive ? 'Активна' : 'Закрыта'}
-                  </div>
-
-                  <div className="admin-group-card__menu-root">
-                    <button
-                      type="button"
-                      className="admin-group-card__menu-btn"
-                      aria-label="Действия"
-                      onClick={() => setOpenMenuId((id) => (id === row.id ? null : row.id))}
-                    >
-                      …
-                    </button>
-                    {openMenuId === row.id && (
-                      <ul className="admin-group-card__menu" role="menu">
-                        <li>
-                          <button type="button" role="menuitem" onClick={() => { setOpenMenuId(null); setViewId(row.id); }}>
-                            Просмотр группы
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              openEdit(row);
-                            }}
-                          >
-                            Редактировать
-                          </button>
-                        </li>
-                        {isActive ? (
-                          <li>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              onClick={() => {
-                                setOpenMenuId(null);
-                                setCloseTarget(row);
-                                setCloseConfirmName('');
-                              }}
-                            >
-                              Закрыть группу
-                            </button>
-                          </li>
-                        ) : (
-                          <li>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              onClick={() => {
-                                setOpenMenuId(null);
-                                setReopenTarget(row);
-                              }}
-                            >
-                              Открыть группу
-                            </button>
-                          </li>
-                        )}
-                      </ul>
+                  </StatusBadge>
+                  <div className="group-card__actions" onClick={(e) => e.stopPropagation()}>
+                    <Button type="button" variant="outline" size="small" onClick={() => openEdit(row)}>
+                      Редактировать
+                    </Button>
+                    {isActive ? (
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="small"
+                        onClick={() => {
+                          setCloseTarget(row);
+                          setCloseConfirmName('');
+                        }}
+                      >
+                        Закрыть
+                      </Button>
+                    ) : (
+                      <Button type="button" variant="primary" size="small" onClick={() => setReopenTarget(row)}>
+                        Открыть
+                      </Button>
                     )}
                   </div>
-                </Card>
+                </EntityCard>
               );
             })}
           </div>
         )}
       </div>
-
       <Pagination
         className="admin-group-management__pagination"
         currentPage={meta.currentPage}
@@ -464,38 +424,14 @@ const AdminGroupManagement = () => {
         onNext={() => setPage((p) => p + 1)}
       />
 
-      <Modal isOpen={createOpen} onClose={() => !createSubmitting && setCreateOpen(false)} title="Новая группа" size="medium">
-        <div className="admin-group-form">
-          <label className="admin-group-form__label">
-            Название
-            <input
-              className="admin-group-form__input"
-              value={createName}
-              onChange={(e) => setCreateName(e.target.value)}
-              placeholder="Например: ИС-31"
-              autoComplete="off"
-            />
-          </label>
-          <label className="admin-group-form__label">
-            Специальность
-            <input
-              className="admin-group-form__input"
-              list="admin-group-specialty-datalist"
-              value={createSpecialty}
-              onChange={(e) => setCreateSpecialty(e.target.value)}
-              placeholder="Выберите или введите новую"
-              autoComplete="off"
-            />
-          </label>
-          <datalist id="admin-group-specialty-datalist">
-            {specialtyOptions.map((s) => (
-              <option key={s} value={s} />
-            ))}
-          </datalist>
-          <p className="admin-group-form__hint">
-            По умолчанию группа создаётся со статусом «Активна». Назначения преподавателей задаются в разделе «Назначения».
-          </p>
-          <div className="admin-group-form__actions">
+      <Modal
+        isOpen={createOpen}
+        onClose={() => !createSubmitting && setCreateOpen(false)}
+        title="Новая группа"
+        size="medium"
+        contentClassName="admin-group-modal__body"
+        footer={(
+          <>
             <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} disabled={createSubmitting}>
               Отмена
             </Button>
@@ -508,45 +444,57 @@ const AdminGroupManagement = () => {
             >
               Создать
             </Button>
+          </>
+        )}
+      >
+        <ModalSection title="Данные группы">
+          <div className="admin-group-modal__field">
+            <label className="admin-group-modal__label">
+              Название группы <span className="admin-group-modal__required">*</span>
+            </label>
+            <input
+              className="admin-group-modal__input"
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              placeholder="Например: ИС-31"
+              autoComplete="off"
+            />
           </div>
-        </div>
+          <div className="admin-group-modal__field">
+            <label className="admin-group-modal__label">
+              Специальность <span className="admin-group-modal__required">*</span>
+            </label>
+            <input
+              className="admin-group-modal__input"
+              list="admin-group-specialty-datalist"
+              value={createSpecialty}
+              onChange={(e) => setCreateSpecialty(e.target.value)}
+              placeholder="Выберите или введите новую"
+              autoComplete="off"
+            />
+            <datalist id="admin-group-specialty-datalist">
+              {specialtyOptions.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </div>
+        </ModalSection>
+          <ModalSection title="Примечание" variant="soft">
+          <div className="admin-group-modal__hint">
+            <p>По умолчанию группа создаётся со статусом «Активна».</p>
+            <p>Назначения преподавателей задаются в разделе «Назначения».</p>
+          </div>
+          </ModalSection>
       </Modal>
 
-      <Modal isOpen={!!editRow} onClose={() => !editSubmitting && setEditRow(null)} title="Редактировать группу" size="medium">
-        <div className="admin-group-form">
-          <label className="admin-group-form__label">
-            Название
-            <input
-              className="admin-group-form__input"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              autoComplete="off"
-            />
-          </label>
-          <label className="admin-group-form__label">
-            Специальность
-            <input
-              className="admin-group-form__input"
-              list="admin-group-specialty-datalist-edit"
-              value={editSpecialty}
-              onChange={(e) => setEditSpecialty(e.target.value)}
-              autoComplete="off"
-            />
-          </label>
-          <datalist id="admin-group-specialty-datalist-edit">
-            {specialtyOptions.map((s) => (
-              <option key={s} value={s} />
-            ))}
-          </datalist>
-          {editRow && (
-            <p className="admin-group-form__hint">
-              Статус:{' '}
-              {editRow.status === 'active' ? 'активна' : 'закрыта'}
-              {editRow.status === 'inactive' &&
-                ' — чтобы снова открыть группу, используйте действие «Открыть группу» в меню карточки.'}
-            </p>
-          )}
-          <div className="admin-group-form__actions">
+      <Modal
+        isOpen={!!editRow}
+        onClose={() => !editSubmitting && setEditRow(null)}
+        title={editRow?.name ? `Редактирование: ${editRow.name}` : 'Редактирование группы'}
+        size="medium"
+        contentClassName="admin-group-modal__body"
+        footer={(
+          <>
             <Button type="button" variant="secondary" onClick={() => setEditRow(null)} disabled={editSubmitting}>
               Отмена
             </Button>
@@ -559,179 +507,239 @@ const AdminGroupManagement = () => {
             >
               Сохранить
             </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={viewId != null}
-        onClose={() => setViewId(null)}
-        title={viewData?.group ? `Группа ${viewData.group.name}` : 'Группа'}
-        size="large"
-        className="admin-group-view-modal-wrap"
-      >
-        {viewLoading && <p className="admin-group-management__hint">Загрузка…</p>}
-        {!viewLoading && viewData?.group && (
-          <div className="admin-group-view">
-            <section className="admin-group-view__section">
-              <h3 className="admin-group-view__h">Информация</h3>
-              <dl className="admin-group-view__dl">
-                <div><dt>Название</dt><dd>{viewData.group.name}</dd></div>
-                <div><dt>Специальность</dt><dd>{viewData.group.specialty || '—'}</dd></div>
-                <div><dt>Статус</dt><dd>{viewData.group.status === 'active' ? 'Активна' : 'Закрыта'}</dd></div>
-                <div><dt>Создана</dt><dd>{formatIsoDate(viewData.group.createdAt)}</dd></div>
-              </dl>
-            </section>
-
-            <section className="admin-group-view__section">
-              <h3 className="admin-group-view__h">
-                Студенты ({viewData.group.studentsCount ?? 0})
-              </h3>
-              {(!viewData.students || viewData.students.length === 0) && (
-                <p className="admin-group-view__empty">Студентов пока нет</p>
-              )}
-              {viewData.students?.length > 0 && (
-                <>
-                  <div className="admin-group-view__student-grid">
-                    {viewData.students.slice(0, 12).map((s) => (
-                      <div key={s.id} className="admin-group-view__student-card">
-                        <div className="admin-group-view__student-name">{shortName(s.lastName, s.firstName, s.middleName)}</div>
-                        <div className="admin-group-view__student-avg">
-                          {s.avgScore != null ? `ср. ${s.avgScore}` : 'нет оценок'}
-                        </div>
-                        {(s.overdueAssignments ?? 0) > 0 && (
-                          <div className="admin-group-view__warn">просрочено заданий: {s.overdueAssignments}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  {(viewData.group.studentsCount ?? 0) > 12 && (
-                    <div className="admin-group-view__more">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          const id = viewData.group.id;
-                          setViewId(null);
-                          navigate('/admin/users', { state: { filterGroupId: id } });
-                        }}
-                      >
-                        Все студенты ({viewData.group.studentsCount})
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
-            </section>
-
-            <section className="admin-group-view__section">
-              <h3 className="admin-group-view__h">Преподаватели и предметы</h3>
-              {(!viewData.subjectBlocks || viewData.subjectBlocks.length === 0) && (
-                <p className="admin-group-view__empty">Нет активных назначений</p>
-              )}
-              {viewData.subjectBlocks?.length > 0 && (
-                <ul className="admin-group-view__subjects">
-                  {viewData.subjectBlocks.map((block, idx) => (
-                    <li key={`${block.subject?.id}-${block.teacher?.id}-${idx}`} className="admin-group-view__subject-row">
-                      <div className="admin-group-view__subject-name">{block.subject?.name || '—'}</div>
-                      <div className="admin-group-view__subject-teacher">
-                        {block.teacher
-                          ? shortName(block.teacher.lastName, block.teacher.firstName, block.teacher.middleName)
-                          : '—'}
-                      </div>
-                      <div className="admin-group-view__subject-count">
-                        Активных заданий: {block.activeAssignmentsCount ?? 0}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <div className="admin-group-view__footer-actions">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  const g = viewData.group;
-                  setViewId(null);
-                  const row = groups.find((x) => x.id === g.id);
-                  openEdit(row || { id: g.id, name: g.name, specialty: g.specialty, status: g.status });
-                }}
-              >
-                Редактировать
-              </Button>
-              {viewData.group.status === 'active' ? (
-                <Button
-                  type="button"
-                  variant="danger"
-                  onClick={() => {
-                    const g = viewData.group;
-                    setViewId(null);
-                    setCloseTarget({ id: g.id, name: g.name });
-                    setCloseConfirmName('');
-                  }}
-                >
-                  Закрыть группу
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => {
-                    const g = viewData.group;
-                    setViewId(null);
-                    setReopenTarget({ id: g.id, name: g.name });
-                  }}
-                >
-                  Открыть группу
-                </Button>
-              )}
-            </div>
-          </div>
+          </>
         )}
+      >
+        <ModalSection title="Данные группы">
+          <div className="admin-group-modal__field">
+            <label className="admin-group-modal__label">
+              Название группы <span className="admin-group-modal__required">*</span>
+            </label>
+            <input
+              className="admin-group-modal__input"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+          <div className="admin-group-modal__field">
+            <label className="admin-group-modal__label">
+              Специальность <span className="admin-group-modal__required">*</span>
+            </label>
+            <input
+              className="admin-group-modal__input"
+              list="admin-group-specialty-datalist-edit"
+              value={editSpecialty}
+              onChange={(e) => setEditSpecialty(e.target.value)}
+              autoComplete="off"
+            />
+            <datalist id="admin-group-specialty-datalist-edit">
+              {specialtyOptions.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </div>
+        </ModalSection>
+          {editRow && (
+            <ModalSection title="Текущий статус" variant="soft">
+            <div className="admin-group-modal__hint">
+              <p>
+                Статус: <strong>{editRow.status === 'active' ? 'Активна' : 'Закрыта'}</strong>
+              </p>
+            </div>
+            </ModalSection>
+          )}
       </Modal>
 
       <Modal
         isOpen={!!closeTarget}
         onClose={() => !closeSubmitting && setCloseTarget(null)}
-        title={closeTarget ? `Закрыть группу ${closeTarget.name}` : 'Закрыть группу'}
+        title={closeTarget?.name ? `Закрыть группу ${closeTarget.name}` : 'Закрыть группу'}
         size="medium"
-      >
-        <div className="admin-group-form">
-          <p className="admin-group-form__warn">
-            После закрытия группа станет неактивной, назначения преподавателей будут деактивированы, студенты потеряют доступ к активным заданиям этой группы. Данные сохраняются.
-          </p>
-          <label className="admin-group-form__label">
-            Введите название группы для подтверждения
-            <input
-              className="admin-group-form__input"
-              value={closeConfirmName}
-              onChange={(e) => setCloseConfirmName(e.target.value)}
-              autoComplete="off"
-            />
-          </label>
-          <div className="admin-group-form__actions">
+        contentClassName="admin-group-modal__body"
+        footer={(
+          <>
             <Button type="button" variant="secondary" onClick={() => setCloseTarget(null)} disabled={closeSubmitting}>
               Отмена
             </Button>
-            <Button
-              type="button"
-              variant="danger"
-              loading={closeSubmitting}
-              onClick={() => void submitClose()}
-            >
+            <Button type="button" variant="danger" loading={closeSubmitting} onClick={() => void submitClose()}>
               Закрыть группу
             </Button>
+          </>
+        )}
+      >
+        <ModalSection title="Подтверждение закрытия" variant="warning">
+          <div className="warning-card">
+            <div className="warning-card__icon">!</div>
+            <div className="warning-card__content">
+              <p>После закрытия группа станет неактивной.</p>
+            </div>
           </div>
-        </div>
+          <div className="admin-group-modal__field">
+            <label className="admin-group-modal__label">
+              Введите название группы для подтверждения <span className="admin-group-modal__required">*</span>
+            </label>
+            <input
+              className="admin-group-modal__input"
+              value={closeConfirmName}
+              onChange={(e) => setCloseConfirmName(e.target.value)}
+              placeholder={closeTarget?.name}
+              autoComplete="off"
+            />
+          </div>
+        </ModalSection>
+      </Modal>
+
+      <Modal
+        isOpen={!!viewId}
+        onClose={() => setViewId(null)}
+        title={viewData?.group ? `Группа ${viewData.group.name}` : 'Группа'}
+        size="large"
+        contentClassName="admin-group-modal__body"
+        footer={viewData?.group ? (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                const g = viewData?.group;
+                setViewId(null);
+                const row = groups.find((x) => x.id === g?.id);
+                openEdit(row || { id: g?.id, name: g?.name, specialty: g?.specialty, status: g?.status });
+              }}
+            >
+              Редактировать
+            </Button>
+            {viewData.group.status === 'active' ? (
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  const g = viewData?.group;
+                  setViewId(null);
+                  setCloseTarget({ id: g?.id, name: g?.name });
+                  setCloseConfirmName('');
+                }}
+              >
+                Закрыть группу
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  const g = viewData?.group;
+                  setViewId(null);
+                  setReopenTarget({ id: g?.id, name: g?.name });
+                }}
+              >
+                Открыть группу
+              </Button>
+            )}
+          </>
+        ) : null}
+      >
+          {viewLoading && (
+            <LoadingState message="Загрузка..." className="admin-group-modal__state" />
+          )}
+          {!viewLoading && viewData?.group && (
+            <div className="group-view">
+              {/* Информация о группе */}
+              <ModalSection title="Основная информация">
+                <div className="info-grid">
+                  <div className="info-item">
+                    <span className="info-item__label">Название</span>
+                    <span className="info-item__value">{viewData.group.name}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-item__label">Специальность</span>
+                    <span className="info-item__value">{viewData.group.specialty || '—'}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-item__label">Статус</span>
+                    <StatusBadge tone={viewData.group.status === 'active' ? 'success' : 'neutral'}>
+                      {viewData.group.status === 'active' ? 'Активна' : 'Закрыта'}
+                    </StatusBadge>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-item__label">Создана</span>
+                    <span className="info-item__value">{formatDateLong(viewData.group.createdAt)}</span>
+                  </div>
+                </div>
+              </ModalSection>
+
+              {/* Студенты */}
+              <ModalSection title={`Студенты (${viewData.group.studentsCount ?? 0})`}>
+                {(!viewData.students || viewData.students.length === 0) && (
+                  <div className="admin-group-modal__empty-note">Студентов пока нет</div>
+                )}
+                {viewData.students?.length > 0 && (
+                  <>
+                    <div className="students-grid">
+                      {viewData.students.slice(0, 12).map((s) => (
+                        <div key={s.id} className="student-card">
+                          <div className="student-card__name">{shortName(s.lastName, s.firstName, s.middleName)}</div>
+                          <div className="student-card__avg">
+                            {s.avgScore != null ? `Средний балл: ${s.avgScore}` : 'Нет оценок'}
+                          </div>
+                          {(s.overdueAssignments ?? 0) > 0 && (
+                            <div className="student-card__warning">Просрочено заданий: {s.overdueAssignments}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {(viewData.group.studentsCount ?? 0) > 12 && (
+                      <div className="view-all-link">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="small"
+                          onClick={() => {
+                            const id = viewData.group.id;
+                            setViewId(null);
+                            navigate('/admin/users', { state: { filterGroupId: id } });
+                          }}
+                        >
+                          Все студенты ({viewData.group.studentsCount})
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </ModalSection>
+
+              {/* Преподаватели и предметы */}
+              <ModalSection title="Преподаватели и предметы">
+                {(!viewData.subjectBlocks || viewData.subjectBlocks.length === 0) && (
+                  <div className="admin-group-modal__empty-note">Нет активных назначений</div>
+                )}
+                {viewData.subjectBlocks?.length > 0 && (
+                  <div className="subjects-list">
+                    {viewData.subjectBlocks.map((block, idx) => (
+                      <div key={`${block.subject?.id}-${block.teacher?.id}-${idx}`} className="subject-card">
+                        <div className="subject-card__name">{block.subject?.name || '—'}</div>
+                        <div className="subject-card__teacher">
+                          {block.teacher
+                            ? shortName(block.teacher.lastName, block.teacher.firstName, block.teacher.middleName)
+                            : 'Преподаватель не назначен'}
+                        </div>
+                        <div className="subject-card__count">
+                          Активных заданий: {block.activeAssignmentsCount ?? 0}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ModalSection>
+            </div>
+          )}
       </Modal>
 
       <ConfirmModal
         isOpen={!!reopenTarget}
         onClose={() => setReopenTarget(null)}
         title={reopenTarget ? `Открыть группу ${reopenTarget.name}` : 'Открыть группу'}
-        message="Группа снова станет активной. Назначения преподавателей потребуется восстановить вручную в разделе «Назначения»."
+        message="Группа снова станет активной. После открытия проверьте назначения преподавателей."
         confirmText="Открыть"
         cancelText="Отмена"
         onConfirm={async () => {

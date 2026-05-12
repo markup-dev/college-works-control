@@ -1,4 +1,4 @@
-.btn {
+.ui-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -131,13 +131,13 @@
   &--loading {
     pointer-events: none;
     
-    .btn__text {
+    .ui-button__text {
       opacity: 0.7;
     }
   }
 }
 
-.btn__icon {
+.ui-button__icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -161,7 +161,7 @@
   }
 }
 
-.btn__text {
+.ui-button__text {
   font-weight: 600;
   white-space: nowrap;
   
@@ -175,7 +175,7 @@
   padding: 0;
 }
 
-.btn__spinner {
+.ui-button__spinner {
   width: 18px;
   height: 18px;
   border: 2px solid transparent;
@@ -189,55 +189,55 @@
   justify-content: center;
 }
 
-.btn--icon-only {
+.ui-button--icon-only {
   padding: 8px;
   aspect-ratio: 1;
   
-  .btn__icon {
+  .ui-button__icon {
     font-size: 20px;
     margin: 0;
   }
 }
 
-.btn--icon-left {
-  .btn__icon {
+.ui-button--icon-left {
+  .ui-button__icon {
     order: 1;
   }
   
-  .btn__text {
+  .ui-button__text {
     order: 2;
   }
 }
 
-.btn--icon-right {
-  .btn__icon {
+.ui-button--icon-right {
+  .ui-button__icon {
     order: 2;
   }
   
-  .btn__text {
+  .ui-button__text {
     order: 1;
   }
 }
 
-.btn--small {
-  &.btn--icon-left,
-  &.btn--icon-right {
+.ui-button--small {
+  &.ui-button--icon-left,
+  &.ui-button--icon-right {
     padding-left: 12px;
     padding-right: 12px;
   }
 }
 
-.btn--medium {
-  &.btn--icon-left,
-  &.btn--icon-right {
+.ui-button--medium {
+  &.ui-button--icon-left,
+  &.ui-button--icon-right {
     padding-left: 16px;
     padding-right: 16px;
   }
 }
 
-.btn--large {
-  &.btn--icon-left,
-  &.btn--icon-right {
+.ui-button--large {
+  &.ui-button--icon-left,
+  &.ui-button--icon-right {
     padding-left: 20px;
     padding-right: 20px;
   }
@@ -249,7 +249,7 @@
 }
 
 @media (max-width: 768px) {
-  .btn {
+  .ui-button {
     &--medium {
       padding: 10px 16px;
       font-size: 14px;
@@ -263,16 +263,16 @@
     }
     
     &--medium {
-      &.btn--icon-left,
-      &.btn--icon-right {
+      &.ui-button--icon-left,
+      &.ui-button--icon-right {
         padding-left: 14px;
         padding-right: 14px;
       }
     }
     
     &--large {
-      &.btn--icon-left,
-      &.btn--icon-right {
+      &.ui-button--icon-left,
+      &.ui-button--icon-right {
         padding-left: 18px;
         padding-right: 18px;
       }
@@ -280,7 +280,7 @@
   }
 }
 
-.btn-content-wrapper {
+.ui-button-content-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -289,6 +289,6 @@
   height: 100%;
 }
 
-.btn--flex-fix {
+.ui-button--flex-fix {
   flex-shrink: 0;
 }

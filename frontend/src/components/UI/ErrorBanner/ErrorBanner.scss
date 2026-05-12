@@ -1,0 +1,56 @@
+.ui-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  width: min(100%, 760px);
+  margin: 48px auto;
+  padding: 1.5rem;
+  border: 1px solid #fecaca;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff8f8 0%, #ffffff 100%);
+  box-shadow: 0 10px 28px rgba(127, 29, 29, 0.08);
+  box-sizing: border-box;
+
+  &__indicator {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: #fee2e2;
+    color: #991b1b;
+    font-size: 1rem;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  &__body {
+    min-width: 0;
+  }
+
+  &__title {
+    margin: 0 0 0.4rem;
+    color: #7f1d1d;
+    font-size: 1.35rem;
+    font-weight: 800;
+  }
+
+  &__message {
+    margin: 0 0 1rem;
+    color: #7f1d1d;
+    font-size: 0.98rem;
+    line-height: 1.45;
+  }
+}
+
+@media (max-width: 560px) {
+  .ui-error-banner {
+    flex-direction: column;
+    margin: 24px 0;
+    padding: 1rem;
+
+    &__title {
+      font-size: 1.2rem;
+    }
+  }
+}

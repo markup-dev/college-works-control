@@ -19,6 +19,7 @@ const DashboardHeader = ({
   onTeacherFilterChange,
   availableTeachers = [],
   onResetFilters,
+  filtersResetDisabled = false,
   attentionAssignments = { retakes: [], deadlines: [] },
   onOpenAttentionAssignment,
   className = "",
@@ -53,6 +54,7 @@ const DashboardHeader = ({
         onTeacherFilterChange={onTeacherFilterChange}
         availableTeachers={availableTeachers}
         onResetFilters={onResetFilters}
+        filtersResetDisabled={filtersResetDisabled}
       />
     </div>
   );

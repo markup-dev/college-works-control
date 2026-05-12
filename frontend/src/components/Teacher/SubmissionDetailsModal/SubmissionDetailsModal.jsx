@@ -1,8 +1,8 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
+import Modal from '../../UI/Modal/Modal';
+import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import { formatDate, formatFileSize } from '../../../utils';
-import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './SubmissionDetailsModal.scss';
 
 const SubmissionDetailsModal = ({ 
@@ -14,8 +14,6 @@ const SubmissionDetailsModal = ({
   onGrade,
   onReturn
 }) => {
-  useBodyScrollLock(isOpen);
-
   if (!isOpen || !submission) return null;
 
   const maxScore = assignment?.maxScore || submission.maxScore || 100;
@@ -28,34 +26,72 @@ const SubmissionDetailsModal = ({
     returned: { label: 'Возвращена', variant: 'danger' }
   }[submission.status] || { label: 'На проверке', variant: 'warning' };
 
-  return createPortal(
-    (
-      <div className="modal-overlay teacher-submission-details-modal" onClick={onClose}>
-        <div className="modal-content submission-details-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-header__titles">
-            <h3>Детали работы</h3>
-            <p className="modal-header__subtitle">
-              {submission.assignmentTitle || assignment?.title || 'Задание'}
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Детали работы"
+      subtitle={submission.assignmentTitle || assignment?.title || 'Задание'}
+      size="large"
+      className="teacher-submission-details-modal"
+      contentClassName="teacher-submission-details-modal__body"
+      footer={(
+        <div className="teacher-submission-details-modal__actions">
+          {submission.status === 'submitted' && !submission.isResubmission && (
+            <Button
+              variant="warning"
+              onClick={() => {
+                onClose();
+                onReturn?.(submission);
+              }}
+            >
+              Отправить на доработку
+            </Button>
+          )}
+          {submission.status === 'submitted' && (
+            <Button
+              variant="primary"
+              onClick={() => {
+                onGrade?.(submission);
+              }}
+            >
+              Оценить работу
+            </Button>
+          )}
+          {submission.status === 'graded' && (
+            <Button
+              variant="primary"
+              onClick={() => {
+                onGrade?.(submission);
+              }}
+            >
+              Изменить оценку
+            </Button>
+          )}
+          {submission.status === 'returned' && (
+            <p className="teacher-submission-details-modal__actions-hint">
+              Работа у студента на доработке. Оценить можно только после новой сдачи файла.
             </p>
-          </div>
-          <button type="button" className="modal-close" onClick={onClose}>×</button>
+          )}
+          <Button variant="secondary" onClick={onClose}>
+            Закрыть
+          </Button>
         </div>
-        
-        <div className="modal-body">
+      )}
+    >
           <div className="details-overview">
-            <span className={`status-badge status-badge--${statusInfo.variant}`}>
+            <StatusBadge tone={statusInfo.variant}>
               {statusInfo.label}
-            </span>
+            </StatusBadge>
             {submission.submissionDate && (
               <span className="details-overview__meta">
                 Сдано: {formatDate(submission.submissionDate)}
               </span>
             )}
             {submission.isResubmission && (
-              <span className="status-badge status-badge--default">
+              <StatusBadge tone="default">
                 Пересдача
-              </span>
+              </StatusBadge>
             )}
           </div>
 
@@ -111,13 +147,13 @@ const SubmissionDetailsModal = ({
               <div className="info-item">
                 <strong>Статус:</strong>
                 <div className="submission-status-stack">
-                  <span className={`status-badge status-badge--${statusInfo.variant}`}>
+                  <StatusBadge tone={statusInfo.variant}>
                     {statusInfo.label}
-                  </span>
+                  </StatusBadge>
                   {submission.isResubmission && (
-                    <span className="status-badge status-badge--default">
+                    <StatusBadge tone="default">
                       Пересдача
-                    </span>
+                    </StatusBadge>
                   )}
                 </div>
               </div>
@@ -199,53 +235,7 @@ const SubmissionDetailsModal = ({
               </ul>
             </div>
           )}
-        </div>
-        
-        <div className="modal-actions">
-          {submission.status === 'submitted' && !submission.isResubmission && (
-            <Button
-              variant="warning"
-              onClick={() => {
-                onClose();
-                onReturn?.(submission);
-              }}
-            >
-              Отправить на доработку
-            </Button>
-          )}
-          {submission.status === 'submitted' && (
-            <Button
-              variant="primary"
-              onClick={() => {
-                onGrade?.(submission);
-              }}
-            >
-              Оценить работу
-            </Button>
-          )}
-          {submission.status === 'graded' && (
-            <Button
-              variant="primary"
-              onClick={() => {
-                onGrade?.(submission);
-              }}
-            >
-              Изменить оценку
-            </Button>
-          )}
-          {submission.status === 'returned' && (
-            <p className="modal-actions__hint">
-              Работа у студента на доработке. Оценить можно только после новой сдачи файла.
-            </p>
-          )}
-          <Button variant="secondary" onClick={onClose}>
-            Закрыть
-          </Button>
-        </div>
-      </div>
-    </div>
-    ),
-    document.body,
+    </Modal>
   );
 };
 

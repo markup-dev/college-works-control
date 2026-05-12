@@ -104,6 +104,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
         Route::get('/stats', [DashboardController::class, 'stats']);
 
         Route::get('/users', [AdminUserController::class, 'users']);
+        Route::get('/users/{user}/warnings-detail', [AdminUserController::class, 'adminUserWarningsDetail']);
         Route::post('/users', [AdminUserController::class, 'createUser']);
         Route::post('/users/{user}/reset-credentials', [AdminUserController::class, 'resetUserCredentials']);
         Route::put('/users/{user}', [AdminUserController::class, 'updateUser']);

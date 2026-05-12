@@ -11,6 +11,10 @@ import PublishFromBankModal from '../../components/Teacher/PublishFromBankModal/
 import SubmissionDetailsModal from '../../components/Teacher/SubmissionDetailsModal/SubmissionDetailsModal';
 import Button from '../../components/UI/Button/Button';
 import Pagination from '../../components/UI/Pagination/Pagination';
+import PageShell from '../../components/UI/PageShell/PageShell';
+import LoadingState from '../../components/UI/LoadingState/LoadingState';
+import EmptyState from '../../components/UI/EmptyState/EmptyState';
+import ErrorBanner from '../../components/UI/ErrorBanner/ErrorBanner';
 import InputModal from '../../components/UI/Modal/InputModal';
 import ConfirmModal from '../../components/UI/Modal/ConfirmModal';
 import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsModal/AssignmentDetailsModal';
@@ -152,6 +156,41 @@ const TeacherDashboard = () => {
   const [analyticsSnapshotLoading, setAnalyticsSnapshotLoading] = useState(false);
   const [analyticsGroupId, setAnalyticsGroupId] = useState(storedFilters?.analyticsGroupId || 'all');
   const submissionsTabBusy = submissionsPanelLoading || submissionsLoading;
+
+  const assignmentFiltersResetDisabled = useMemo(() => {
+    return (
+      !assignmentSearchTerm.trim() &&
+      assignmentSubjectFilter === 'all' &&
+      assignmentGroupFilter === 'all' &&
+      assignmentWorkFilter === 'all' &&
+      assignmentDeadlineFilter === 'all'
+    );
+  }, [
+    assignmentSearchTerm,
+    assignmentSubjectFilter,
+    assignmentGroupFilter,
+    assignmentWorkFilter,
+    assignmentDeadlineFilter,
+  ]);
+
+  const submissionFiltersResetDisabled = useMemo(() => {
+    const atDefaults =
+      !searchTerm.trim() &&
+      assignmentFilter === 'all' &&
+      groupFilter === 'all' &&
+      statusFilter === DEFAULT_SUBMISSION_STATUS_FILTER &&
+      submissionSort === 'review_queue' &&
+      deadlineFilter === 'all';
+    return atDefaults || submissionsTabBusy;
+  }, [
+    searchTerm,
+    assignmentFilter,
+    groupFilter,
+    statusFilter,
+    submissionSort,
+    deadlineFilter,
+    submissionsTabBusy,
+  ]);
 
   const debouncedAssignmentSearch = useDebouncedValue(assignmentSearchTerm, 350);
   const debouncedSubmissionsSearch = useDebouncedValue(searchTerm, 350);
@@ -1075,132 +1114,132 @@ const TeacherDashboard = () => {
   };
 
   if (loading && assignments.length === 0) {
-    return <LoadingState />;
+    return <LoadingState message="Загрузка дашборда..." />;
   }
 
   if (error) {
     return (
-      <div className="error-state">
-        <div className="error-icon">⚠️</div>
-        <h3>Ошибка загрузки</h3>
-        <p>{error}</p>
-        <button onClick={() => {
+      <ErrorBanner
+        title="Ошибка загрузки"
+        message={error}
+        actionLabel="Повторить попытку"
+        onAction={() => {
           loadTeacherAssignments();
-        }}>Повторить попытку</button>
-      </div>
+        }}
+      />
     );
   }
 
   return (
     <div className="teacher-dashboard app-page">
-      <main className="dashboard-main">
-        <div className="dashboard-container">
-          <DashboardHeader
-            user={user}
-            stats={dashboardStats}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-          />
+      <PageShell contentClassName="teacher-dashboard__content">
+        <DashboardHeader
+          user={user}
+          stats={dashboardStats}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
 
-          <DashboardContent
-            activeTab={activeTab}
-            assignments={filteredAssignments}
-            activeAssignments={filteredActiveAssignments}
-            completedAssignments={filteredCompletedAssignments}
-            filteredSubmissions={filteredSubmissions}
-            analyticsAssignments={analyticsAssignments}
-            analyticsSubmissions={analyticsSubmissions}
-            submissionAssignmentOptions={submissionAssignmentOptions}
-            assignmentFilter={assignmentFilter}
-            groupFilter={groupFilter}
-            statusFilter={statusFilter}
-            searchTerm={searchTerm}
-            assignmentSearchTerm={assignmentSearchTerm}
-            assignmentGroupFilter={assignmentGroupFilter}
-            assignmentSubjectFilter={assignmentSubjectFilter}
-            assignmentWorkFilter={assignmentWorkFilter}
-            assignmentDeadlineFilter={assignmentDeadlineFilter}
-            assignmentGroupOptions={assignmentGroupOptions}
-            assignmentSubjectOptions={assignmentSubjectOptions}
-            submissionGroupOptions={submissionGroupOptions}
-            assignmentsMeta={assignmentsMeta}
-            submissionsMeta={submissionsMeta}
-            onAssignmentFilterChange={(value) => {
-              setAssignmentFilter(value);
-              setSubmissionPage(1);
-            }}
-            onGroupFilterChange={(value) => {
-              setGroupFilter(value);
-              setSubmissionPage(1);
-            }}
-            onStatusFilterChange={(value) => {
-              setStatusFilter(value);
-              setSubmissionPage(1);
-            }}
-            onSearchChange={(value) => {
-              setSearchTerm(value);
-              setSubmissionPage(1);
-            }}
-            onAssignmentSearchChange={(value) => {
-              setAssignmentSearchTerm(value);
-              setAssignmentPage(1);
-            }}
-            onAssignmentGroupFilterChange={(value) => {
-              setAssignmentGroupFilter(value);
-              setAssignmentPage(1);
-            }}
-            onAssignmentSubjectFilterChange={(value) => {
-              setAssignmentSubjectFilter(value);
-              setAssignmentPage(1);
-            }}
-            onAssignmentWorkFilterChange={(value) => {
-              setAssignmentWorkFilter(value);
-              setAssignmentPage(1);
-            }}
-            onAssignmentDeadlineFilterChange={(value) => {
-              setAssignmentDeadlineFilter(value);
-              setAssignmentPage(1);
-            }}
-            onResetAssignmentFilters={handleResetAssignmentFilters}
-            onResetSubmissionFilters={handleResetSubmissionFilters}
-            onPrevAssignmentsPage={() => setAssignmentPage((prev) => Math.max(1, prev - 1))}
-            onNextAssignmentsPage={() => setAssignmentPage((prev) => prev + 1)}
-            onPrevSubmissionsPage={() => setSubmissionPage((prev) => Math.max(1, prev - 1))}
-            onNextSubmissionsPage={() => setSubmissionPage((prev) => prev + 1)}
-            onCreateAssignment={handleCreateAssignment}
-            onViewSubmissions={handleViewSubmissions}
-            onViewAssignmentDetails={handleViewAssignmentDetails}
-            onDeleteAssignment={handleRequestDeleteAssignment}
-            onGradeSubmission={handleGradeSubmission}
-            onReturnSubmission={handleReturnSubmission}
-            onDownloadFile={handleDownloadFile}
-            onViewDetails={handleViewDetails}
-            reviewQueue={priorityQueue}
-            deadlineFilter={deadlineFilter}
-            onDeadlineFilterChange={(value) => {
-              setDeadlineFilter(value);
-              setSubmissionPage(1);
-            }}
-            submissionSort={submissionSort}
-            onSubmissionSortChange={(value) => {
-              setSubmissionSort(value);
-              setSubmissionPage(1);
-            }}
-            submissionsTabBusy={submissionsTabBusy}
-            teachingGroups={teachingGroups}
-            analyticsGroupId={analyticsGroupId}
-            onAnalyticsGroupChange={setAnalyticsGroupId}
-            analyticsSnapshotLoading={analyticsSnapshotLoading}
-            assignmentsBankMode={assignmentsBankMode}
-            onToggleAssignmentsBankMode={setAssignmentsBankMode}
-            filteredBankTemplates={filteredBankTemplates}
-            bankLoading={bankLoading}
-            onEditBankTemplate={handleEditBankTemplate}
-            onDeleteBankTemplate={handleRequestDeleteBankTemplate}
-            onPublishBankTemplate={handleOpenPublishBank}
-          />
-        </div>
-      </main>
+        <DashboardContent
+          activeTab={activeTab}
+          assignments={filteredAssignments}
+          activeAssignments={filteredActiveAssignments}
+          completedAssignments={filteredCompletedAssignments}
+          filteredSubmissions={filteredSubmissions}
+          analyticsAssignments={analyticsAssignments}
+          analyticsSubmissions={analyticsSubmissions}
+          submissionAssignmentOptions={submissionAssignmentOptions}
+          assignmentFilter={assignmentFilter}
+          groupFilter={groupFilter}
+          statusFilter={statusFilter}
+          searchTerm={searchTerm}
+          assignmentSearchTerm={assignmentSearchTerm}
+          assignmentGroupFilter={assignmentGroupFilter}
+          assignmentSubjectFilter={assignmentSubjectFilter}
+          assignmentWorkFilter={assignmentWorkFilter}
+          assignmentDeadlineFilter={assignmentDeadlineFilter}
+          assignmentGroupOptions={assignmentGroupOptions}
+          assignmentSubjectOptions={assignmentSubjectOptions}
+          submissionGroupOptions={submissionGroupOptions}
+          assignmentsMeta={assignmentsMeta}
+          submissionsMeta={submissionsMeta}
+          onAssignmentFilterChange={(value) => {
+            setAssignmentFilter(value);
+            setSubmissionPage(1);
+          }}
+          onGroupFilterChange={(value) => {
+            setGroupFilter(value);
+            setSubmissionPage(1);
+          }}
+          onStatusFilterChange={(value) => {
+            setStatusFilter(value);
+            setSubmissionPage(1);
+          }}
+          onSearchChange={(value) => {
+            setSearchTerm(value);
+            setSubmissionPage(1);
+          }}
+          onAssignmentSearchChange={(value) => {
+            setAssignmentSearchTerm(value);
+            setAssignmentPage(1);
+          }}
+          onAssignmentGroupFilterChange={(value) => {
+            setAssignmentGroupFilter(value);
+            setAssignmentPage(1);
+          }}
+          onAssignmentSubjectFilterChange={(value) => {
+            setAssignmentSubjectFilter(value);
+            setAssignmentPage(1);
+          }}
+          onAssignmentWorkFilterChange={(value) => {
+            setAssignmentWorkFilter(value);
+            setAssignmentPage(1);
+          }}
+          onAssignmentDeadlineFilterChange={(value) => {
+            setAssignmentDeadlineFilter(value);
+            setAssignmentPage(1);
+          }}
+          onResetAssignmentFilters={handleResetAssignmentFilters}
+          onResetSubmissionFilters={handleResetSubmissionFilters}
+          assignmentFiltersResetDisabled={assignmentFiltersResetDisabled}
+          submissionFiltersResetDisabled={submissionFiltersResetDisabled}
+          onPrevAssignmentsPage={() => setAssignmentPage((prev) => Math.max(1, prev - 1))}
+          onNextAssignmentsPage={() => setAssignmentPage((prev) => prev + 1)}
+          onPrevSubmissionsPage={() => setSubmissionPage((prev) => Math.max(1, prev - 1))}
+          onNextSubmissionsPage={() => setSubmissionPage((prev) => prev + 1)}
+          onCreateAssignment={handleCreateAssignment}
+          onViewSubmissions={handleViewSubmissions}
+          onViewAssignmentDetails={handleViewAssignmentDetails}
+          onDeleteAssignment={handleRequestDeleteAssignment}
+          onGradeSubmission={handleGradeSubmission}
+          onReturnSubmission={handleReturnSubmission}
+          onDownloadFile={handleDownloadFile}
+          onViewDetails={handleViewDetails}
+          reviewQueue={priorityQueue}
+          deadlineFilter={deadlineFilter}
+          onDeadlineFilterChange={(value) => {
+            setDeadlineFilter(value);
+            setSubmissionPage(1);
+          }}
+          submissionSort={submissionSort}
+          onSubmissionSortChange={(value) => {
+            setSubmissionSort(value);
+            setSubmissionPage(1);
+          }}
+          submissionsTabBusy={submissionsTabBusy}
+          teachingGroups={teachingGroups}
+          analyticsGroupId={analyticsGroupId}
+          onAnalyticsGroupChange={setAnalyticsGroupId}
+          analyticsSnapshotLoading={analyticsSnapshotLoading}
+          assignmentsBankMode={assignmentsBankMode}
+          onToggleAssignmentsBankMode={setAssignmentsBankMode}
+          filteredBankTemplates={filteredBankTemplates}
+          bankLoading={bankLoading}
+          onEditBankTemplate={handleEditBankTemplate}
+          onDeleteBankTemplate={handleRequestDeleteBankTemplate}
+          onPublishBankTemplate={handleOpenPublishBank}
+        />
+      </PageShell>
 
       <GradingModal
         submission={selectedSubmission}
@@ -1336,13 +1375,6 @@ const TeacherDashboard = () => {
   );
 };
 
-const LoadingState = () => (
-  <div className="loading-state">
-    <div className="spinner"></div>
-    <p>Загрузка дашборда...</p>
-  </div>
-);
-
 const DashboardContent = ({
   activeTab,
   assignments,
@@ -1377,6 +1409,8 @@ const DashboardContent = ({
   onAssignmentDeadlineFilterChange,
   onResetAssignmentFilters,
   onResetSubmissionFilters,
+  assignmentFiltersResetDisabled = false,
+  submissionFiltersResetDisabled = false,
   onPrevAssignmentsPage,
   onNextAssignmentsPage,
   onPrevSubmissionsPage,
@@ -1426,6 +1460,7 @@ const DashboardContent = ({
             onWorkFilterChange={onAssignmentWorkFilterChange}
             onDeadlineFilterChange={onAssignmentDeadlineFilterChange}
             onResetFilters={onResetAssignmentFilters}
+            filtersResetDisabled={assignmentFiltersResetDisabled}
             paginationMeta={assignmentsMeta}
             onPrevPage={onPrevAssignmentsPage}
             onNextPage={onNextAssignmentsPage}
@@ -1458,6 +1493,7 @@ const DashboardContent = ({
             onSubjectFilterChange={onAssignmentSubjectFilterChange}
             onDeadlineFilterChange={onAssignmentDeadlineFilterChange}
             onResetFilters={onResetAssignmentFilters}
+            filtersResetDisabled={assignmentFiltersResetDisabled}
             paginationMeta={assignmentsMeta}
             onPrevPage={onPrevAssignmentsPage}
             onNextPage={onNextAssignmentsPage}
@@ -1482,6 +1518,7 @@ const DashboardContent = ({
             onStatusFilterChange={onStatusFilterChange}
             onSearchChange={onSearchChange}
             onResetFilters={onResetSubmissionFilters}
+            filtersResetDisabled={submissionFiltersResetDisabled}
             paginationMeta={submissionsMeta}
             onPrevPage={onPrevSubmissionsPage}
             onNextPage={onNextSubmissionsPage}
@@ -1643,6 +1680,7 @@ const AssignmentsSection = ({
   onEditBankTemplate,
   onDeleteBankTemplate,
   onPublishBankTemplate,
+  filtersResetDisabled = false,
 }) => (
   <div className="assignments-section">
     <div className="section-header">
@@ -1677,17 +1715,8 @@ const AssignmentsSection = ({
           searchInputType="text"
           searchBoxClassName="search-box teacher-dashboard-filter-search"
           onReset={onResetFilters}
+          resetDisabled={filtersResetDisabled}
           popoverAriaLabel="Фильтры заданий"
-          renderReset={({ closeAndReset }) => (
-            <Button
-              type="button"
-              variant="secondary"
-              className="teacher-dashboard-filter-reset-btn"
-              onClick={closeAndReset}
-            >
-              Сбросить фильтры
-            </Button>
-          )}
         >
           {!assignmentsBankMode && (
             <div className="filter-popover__field">
@@ -1698,7 +1727,7 @@ const AssignmentsSection = ({
                 id="teacher-assignment-group-filter"
                 value={groupFilter}
                 onChange={(e) => onGroupFilterChange(e.target.value)}
-                className="filter-select group-filter"
+                className="filter-select"
               >
                 <option value="all">Все группы</option>
                 {availableGroups.map((group) => (
@@ -1717,7 +1746,7 @@ const AssignmentsSection = ({
               id="teacher-assignment-subject-filter"
               value={subjectFilter}
               onChange={(e) => onSubjectFilterChange(e.target.value)}
-              className="filter-select subject-filter"
+              className="filter-select"
             >
               <option value="all">Все предметы</option>
               {availableSubjects.map((subject) => (
@@ -1736,7 +1765,7 @@ const AssignmentsSection = ({
                 id="teacher-assignment-deadline-filter"
                 value={deadlineFilter}
                 onChange={(e) => onDeadlineFilterChange(e.target.value)}
-                className="filter-select deadline-filter"
+                className="filter-select"
               >
                 {ASSIGNMENT_DEADLINE_FILTERS.map((filter) => (
                   <option key={filter.value} value={filter.value}>
@@ -1762,9 +1791,7 @@ const AssignmentsSection = ({
 
     {assignmentsBankMode ? (
       bankLoading ? (
-        <div className="empty-state">
-          <p>Загрузка банка…</p>
-        </div>
+        <LoadingState message="Загрузка банка..." />
       ) : filteredBankTemplates.length > 0 ? (
         <div className="assignments-grid app-reveal-stagger">
           {filteredBankTemplates.map((template) => (
@@ -1778,9 +1805,7 @@ const AssignmentsSection = ({
           ))}
         </div>
       ) : (
-        <div className="empty-state">
-          <p>В банке пока нет заготовок. Добавьте задание через «Детали задания» — кнопка «В банк заданий».</p>
-        </div>
+        <EmptyState message="В банке пока нет заготовок. Добавьте задание через детали задания." />
       )
     ) : activeAssignments.length > 0 ? (
       <div className="assignments-grid app-reveal-stagger">
@@ -1795,9 +1820,7 @@ const AssignmentsSection = ({
         ))}
       </div>
     ) : (
-      <div className="empty-state">
-        <p>Нет активных заданий по текущим фильтрам</p>
-      </div>
+      <EmptyState message="Нет активных заданий по текущим фильтрам" />
     )}
     {!assignmentsBankMode && (
       <Pagination
@@ -1830,7 +1853,8 @@ const CompletedAssignmentsSection = ({
   onNextPage,
   onViewSubmissions,
   onViewDetails,
-  onDeleteAssignment
+  onDeleteAssignment,
+  filtersResetDisabled = false,
 }) => (
   <div className="assignments-section">
     <div className="section-header">
@@ -1847,17 +1871,8 @@ const CompletedAssignmentsSection = ({
           searchInputType="text"
           searchBoxClassName="search-box teacher-dashboard-filter-search"
           onReset={onResetFilters}
+          resetDisabled={filtersResetDisabled}
           popoverAriaLabel="Фильтры завершённых заданий"
-          renderReset={({ closeAndReset }) => (
-            <Button
-              type="button"
-              variant="secondary"
-              className="teacher-dashboard-filter-reset-btn"
-              onClick={closeAndReset}
-            >
-              Сбросить фильтры
-            </Button>
-          )}
         >
           <div className="filter-popover__field">
             <label className="filter-popover__label" htmlFor="teacher-completed-group-filter">
@@ -1867,7 +1882,7 @@ const CompletedAssignmentsSection = ({
               id="teacher-completed-group-filter"
               value={groupFilter}
               onChange={(e) => onGroupFilterChange(e.target.value)}
-              className="filter-select group-filter"
+              className="filter-select"
             >
               <option value="all">Все группы</option>
               {availableGroups.map((group) => (
@@ -1885,7 +1900,7 @@ const CompletedAssignmentsSection = ({
               id="teacher-completed-subject-filter"
               value={subjectFilter}
               onChange={(e) => onSubjectFilterChange(e.target.value)}
-              className="filter-select subject-filter"
+              className="filter-select"
             >
               <option value="all">Все предметы</option>
               {availableSubjects.map((subject) => (
@@ -1903,7 +1918,7 @@ const CompletedAssignmentsSection = ({
               id="teacher-completed-deadline-filter"
               value={deadlineFilter}
               onChange={(e) => onDeadlineFilterChange(e.target.value)}
-              className="filter-select deadline-filter"
+              className="filter-select"
             >
               {ASSIGNMENT_DEADLINE_FILTERS.map((filter) => (
                 <option key={filter.value} value={filter.value}>
@@ -1929,9 +1944,7 @@ const CompletedAssignmentsSection = ({
         ))}
       </div>
     ) : (
-      <div className="empty-state">
-        <p>Нет завершенных заданий по текущим фильтрам</p>
-      </div>
+      <EmptyState message="Нет завершенных заданий по текущим фильтрам" />
     )}
     <Pagination
       currentPage={paginationMeta.currentPage}
@@ -1970,6 +1983,7 @@ const SubmissionsSection = ({
   submissionSort = 'review_queue',
   onSubmissionSortChange,
   submissionsBusy = false,
+  filtersResetDisabled = false,
 }) => (
   <div className="submissions-section">
     <div className="section-header teacher-submissions-header">
@@ -1988,18 +2002,7 @@ const SubmissionsSection = ({
             onReset={onResetFilters}
             popoverAriaLabel="Фильтры работ студентов"
             disabled={submissionsBusy}
-            resetDisabled={submissionsBusy}
-            renderReset={({ closeAndReset, disabled: resetDis }) => (
-              <Button
-                type="button"
-                variant="secondary"
-                className="teacher-submissions-reset-btn teacher-dashboard-filter-reset-btn"
-                onClick={closeAndReset}
-                disabled={resetDis}
-              >
-                Сбросить фильтры
-              </Button>
-            )}
+            resetDisabled={filtersResetDisabled}
           >
             <div className="filter-popover__field">
               <label className="filter-popover__label" htmlFor="teacher-submissions-assignment-filter">
@@ -2009,7 +2012,7 @@ const SubmissionsSection = ({
                 id="teacher-submissions-assignment-filter"
                 value={assignmentFilter}
                 onChange={(e) => onAssignmentFilterChange(e.target.value)}
-                className="teacher-submissions-select assignment-filter"
+                className="teacher-submissions-select"
                 disabled={submissionsBusy}
                 aria-disabled={submissionsBusy}
               >
@@ -2029,7 +2032,7 @@ const SubmissionsSection = ({
                 id="teacher-submissions-group-filter"
                 value={groupFilter}
                 onChange={(e) => onGroupFilterChange(e.target.value)}
-                className="teacher-submissions-select group-filter"
+                className="teacher-submissions-select"
                 disabled={submissionsBusy}
                 aria-disabled={submissionsBusy}
               >
@@ -2049,7 +2052,7 @@ const SubmissionsSection = ({
                 id="teacher-submissions-status-filter"
                 value={statusFilter}
                 onChange={(e) => onStatusFilterChange(e.target.value)}
-                className="teacher-submissions-select status-filter"
+                className="teacher-submissions-select"
                 disabled={submissionsBusy}
                 aria-disabled={submissionsBusy}
               >
@@ -2066,7 +2069,7 @@ const SubmissionsSection = ({
                 id="teacher-submissions-deadline-filter"
                 value={deadlineFilter}
                 onChange={(e) => onDeadlineFilterChange?.(e.target.value)}
-                className="teacher-submissions-select deadline-filter"
+                className="teacher-submissions-select"
                 title="По календарному дедлайну задания. Просроченные: на проверке или возвращённые при истёкшем сроке, а также зачтённые, но сданные после дедлайна; зачтённые в срок скрываются."
                 disabled={submissionsBusy}
                 aria-disabled={submissionsBusy}

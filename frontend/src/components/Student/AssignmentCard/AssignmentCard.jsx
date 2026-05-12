@@ -1,6 +1,7 @@
 import React from 'react';
 import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
+import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import { getAssignmentStatusInfo, getDaysUntilDeadline, formatDate } from '../../../utils';
 import iconDeadline from '../../../assets/assignment/assignment-deadline.svg';
 import iconMaxScore from '../../../assets/assignment/assignment-max-score.svg';
@@ -153,9 +154,9 @@ const AssignmentCard = ({
           </div>
         </div>
         <div className="assignment-status">
-          <span className={`status-badge status-badge--${statusInfo.variant}`}>
+          <StatusBadge tone={statusInfo.variant}>
             {statusInfo.label}
-          </span>
+          </StatusBadge>
           {isRetakeAssignment && (
             <span className={`retake-badge ${retakeUsed ? 'retake-badge--used' : ''}`}>
               {retakeUsed ? 'Пересдача использована' : 'Пересдача'}

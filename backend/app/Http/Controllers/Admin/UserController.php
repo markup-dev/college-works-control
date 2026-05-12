@@ -270,6 +270,127 @@ class UserController extends Controller
         return $byUser;
     }
 
+    /**
+     * Детализация предупреждений на карточке пользователя (модалка админки).
+     */
+    public function adminUserWarningsDetail(User $user): \Illuminate\Http\JsonResponse
+    {
+        $displayName = trim(implode(' ', array_filter([
+            $user->last_name,
+            $user->first_name,
+            $user->middle_name,
+        ])));
+
+        if ($user->role === 'admin') {
+            return response()->json([
+                'role' => 'admin',
+                'display_name' => $displayName ?: ($user->login ?? ''),
+                'student' => null,
+                'teacher' => null,
+            ]);
+        }
+
+        if ($user->role === 'student') {
+            return response()->json([
+                'role' => 'student',
+                'display_name' => $displayName ?: ($user->login ?? ''),
+                'student' => $this->adminStudentWarningsDetailPayload($user),
+                'teacher' => null,
+            ]);
+        }
+
+        return response()->json([
+            'role' => 'teacher',
+            'display_name' => $displayName ?: ($user->login ?? ''),
+            'student' => null,
+            'teacher' => $this->adminTeacherWarningsDetailPayload($user),
+        ]);
+    }
+
+    /**
+     * @return array{overdue_assignments: list<array{title: string, deadline: string}>, no_submissions_week: null|array{last_submission_at: null|string}}
+     */
+    private function adminStudentWarningsDetailPayload(User $user): array
+    {
+        $overdueAssignments = [];
+
+        if ($user->group_id) {
+            $rows = DB::table('assignment_group as ag')
+                ->join('assignments as a', 'a.id', '=', 'ag.assignment_id')
+                ->leftJoin('submissions as s', function ($join) use ($user) {
+                    $join->on('s.assignment_id', '=', 'a.id')
+                        ->where('s.student_id', '=', $user->id)
+                        ->where('s.status', '=', 'graded');
+                })
+                ->where('ag.group_id', $user->group_id)
+                ->where('a.status', '=', 'active')
+                ->whereDate('a.deadline', '<', now()->toDateString())
+                ->whereNull('s.id')
+                ->orderBy('a.deadline')
+                ->select(['a.title', 'a.deadline'])
+                ->get();
+
+            foreach ($rows as $r) {
+                $deadline = $r->deadline ?? null;
+                $overdueAssignments[] = [
+                    'title' => (string) $r->title,
+                    'deadline' => $deadline ? substr((string) $deadline, 0, 10) : '',
+                ];
+            }
+        }
+
+        $recentCount = (int) Submission::query()
+            ->where('student_id', $user->id)
+            ->whereNotNull('submitted_at')
+            ->where('submitted_at', '>=', now()->subDays(7))
+            ->count();
+
+        $lastSubmission = Submission::query()
+            ->where('student_id', $user->id)
+            ->whereNotNull('submitted_at')
+            ->orderByDesc('submitted_at')
+            ->first(['submitted_at']);
+
+        $noSubmissionsWeek = null;
+        if ($user->group_id && $recentCount === 0) {
+            $ts = $lastSubmission?->submitted_at;
+            $noSubmissionsWeek = [
+                'last_submission_at' => $ts ? $ts->toIso8601String() : null,
+            ];
+        }
+
+        return [
+            'overdue_assignments' => $overdueAssignments,
+            'no_submissions_week' => $noSubmissionsWeek,
+        ];
+    }
+
+    /**
+     * @return array{stale_reviews: list<array{assignment_title: string, submitted_at: string}>}
+     */
+    private function adminTeacherWarningsDetailPayload(User $user): array
+    {
+        $rows = Submission::query()
+            ->join('assignments', 'submissions.assignment_id', '=', 'assignments.id')
+            ->where('assignments.teacher_id', $user->id)
+            ->where('submissions.status', 'submitted')
+            ->whereNotNull('submissions.submitted_at')
+            ->where('submissions.submitted_at', '<=', now()->subDays(3))
+            ->orderBy('submissions.submitted_at')
+            ->select(['assignments.title as assignment_title', 'submissions.submitted_at'])
+            ->get();
+
+        $stale = [];
+        foreach ($rows as $r) {
+            $stale[] = [
+                'assignment_title' => (string) $r->assignment_title,
+                'submitted_at' => $r->submitted_at?->toIso8601String() ?? '',
+            ];
+        }
+
+        return ['stale_reviews' => $stale];
+    }
+
     public function createUser(Request $request)
     {
         if ($request->filled('patronymic') && !$request->has('middle_name')) {
@@ -476,6 +597,16 @@ class UserController extends Controller
         if ($roleAfter === 'student' && empty($groupIdAfter)) {
             throw ValidationException::withMessages([
                 'group_id' => ['Выберите группу для студента.'],
+            ]);
+        }
+
+        if (
+            array_key_exists('is_active', $validated)
+            && $validated['is_active'] === false
+            && (int) $request->user()->id === (int) $user->id
+        ) {
+            throw ValidationException::withMessages([
+                'is_active' => ['Нельзя заблокировать собственную учётную запись.'],
             ]);
         }
 

@@ -1,81 +1,8 @@
 .teacher-grading-modal {
-  &.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.5);
-    backdrop-filter: blur(2px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 5000;
-    padding: 1.25rem;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+  max-width: 720px;
+  border: 1px solid #e6edf7;
 
-  .modal-content {
-    background: #ffffff;
-    border: 1px solid #e6edf7;
-    border-radius: 14px;
-    width: 100%;
-    max-width: 720px;
-    max-height: min(92vh, 100dvh - 2.5rem);
-    overflow-x: hidden;
-    overflow-y: auto;
-    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.22);
-    margin: auto;
-  }
-
-  .modal-header {
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 16px 18px;
-    border-bottom: 1px solid #e6ebf3;
-    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-
-    h3 {
-      margin: 0;
-      font-size: 1.3rem;
-      color: #1f2937;
-      font-weight: 700;
-    }
-  }
-
-  .modal-header__titles p {
-    margin: 4px 0 0;
-    color: #64748b;
-    font-size: 0.88rem;
-    font-weight: 500;
-  }
-
-  .modal-close {
-    border: 1px solid transparent;
-    background: #f3f6fb;
-    font-size: 1.4rem;
-    line-height: 1;
-    cursor: pointer;
-    color: #64748b;
-    width: 34px;
-    height: 34px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    transition: all 0.2s ease;
-
-    &:hover {
-      color: #334155;
-      border-color: #d6dfed;
-      background: #ffffff;
-    }
-  }
-
-  .modal-body {
+  &__body {
     padding: 16px 18px;
   }
 
@@ -121,7 +48,7 @@
   }
 
   .grading-form {
-    .form-group {
+    .teacher-grading-modal__field {
       margin-bottom: 14px;
 
       label {
@@ -328,28 +255,14 @@
     }
   }
 
-  .modal-actions {
-    position: sticky;
-    bottom: 0;
-    z-index: 3;
+  &__actions {
     display: flex;
+    width: 100%;
     justify-content: flex-end;
     gap: 10px;
-    padding: 14px 18px;
-    border-top: 1px solid #e6ebf3;
-    background: #f8fbff;
   }
 
   @media (max-width: 768px) {
-    &.modal-overlay {
-      padding: 0.7rem;
-    }
-
-    .modal-content {
-      max-width: 100%;
-      border-radius: 12px;
-    }
-
     .submission-info .info-grid {
       grid-template-columns: 1fr;
     }
@@ -363,10 +276,10 @@
       text-align: left;
     }
 
-    .modal-actions {
+    .teacher-grading-modal__actions {
       flex-direction: column;
 
-      .btn {
+      .ui-button {
         width: 100%;
       }
     }

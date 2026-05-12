@@ -1,96 +1,352 @@
 @import '../../../styles/base/variables';
 
-.admin-user-view {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.admin-user-view-modal {
+  max-width: 720px;
 
-  &__grid {
+  &__body {
+    padding: 20px 22px;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.85rem 1.25rem;
-    align-items: start;
+    gap: 14px;
+    background: #fcfdff;
+  }
 
-    @media (max-width: 520px) {
-      grid-template-columns: 1fr;
+  // Профиль header
+  .profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 14px;
+    border: 1px solid #e7edf6;
+    border-radius: 14px;
+    background: #ffffff;
+  }
+
+  .profile-header__avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 32px;
+    background: linear-gradient(135deg, $primary-color, #4f81c7);
+    color: white;
+    font-weight: 700;
+    font-size: 1.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba($primary-color, 0.2);
+    flex-shrink: 0;
+  }
+
+  .profile-header__info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    min-width: 0;
+  }
+
+  .profile-header__identity {
+    h4 {
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #1e293b;
+      line-height: 1.25;
+    }
+
+    p {
+      margin: 0.2rem 0 0;
+      font-size: 0.88rem;
+      color: #64748b;
+      overflow-wrap: anywhere;
     }
   }
 
-  &__field {
+  .profile-header__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  // Бейджи ролей
+  .role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+
+    &--student {
+      background: #eff6ff;
+      color: #1e40af;
+    }
+
+    &--teacher {
+      background: #f0fdf4;
+      color: #166534;
+    }
+
+    &--admin {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    &--default {
+      background: #f1f5f9;
+      color: #475569;
+    }
+  }
+
+  // Статусная карточка
+  .status-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+
+    &--active {
+      background: #ecfdf5;
+      border: 1px solid #d1fae5;
+
+      .status-card__icon {
+        background: #10b981;
+        color: white;
+      }
+    }
+
+    &--password {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+
+      .status-card__icon {
+        background: #eab308;
+        color: white;
+      }
+    }
+
+    &--blocked {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+
+      .status-card__icon {
+        background: #ef4444;
+        color: white;
+      }
+    }
+  }
+
+  .status-card__icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .status-card__content {
+    flex: 1;
+  }
+
+  .status-card__title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #1e293b;
+    margin-bottom: 0.2rem;
+  }
+
+  .status-card__description {
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+
+  // Три ключевых поля
+  .key-fields {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #eef2f8;
+
+    &--two {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .key-field {
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
     min-width: 0;
   }
 
-  &__field--full {
-    grid-column: 1 / -1;
-  }
-
-  &__label {
-    font-size: 0.78rem;
+  .key-field__label {
+    font-size: 0.7rem;
     font-weight: 600;
-    color: $text-secondary;
+    color: #64748b;
     text-transform: uppercase;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.3px;
   }
 
-  &__value {
+  .key-field__value {
     font-size: 0.95rem;
-    color: $text-primary;
-    line-height: 1.35;
+    font-weight: 600;
+    color: #1e293b;
     word-break: break-word;
   }
 
-  &__value--muted {
-    color: $text-secondary;
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px 16px;
   }
 
-  &__status {
-    display: inline-flex;
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+
+    strong {
+      font-size: 0.72rem;
+      color: #6b7280;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    span {
+      font-size: 0.9rem;
+      color: #1f2937;
+      word-break: break-word;
+
+      &.muted {
+        color: #94a3b8;
+      }
+    }
+
+    &--full {
+      grid-column: 1 / -1;
+    }
+  }
+
+  // Последний вход
+  .last-login {
+    display: flex;
     align-items: center;
-    gap: 0.45rem;
-    font-size: 0.92rem;
+    padding: 0.75rem 1rem;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #eef2f8;
+  }
+
+  .last-login__content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex: 1;
+  }
+
+  .last-login__label {
+    font-size: 0.7rem;
     font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
   }
 
-  &__status-dot {
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    flex-shrink: 0;
+  .last-login__date {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #1e293b;
   }
 
-  &__status--active .admin-user-view__status-dot {
-    background: #10b981;
+  .last-login__relative {
+    font-size: 0.75rem;
+    color: #64748b;
   }
 
-  &__status--password .admin-user-view__status-dot {
-    background: #eab308;
-  }
-
-  &__status--blocked .admin-user-view__status-dot {
-    background: #dc2626;
-  }
-
-  &__status--active {
-    color: #065f46;
-  }
-
-  &__status--password {
-    color: #a16207;
-  }
-
-  &__status--blocked {
-    color: #991b1b;
+  // Мета информация
+  .meta-info {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+    font-size: 0.7rem;
+    color: #94a3b8;
+    border-top: 1px solid #eef2f8;
+    margin-top: 0.5rem;
   }
 
   &__actions {
     display: flex;
+    width: 100%;
     justify-content: flex-end;
-    gap: 0.5rem;
-    padding-top: 0.65rem;
-    margin-top: 0.15rem;
-    border-top: 1px solid rgba($primary-color, 0.12);
+    gap: 10px;
+    flex-wrap: wrap;
+
+    &-primary,
+    &-danger {
+      display: flex;
+      gap: 8px;
+    }
+
+    &-danger {
+      margin-left: auto;
+    }
+  }
+
+  // Адаптивность
+  @media (max-width: 768px) {
+    .admin-user-view-modal__body {
+      padding-left: 14px;
+      padding-right: 14px;
+    }
+
+    .key-fields {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
+
+    .info-grid {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .admin-user-view-modal__actions {
+      flex-direction: column;
+
+      &-primary,
+      &-danger {
+        width: 100%;
+        justify-content: stretch;
+      }
+
+      &-danger {
+        margin-left: 0;
+      }
+
+      .ui-button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+
+    .profile-header {
+      flex-direction: column;
+      text-align: center;
+    }
+
+    .profile-header__info {
+      justify-content: center;
+    }
   }
 }

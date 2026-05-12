@@ -451,6 +451,26 @@
   line-height: 1.4;
 }
 
+.header__panel-section-label {
+  margin: 6px 0 8px;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.header__panel-subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e8ecf1;
+}
+
 .header__panel-actions {
   margin-top: 18px;
   padding-top: 16px;

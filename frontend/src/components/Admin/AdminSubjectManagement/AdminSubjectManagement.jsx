@@ -3,13 +3,19 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { formatDateLong } from '../../../utils/dateHelpers';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
-import Card from '../../UI/Card/Card';
+import EmptyState from '../../UI/EmptyState/EmptyState';
+import EntityCard from '../../UI/EntityCard/EntityCard';
+import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
+import LoadingState from '../../UI/LoadingState/LoadingState';
 import Modal from '../../UI/Modal/Modal';
+import ModalSection from '../../UI/Modal/ModalSection';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
+import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import './AdminSubjectManagement.scss';
 
 const PER_PAGE = 18;
@@ -26,6 +32,8 @@ const SUBJECT_SORT_OPTIONS = [
   { value: 'newest', label: 'Сначала новые' },
   { value: 'oldest', label: 'Сначала старые' },
 ];
+
+const subjectStatusLabel = (value) => (value === 'inactive' ? 'Неактивен' : 'Активен');
 
 const shortName = (lastName, firstName, middleName) => {
   const a = firstName?.trim()?.[0];
@@ -47,7 +55,6 @@ const AdminSubjectManagement = () => {
   const [status, setStatus] = useState('');
   const [sort, setSort] = useState('name_asc');
   const [page, setPage] = useState(1);
-  const [openMenuId, setOpenMenuId] = useState(null);
 
   const [subjects, setSubjects] = useState([]);
   const [meta, setMeta] = useState({ currentPage: 1, lastPage: 1, total: 0 });
@@ -62,6 +69,7 @@ const AdminSubjectManagement = () => {
   const [editRow, setEditRow] = useState(null);
   const [editName, setEditName] = useState('');
   const [editCode, setEditCode] = useState('');
+  const [editStatus, setEditStatus] = useState('active');
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   const [viewId, setViewId] = useState(null);
@@ -126,17 +134,6 @@ const AdminSubjectManagement = () => {
     navigate(location.pathname, { replace: true, state: {} });
   }, [viewSubjectIdFromRoute, location.pathname, navigate]);
 
-  useEffect(() => {
-    if (openMenuId == null) return undefined;
-    const onDown = (e) => {
-      if (!e.target.closest?.('.admin-subject-card__menu-root')) {
-        setOpenMenuId(null);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [openMenuId]);
-
   const fetchSubjects = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -184,10 +181,10 @@ const AdminSubjectManagement = () => {
       try {
         const { data } = await api.get(`/admin/subjects/${viewId}`);
         if (!cancelled) setViewData(data);
-      } catch {
+      } catch (e) {
         if (!cancelled) {
           setViewData(null);
-          showError('Не удалось загрузить предмет');
+          showError(firstApiErrorMessage(e, 'Не удалось загрузить предмет'));
         }
       } finally {
         if (!cancelled) setViewLoading(false);
@@ -261,6 +258,7 @@ const AdminSubjectManagement = () => {
     setEditRow(row);
     setEditName(row.name || '');
     setEditCode(row.code || '');
+    setEditStatus(row.status === 'inactive' ? 'inactive' : 'active');
   };
 
   const submitEdit = async () => {
@@ -270,6 +268,7 @@ const AdminSubjectManagement = () => {
       await api.put(`/admin/subjects/${editRow.id}`, {
         name: editName.trim(),
         code: editCode.trim(),
+        status: editStatus,
       });
       showSuccess('Изменения сохранены');
       setEditRow(null);
@@ -286,6 +285,25 @@ const AdminSubjectManagement = () => {
       showError(firstApiErrorMessage(e, 'Не удалось сохранить'));
     } finally {
       setEditSubmitting(false);
+    }
+  };
+
+  const toggleSubjectStatus = async (row) => {
+    const nextStatus = row.status === 'inactive' ? 'active' : 'inactive';
+    try {
+      await api.put(`/admin/subjects/${row.id}`, { status: nextStatus });
+      showSuccess(nextStatus === 'active' ? 'Предмет активирован' : 'Предмет деактивирован');
+      void fetchSubjects();
+      if (viewId === row.id) {
+        try {
+          const { data } = await api.get(`/admin/subjects/${row.id}`);
+          setViewData(data);
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch (e) {
+      showError(firstApiErrorMessage(e, 'Не удалось изменить статус предмета'));
     }
   };
 
@@ -413,13 +431,6 @@ const AdminSubjectManagement = () => {
     }
   };
 
-  const formatDate = (iso) => {
-    if (!iso) return '—';
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  };
-
   return (
     <div className="admin-subject-management">
       <div className="admin-subject-management__head">
@@ -479,18 +490,23 @@ const AdminSubjectManagement = () => {
       </div>
 
       {error && (
-        <div className="admin-subject-management__banner admin-subject-management__banner--error" role="alert">
-          <span>{error}</span>
-          <Button type="button" variant="secondary" onClick={() => void fetchSubjects()} className="admin-subject-management__retry">
-            Повторить
-          </Button>
-        </div>
+        <ErrorBanner
+          className="admin-subject-management__error"
+          title="Ошибка загрузки предметов"
+          message={error}
+          actionLabel="Повторить"
+          onAction={() => void fetchSubjects()}
+        />
       )}
 
       <div className={`admin-subject-management__grid-wrap${loading ? ' admin-subject-management__grid-wrap--loading' : ''}`}>
-        {loading && <p className="admin-subject-management__hint">Загрузка…</p>}
+        {loading && <LoadingState message="Загрузка предметов..." className="admin-subject-management__state" />}
         {!loading && subjects.length === 0 && !error && (
-          <p className="admin-subject-management__hint">Предметы не найдены</p>
+          <EmptyState
+            title="Предметы не найдены"
+            message="Попробуйте изменить параметры поиска или фильтрации"
+            className="admin-subject-management__state"
+          />
         )}
         {!loading && subjects.length > 0 && (
           <div className="admin-subject-management__card-grid">
@@ -498,59 +514,63 @@ const AdminSubjectManagement = () => {
               const t = row.teachersCount ?? 0;
               const g = row.groupsCount ?? 0;
               const a = row.assignmentsCount ?? 0;
+              const isActive = row.status !== 'inactive';
               return (
-                <Card key={row.id} className="admin-subject-card" padding="medium" shadow="small" bordered>
+                <EntityCard
+                  key={row.id}
+                  className="admin-subject-card"
+                  padding="medium"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewId(row.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setViewId(row.id);
+                    }
+                  }}
+                >
                   <div className="admin-subject-card__title">{row.name}</div>
                   <div className="admin-subject-card__code">Код: {row.code}</div>
+                  <StatusBadge tone={isActive ? 'success' : 'neutral'} className="admin-subject-card__status">
+                    {subjectStatusLabel(row.status)}
+                  </StatusBadge>
                   <div className="admin-subject-card__meta">
                     <span>Преподавателей: {t}</span>
                     <span>Групп: {g}</span>
                     <span>Заданий: {a}</span>
                   </div>
-                  <div className="admin-subject-card__menu-root">
-                    <button
+                  <div
+                    className="admin-subject-card__actions"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <Button
                       type="button"
-                      className="admin-subject-card__menu-btn"
-                      aria-label="Действия"
-                      onClick={() => setOpenMenuId((id) => (id === row.id ? null : row.id))}
+                      size="small"
+                      variant="outline"
+                      onClick={() => openEdit(row)}
                     >
-                      …
-                    </button>
-                    {openMenuId === row.id && (
-                      <ul className="admin-subject-card__menu" role="menu">
-                        <li>
-                          <button type="button" role="menuitem" onClick={() => { setOpenMenuId(null); setViewId(row.id); }}>
-                            Просмотр предмета
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              openEdit(row);
-                            }}
-                          >
-                            Редактировать
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              void openDelete(row);
-                            }}
-                          >
-                            Удалить
-                          </button>
-                        </li>
-                      </ul>
-                    )}
+                      Редактировать
+                    </Button>
+                    <Button
+                      type="button"
+                      size="small"
+                      variant={isActive ? 'secondary' : 'primary'}
+                      onClick={() => void toggleSubjectStatus(row)}
+                    >
+                      {isActive ? 'Деактивировать' : 'Активировать'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="small"
+                      variant="danger"
+                      onClick={() => void openDelete(row)}
+                    >
+                      Удалить
+                    </Button>
                   </div>
-                </Card>
+                </EntityCard>
               );
             })}
           </div>
@@ -568,8 +588,30 @@ const AdminSubjectManagement = () => {
         onNext={() => setPage((p) => p + 1)}
       />
 
-      <Modal isOpen={createOpen} onClose={() => !createSubmitting && setCreateOpen(false)} title="Новый предмет" size="medium">
-        <div className="admin-subject-form">
+      <Modal
+        isOpen={createOpen}
+        onClose={() => !createSubmitting && setCreateOpen(false)}
+        title="Новый предмет"
+        size="medium"
+        contentClassName="admin-subject-form"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} disabled={createSubmitting}>
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              loading={createSubmitting}
+              disabled={createSubmitting || createName.trim().length < 2 || !createCode.trim()}
+              onClick={() => void submitCreate()}
+            >
+              Создать
+            </Button>
+          </>
+        )}
+      >
+        <ModalSection title="Данные предмета">
           <label className="admin-subject-form__label">
             Название
             <input
@@ -592,25 +634,33 @@ const AdminSubjectManagement = () => {
           <p className="admin-subject-form__hint">
             Код должен быть уникальным и используется в отчётах.
           </p>
-          <div className="admin-subject-form__actions">
-            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} disabled={createSubmitting}>
+        </ModalSection>
+      </Modal>
+
+      <Modal
+        isOpen={!!editRow}
+        onClose={() => !editSubmitting && setEditRow(null)}
+        title="Редактировать предмет"
+        size="medium"
+        contentClassName="admin-subject-form"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={() => setEditRow(null)} disabled={editSubmitting}>
               Отмена
             </Button>
             <Button
               type="button"
               variant="primary"
-              loading={createSubmitting}
-              disabled={createSubmitting || createName.trim().length < 2 || !createCode.trim()}
-              onClick={() => void submitCreate()}
+              loading={editSubmitting}
+              disabled={editSubmitting || editName.trim().length < 2 || !editCode.trim()}
+              onClick={() => void submitEdit()}
             >
-              Создать
+              Сохранить
             </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={!!editRow} onClose={() => !editSubmitting && setEditRow(null)} title="Редактировать предмет" size="medium">
-        <div className="admin-subject-form">
+          </>
+        )}
+      >
+        <ModalSection title="Данные предмета">
           <label className="admin-subject-form__label">
             Название
             <input
@@ -629,24 +679,21 @@ const AdminSubjectManagement = () => {
               autoComplete="off"
             />
           </label>
+          <label className="admin-subject-form__label">
+            Статус
+            <select
+              className="admin-subject-form__input"
+              value={editStatus}
+              onChange={(e) => setEditStatus(e.target.value)}
+            >
+              <option value="active">Активен</option>
+              <option value="inactive">Неактивен</option>
+            </select>
+          </label>
           <p className="admin-subject-form__hint">
             При изменении кода задания сохраняют привязку к этой же записи предмета.
           </p>
-          <div className="admin-subject-form__actions">
-            <Button type="button" variant="secondary" onClick={() => setEditRow(null)} disabled={editSubmitting}>
-              Отмена
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              loading={editSubmitting}
-              disabled={editSubmitting || editName.trim().length < 2 || !editCode.trim()}
-              onClick={() => void submitEdit()}
-            >
-              Сохранить
-            </Button>
-          </div>
-        </div>
+        </ModalSection>
       </Modal>
 
       <Modal
@@ -654,71 +701,100 @@ const AdminSubjectManagement = () => {
         onClose={() => setViewId(null)}
         title={viewData?.subject ? viewData.subject.name : 'Предмет'}
         size="large"
+        footer={!viewLoading && viewData?.subject ? (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                const s = viewData.subject;
+                setViewId(null);
+                openEdit({ id: s.id, name: s.name, code: s.code, status: s.status });
+              }}
+            >
+              Редактировать предмет
+            </Button>
+            <Button
+              type="button"
+              variant={viewData.subject.status === 'inactive' ? 'primary' : 'secondary'}
+              onClick={() => void toggleSubjectStatus(viewData.subject)}
+            >
+              {viewData.subject.status === 'inactive' ? 'Активировать предмет' : 'Деактивировать предмет'}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                const s = viewData.subject;
+                setViewId(null);
+                void openDelete({ id: s.id, name: s.name, code: s.code });
+              }}
+            >
+              Удалить предмет
+            </Button>
+          </>
+        ) : null}
       >
-        {viewLoading && <p className="admin-subject-management__hint">Загрузка…</p>}
+        {viewLoading && <LoadingState message="Загрузка..." className="admin-subject-management__state" />}
         {!viewLoading && viewData?.subject && (
           <div className="admin-subject-view">
-            <section>
-              <h3 className="admin-subject-view__section-title">Информация</h3>
-              <dl className="admin-subject-view__dl">
-                <div>
-                  <dt>Название</dt>
-                  <dd>{viewData.subject.name}</dd>
-                </div>
-                <div>
-                  <dt>Код</dt>
-                  <dd>{viewData.subject.code}</dd>
-                </div>
-                <div>
-                  <dt>Создан</dt>
-                  <dd>{formatDate(viewData.subject.createdAt)}</dd>
-                </div>
-              </dl>
+            <section className="admin-subject-view__hero">
+              <div>
+                <span className="admin-subject-view__eyebrow">Предмет</span>
+                <h3 className="admin-subject-view__name">{viewData.subject.name}</h3>
+                <p className="admin-subject-view__code">Код: {viewData.subject.code}</p>
+                <StatusBadge
+                  tone={viewData.subject.status === 'inactive' ? 'neutral' : 'success'}
+                  className="admin-subject-view__status"
+                >
+                  {subjectStatusLabel(viewData.subject.status)}
+                </StatusBadge>
+              </div>
+              <div className="admin-subject-view__created">
+                <span>Создан</span>
+                <strong>{formatDateLong(viewData.subject.createdAt)}</strong>
+              </div>
             </section>
             {viewData.stats && (
-              <section>
-                <h3 className="admin-subject-view__section-title">Показатели</h3>
-                <dl className="admin-subject-view__dl">
-                  <div>
+              <ModalSection title="Показатели">
+                <dl className="admin-subject-view__stats">
+                  <div className="admin-subject-view__stat">
                     <dt>Преподавателей</dt>
                     <dd>{viewData.stats.teachersCount}</dd>
                   </div>
-                  <div>
+                  <div className="admin-subject-view__stat">
                     <dt>Групп по назначениям</dt>
                     <dd>{viewData.stats.groupsCount}</dd>
                   </div>
-                  <div>
+                  <div className="admin-subject-view__stat">
                     <dt>Заданий</dt>
                     <dd>{viewData.stats.assignmentsCount}</dd>
                   </div>
-                  <div>
+                  <div className="admin-subject-view__stat">
                     <dt>Активных заданий</dt>
                     <dd>{viewData.stats.activeAssignmentsCount}</dd>
                   </div>
-                  <div>
+                  <div className="admin-subject-view__stat">
                     <dt>Сданных работ</dt>
                     <dd>{viewData.stats.submissionsCount}</dd>
                   </div>
                 </dl>
-              </section>
+              </ModalSection>
             )}
-            <section>
-              <h3 className="admin-subject-view__section-title">Назначения</h3>
+            <ModalSection title="Назначения">
               {!viewData.teachingLoads?.length && <p className="admin-subject-management__hint">Назначений пока нет</p>}
               {viewData.teachingLoads?.length > 0 && (
                 <ul className="admin-subject-view__loads">
                   {viewData.teachingLoads.map((row) => (
                     <li key={row.teachingLoadId} className="admin-subject-view__load-row">
                       <div className="admin-subject-view__load-meta">
-                        <strong>
+                        <strong className="admin-subject-view__load-title">
                           {row.teacher
                             ? shortName(row.teacher.lastName, row.teacher.firstName, row.teacher.middleName)
                             : '—'}
                         </strong>
-                        <br />
-                        {row.group ? `Группа: ${row.group.name}` : 'Группа не указана'}
-                        <br />
-                        Активных заданий: {row.activeAssignmentsCount ?? 0}
+                        <span>{row.group ? `Группа: ${row.group.name}` : 'Группа не указана'}</span>
+                        <span>Активных заданий: {row.activeAssignmentsCount ?? 0}</span>
                       </div>
                       <div className="admin-subject-view__load-actions">
                         <Button
@@ -745,36 +821,12 @@ const AdminSubjectManagement = () => {
                   ))}
                 </ul>
               )}
-              <div style={{ marginTop: '0.75rem' }}>
+              <div className="admin-subject-view__section-action">
                 <Button type="button" variant="secondary" onClick={openAddLoad}>
                   Добавить назначение
                 </Button>
               </div>
-            </section>
-            <div className="admin-subject-view__footer">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  const s = viewData.subject;
-                  setViewId(null);
-                  openEdit({ id: s.id, name: s.name, code: s.code });
-                }}
-              >
-                Редактировать предмет
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                onClick={() => {
-                  const s = viewData.subject;
-                  setViewId(null);
-                  void openDelete({ id: s.id, name: s.name, code: s.code });
-                }}
-              >
-                Удалить предмет
-              </Button>
-            </div>
+            </ModalSection>
           </div>
         )}
       </Modal>
@@ -784,8 +836,19 @@ const AdminSubjectManagement = () => {
         onClose={() => !addLoadSubmitting && setAddLoadOpen(false)}
         title="Новое назначение"
         size="medium"
+        contentClassName="admin-subject-form admin-subject-add-load"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={() => setAddLoadOpen(false)} disabled={addLoadSubmitting}>
+              Отмена
+            </Button>
+            <Button type="button" variant="primary" loading={addLoadSubmitting} onClick={() => void submitAddLoad()}>
+              Создать
+            </Button>
+          </>
+        )}
       >
-        <div className="admin-subject-form admin-subject-add-load">
+        <ModalSection title="Преподаватель и группы">
           <label className="admin-subject-form__label">
             Преподаватель
             <select
@@ -819,15 +882,7 @@ const AdminSubjectManagement = () => {
               </label>
             ))}
           </div>
-          <div className="admin-subject-form__actions">
-            <Button type="button" variant="secondary" onClick={() => setAddLoadOpen(false)} disabled={addLoadSubmitting}>
-              Отмена
-            </Button>
-            <Button type="button" variant="primary" loading={addLoadSubmitting} onClick={() => void submitAddLoad()}>
-              Создать
-            </Button>
-          </div>
-        </div>
+        </ModalSection>
       </Modal>
 
       <Modal
@@ -835,8 +890,19 @@ const AdminSubjectManagement = () => {
         onClose={() => !changeLoadSubmitting && setChangeLoad(null)}
         title="Изменить группу в назначении"
         size="small"
+        contentClassName="admin-subject-form"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={() => setChangeLoad(null)} disabled={changeLoadSubmitting}>
+              Отмена
+            </Button>
+            <Button type="button" variant="primary" loading={changeLoadSubmitting} onClick={() => void submitChangeLoadGroup()}>
+              Сохранить
+            </Button>
+          </>
+        )}
       >
-        <div className="admin-subject-form">
+        <ModalSection title="Группа назначения">
           <label className="admin-subject-form__label">
             Группа
             <select
@@ -852,15 +918,7 @@ const AdminSubjectManagement = () => {
               ))}
             </select>
           </label>
-          <div className="admin-subject-form__actions">
-            <Button type="button" variant="secondary" onClick={() => setChangeLoad(null)} disabled={changeLoadSubmitting}>
-              Отмена
-            </Button>
-            <Button type="button" variant="primary" loading={changeLoadSubmitting} onClick={() => void submitChangeLoadGroup()}>
-              Сохранить
-            </Button>
-          </div>
-        </div>
+        </ModalSection>
       </Modal>
 
       <Modal
@@ -868,8 +926,19 @@ const AdminSubjectManagement = () => {
         onClose={() => !deleteSubmitting && setDeleteTarget(null)}
         title={deleteTarget ? `Удалить предмет ${deleteTarget.name}` : 'Удаление'}
         size="medium"
+        contentClassName="admin-subject-form"
+        footer={(
+          <>
+            <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleteSubmitting}>
+              Отмена
+            </Button>
+            <Button type="button" variant="danger" loading={deleteSubmitting} onClick={() => void submitDelete()}>
+              Удалить
+            </Button>
+          </>
+        )}
       >
-        <div className="admin-subject-form">
+        <ModalSection title="Подтверждение удаления" variant="danger">
           {deletePreview?.stats && (
             <p className="admin-subject-form__warn">
               Связано: преподавателей {deletePreview.stats.teachersCount}, групп {deletePreview.stats.groupsCount},
@@ -886,15 +955,7 @@ const AdminSubjectManagement = () => {
               autoComplete="off"
             />
           </label>
-          <div className="admin-subject-form__actions">
-            <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleteSubmitting}>
-              Отмена
-            </Button>
-            <Button type="button" variant="danger" loading={deleteSubmitting} onClick={() => void submitDelete()}>
-              Удалить
-            </Button>
-          </div>
-        </div>
+        </ModalSection>
       </Modal>
 
       <ConfirmModal

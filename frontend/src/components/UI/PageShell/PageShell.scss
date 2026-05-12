@@ -1,0 +1,48 @@
+.ui-page-shell {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 24px;
+  padding-inline: max(24px, env(safe-area-inset-left, 0px))
+    max(24px, env(safe-area-inset-right, 0px));
+
+  &__content {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    margin: 0 auto;
+  }
+
+  &--standard {
+    .ui-page-shell__content {
+      max-width: 1200px;
+    }
+  }
+
+  &--wide {
+    .ui-page-shell__content {
+      max-width: 1400px;
+    }
+  }
+
+  &--full {
+    .ui-page-shell__content {
+      max-width: none;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .ui-page-shell {
+    padding: 16px;
+    padding-inline: max(16px, env(safe-area-inset-left, 0px))
+      max(16px, env(safe-area-inset-right, 0px));
+  }
+}
+
+@media (max-width: 480px) {
+  .ui-page-shell {
+    padding: 12px;
+    padding-inline: max(12px, env(safe-area-inset-left, 0px))
+      max(12px, env(safe-area-inset-right, 0px));
+  }
+}

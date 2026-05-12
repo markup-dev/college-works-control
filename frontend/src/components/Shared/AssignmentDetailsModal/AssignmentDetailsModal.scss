@@ -40,46 +40,6 @@
     flex-wrap: wrap;
   }
 
-  .status-badge {
-    padding: 0.42rem 0.9rem;
-    border-radius: 999px;
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
-
-    &--success,
-    &--active {
-      background: #dcfce7;
-      color: #15803d;
-      border: 1px solid #86efac;
-    }
-
-    &--warning {
-      background: #fef3c7;
-      color: #b45309;
-      border: 1px solid #fbbf24;
-    }
-
-    &--danger {
-      background: #fee2e2;
-      color: #b91c1c;
-      border: 1px solid #fca5a5;
-    }
-
-    &--completed {
-      background: #e2e8f0;
-      color: #334155;
-      border: 1px solid #cbd5e1;
-    }
-
-    &--default {
-      background: #f1f5f9;
-      color: #475569;
-      border: 1px solid #dbe3ee;
-    }
-  }
-
   .priority-badge {
     display: inline-flex;
     align-items: center;
@@ -476,7 +436,7 @@
     display: flex;
     justify-content: flex-end;
 
-    .btn {
+    .ui-button {
       min-width: 180px;
     }
   }
@@ -486,7 +446,7 @@
     flex-wrap: wrap;
     gap: 0.6rem;
 
-    .btn {
+    .ui-button {
       min-width: 0;
       flex: 1 1 160px;
     }
@@ -518,12 +478,12 @@
     flex-wrap: wrap;
   }
 
-  .assignment-submit-btn--urgent.btn--primary {
+  .assignment-submit-btn--urgent.ui-button--primary {
     background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
     box-shadow: 0 2px 4px rgba(249, 115, 22, 0.26);
   }
 
-  .assignment-submit-btn--urgent.btn--primary:hover:not(:disabled) {
+  .assignment-submit-btn--urgent.ui-button--primary:hover:not(:disabled) {
     background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
     box-shadow: 0 8px 20px rgba(234, 88, 12, 0.34);
   }
@@ -561,7 +521,7 @@
     &__actions {
       justify-content: stretch;
 
-      .btn {
+      .ui-button {
         min-width: 0;
         width: 100%;
       }
@@ -571,7 +531,7 @@
       flex-direction: column;
       align-items: stretch;
 
-      .btn {
+      .ui-button {
         width: 100%;
         flex: none;
       }
@@ -581,7 +541,7 @@
       width: 100%;
       flex-direction: column;
 
-      .btn {
+      .ui-button {
         width: 100%;
       }
     }

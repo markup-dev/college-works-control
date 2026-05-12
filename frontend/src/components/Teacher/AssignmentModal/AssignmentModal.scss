@@ -1,83 +1,8 @@
 .teacher-assignment-modal {
-&.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.48);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 5000;
-  padding: 1.25rem;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.modal-content {
-  background: white;
   border: 1px solid #e6edf7;
-  border-radius: 14px;
-  width: 100%;
-  max-width: 860px;
-  max-height: min(92vh, 100dvh - 2.5rem);
-  margin: auto;
-  overflow: auto;
-  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.22);
-  
-  &.large {
-    max-width: 980px;
-  }
-}
+  max-width: 980px;
 
-.modal-header {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.8rem;
-  padding: 1rem 1.1rem;
-  border-bottom: 1px solid #e5ebf4;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  
-  h3 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: #1f2937;
-    font-weight: 700;
-  }
-}
-
-.modal-header__subtitle {
-  margin: 0.25rem 0 0;
-  color: #64748b;
-  font-size: 0.86rem;
-}
-
-.modal-close {
-  background: #f3f6fb;
-  border: 1px solid transparent;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  color: #64748b;
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  transition: all 0.2s ease;
-  
-  &:hover {
-    color: #334155;
-    border-color: #d6dfed;
-    background: #ffffff;
-  }
-}
-
-.modal-body {
+&__body {
   padding: 0.95rem 1.1rem;
 }
 
@@ -191,7 +116,7 @@
   margin-bottom: 0.75rem;
 }
 
-.form-group {
+&__field {
   label {
     margin-bottom: 0.38rem;
     font-weight: 700;
@@ -204,9 +129,9 @@
     }
   }
   
-  .form-input,
-  .form-select,
-  .form-textarea {
+  .teacher-assignment-modal__input,
+  .teacher-assignment-modal__select,
+  .teacher-assignment-modal__textarea {
     width: 100%;
     padding: 0.62rem 0.7rem;
     border: 1px solid #d7dfeb;
@@ -222,7 +147,7 @@
     }
   }
   
-  .form-textarea {
+  .teacher-assignment-modal__textarea {
     resize: none;
     min-height: 92px;
     
@@ -231,7 +156,7 @@
     }
   }
 
-  .form-hint {
+  .teacher-assignment-modal__hint {
     display: block;
     margin-top: 0.35rem;
     color: #64748b;
@@ -572,16 +497,11 @@
   }
 }
 
-.modal-actions {
+&__actions {
   display: flex;
+  width: 100%;
   justify-content: flex-end;
   gap: 0.65rem;
-  padding: 0.9rem 1.1rem;
-  border-top: 1px solid #e5ebf4;
-  background: #f8fbff;
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
 }
 
 .back-btn-label {
@@ -596,16 +516,6 @@
 }
 
 @media (max-width: 768px) {
-  &.modal-overlay {
-    padding: 0.75rem;
-  }
-  
-  .modal-content {
-    &.large {
-      max-width: 100%;
-    }
-  }
-  
   .form-row {
     grid-template-columns: 1fr;
     gap: 0.65rem;
@@ -622,10 +532,10 @@
     }
   }
   
-  .modal-actions {
+  .teacher-assignment-modal__actions {
     flex-direction: column;
     
-    .btn {
+    .ui-button {
       width: 100%;
     }
   }

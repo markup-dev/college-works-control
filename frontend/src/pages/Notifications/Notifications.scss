@@ -156,7 +156,7 @@
     justify-content: stretch;
 
     button,
-    .btn {
+    .ui-button {
       flex: 1 1 0;
       min-width: 0;
     }
@@ -192,7 +192,7 @@
     flex-direction: column;
 
     button,
-    .btn {
+    .ui-button {
       width: 100%;
       flex: none;
     }

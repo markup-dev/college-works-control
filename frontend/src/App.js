@@ -12,7 +12,6 @@ import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import AdminUsers from './pages/AdminDashboard/AdminUsers';
 import AdminGroups from './pages/AdminDashboard/AdminGroups';
 import AdminSubjects from './pages/AdminDashboard/AdminSubjects';
-import AdminAssignmentsMatrix from './pages/AdminDashboard/AdminAssignmentsMatrix';
 import TeachingAssignmentsAdminPage from './pages/AdminDashboard/AdminTeachingAssignments';
 import HomeworkAdminPage from './pages/AdminDashboard/AdminHomework';
 import AdminBroadcasts from './pages/AdminDashboard/AdminBroadcasts';
@@ -147,7 +146,6 @@ function AppContent() {
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="groups" element={<AdminGroups />} />
                 <Route path="subjects" element={<AdminSubjects />} />
-                <Route path="assignments-matrix" element={<AdminAssignmentsMatrix />} />
                 <Route path="assignments" element={<TeachingAssignmentsAdminPage />} />
                 <Route path="homework" element={<HomeworkAdminPage />} />
                 <Route path="broadcasts" element={<AdminBroadcasts />} />

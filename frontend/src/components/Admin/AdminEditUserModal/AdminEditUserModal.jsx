@@ -7,26 +7,16 @@ import {
   formatRuPhoneDisplay,
   isPhoneCompleteOrEmpty,
 } from '../../../utils/ruPhoneMask';
-import Modal from '../../UI/Modal/Modal';
 import Button from '../../UI/Button/Button';
-import '../AdminCreateUserModal/AdminCreateUserModal.scss';
+import Modal from '../../UI/Modal/Modal';
+import ModalSection from '../../UI/Modal/ModalSection';
+import './AdminEditUserModal.scss';
 
 const ROLE_OPTIONS = [
   { value: 'student', label: 'Студент' },
   { value: 'teacher', label: 'Преподаватель' },
   { value: 'admin', label: 'Администратор' },
 ];
-
-const Label = ({ htmlFor, required, children }) => (
-  <label className="admin-create-user__label" htmlFor={htmlFor}>
-    {children}
-    {required ? (
-      <span className="admin-create-user__required" aria-hidden="true">
-        *
-      </span>
-    ) : null}
-  </label>
-);
 
 const rowToForm = (row) => {
   if (!row) {
@@ -64,7 +54,7 @@ const rowToForm = (row) => {
   };
 };
 
-const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved }) => {
+const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, currentUserId = null }) => {
   const [form, setForm] = useState(() => rowToForm(null));
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -91,6 +81,7 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved }) 
   }, [form.phone]);
 
   const groupRequired = form.role === 'student';
+  const isEditingSelf = userRow != null && currentUserId != null && Number(userRow.id) === Number(currentUserId);
 
   const canSubmit = useMemo(() => {
     if (!form.lastName.trim() || !form.firstName.trim()) return false;
@@ -130,6 +121,10 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved }) 
     setSubmitting(true);
     setErrorMessage(null);
     try {
+      if (isEditingSelf && form.isActive === false) {
+        setErrorMessage('Нельзя заблокировать собственную учётную запись.');
+        return;
+      }
       const body = {
         lastName: form.lastName.trim(),
         firstName: form.firstName.trim(),
@@ -165,175 +160,215 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved }) 
     }
   };
 
+  if (!isOpen || !userRow) return null;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Редактирование пользователя" size="large">
-      <form className="admin-create-user" onSubmit={handleSubmit} noValidate>
-        {errorMessage && (
-          <p className="admin-create-user__error" role="alert">
-            {errorMessage}
-          </p>
-        )}
-
-        <div className="admin-create-user__grid">
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-edit-last-name" required>
-              Фамилия
-            </Label>
-            <input
-              id="admin-edit-last-name"
-              className="admin-create-user__input"
-              value={form.lastName}
-              onChange={(e) => setField('lastName', e.target.value)}
-              aria-required
-              required
-            />
-          </div>
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-edit-first-name" required>
-              Имя
-            </Label>
-            <input
-              id="admin-edit-first-name"
-              className="admin-create-user__input"
-              value={form.firstName}
-              onChange={(e) => setField('firstName', e.target.value)}
-              aria-required
-              required
-            />
-          </div>
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-edit-middle-name">Отчество</Label>
-            <input
-              id="admin-edit-middle-name"
-              className="admin-create-user__input"
-              value={form.middleName}
-              onChange={(e) => setField('middleName', e.target.value)}
-            />
-          </div>
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-edit-email" required>
-              Email
-            </Label>
-            <input
-              id="admin-edit-email"
-              type="email"
-              className="admin-create-user__input"
-              value={form.email}
-              onChange={(e) => setField('email', e.target.value)}
-              aria-required
-              required
-            />
-          </div>
-          <div className="admin-create-user__field">
-            <span className="admin-create-user__label" id="admin-edit-login-label">
-              Логин
-            </span>
-            <div
-              id="admin-edit-login"
-              className="admin-create-user__readonly-value"
-              aria-labelledby="admin-edit-login-label"
-            >
-              {form.login || '—'}
-            </div>
-            <p className="admin-create-user__hint admin-create-user__hint--compact">
-              Задаётся при создании, не меняется.
-            </p>
-          </div>
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-edit-phone">Телефон</Label>
-            <input
-              id="admin-edit-phone"
-              type="tel"
-              inputMode="tel"
-              className="admin-create-user__input"
-              value={form.phone}
-              onChange={handlePhoneChange}
-              onBlur={handlePhoneBlur}
-              placeholder="8 (___) ___-__-__ или +7 (___) ___-__-__"
-              autoComplete="tel"
-            />
-          </div>
-          <div className="admin-create-user__field">
-            <Label htmlFor="admin-edit-role" required>
-              Роль
-            </Label>
-            <select
-              id="admin-edit-role"
-              className="admin-create-user__select"
-              value={form.role}
-              onChange={(e) => {
-                const role = e.target.value;
-                setForm((prev) => ({
-                  ...prev,
-                  role,
-                  groupId: role === 'student' ? prev.groupId : '',
-                  department: role === 'student' ? '' : prev.department,
-                }));
-              }}
-              aria-required
-            >
-              {ROLE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {groupRequired ? (
-            <div className="admin-create-user__field">
-              <Label htmlFor="admin-edit-group" required>
-                Группа
-              </Label>
-              <select
-                id="admin-edit-group"
-                className="admin-create-user__select"
-                value={form.groupId}
-                onChange={(e) => setField('groupId', e.target.value)}
-                aria-required
-                required
-              >
-                <option value="">Выберите группу</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={String(g.id)}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="admin-create-user__field">
-              <Label htmlFor="admin-edit-department">Подразделение</Label>
-              <input
-                id="admin-edit-department"
-                className="admin-create-user__input"
-                value={form.department}
-                onChange={(e) => setField('department', e.target.value)}
-                placeholder="Необязательно"
-                autoComplete="organization"
-              />
-            </div>
-          )}
-          <div className="admin-create-user__field admin-create-user__field--full">
-            <label className="admin-create-user__checkbox-row">
-              <input
-                type="checkbox"
-                checked={form.isActive}
-                onChange={(e) => setField('isActive', e.target.checked)}
-              />
-              <span>Аккаунт активен (не заблокирован)</span>
-            </label>
-          </div>
-        </div>
-
-        <div className="admin-create-user__actions">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Редактирование пользователя"
+      subtitle={[form.lastName, form.firstName].filter(Boolean).join(' ') || 'Пользователь'}
+      size="large"
+      className="admin-edit-user-modal"
+      contentClassName="admin-edit-user-modal__body"
+      footer={(
+        <div className="admin-edit-user-modal__actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
             Отмена
           </Button>
-          <Button type="submit" variant="primary" loading={submitting} disabled={!canSubmit || submitting}>
+          <Button
+            type="submit"
+            form="admin-edit-user-form"
+            variant="primary"
+            loading={submitting}
+            disabled={!canSubmit || submitting}
+          >
             Сохранить
           </Button>
         </div>
-      </form>
+      )}
+    >
+          <form id="admin-edit-user-form" onSubmit={handleSubmit} noValidate>
+              {errorMessage && (
+                <div className="admin-edit-user-modal__error" role="alert">
+                  <span className="admin-edit-user-modal__error-icon">!</span>
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              <ModalSection title="Данные пользователя">
+              <div className="admin-edit-user-modal__grid">
+                <div className="admin-edit-user-modal__field">
+                  <label className="admin-edit-user-modal__label" htmlFor="admin-edit-last-name">
+                    Фамилия <span className="admin-edit-user-modal__required">*</span>
+                  </label>
+                  <input
+                    id="admin-edit-last-name"
+                    type="text"
+                    className="admin-edit-user-modal__input"
+                    value={form.lastName}
+                    onChange={(e) => setField('lastName', e.target.value)}
+                    placeholder="Введите фамилию"
+                    required
+                  />
+                </div>
+
+                <div className="admin-edit-user-modal__field">
+                  <label className="admin-edit-user-modal__label" htmlFor="admin-edit-first-name">
+                    Имя <span className="admin-edit-user-modal__required">*</span>
+                  </label>
+                  <input
+                    id="admin-edit-first-name"
+                    type="text"
+                    className="admin-edit-user-modal__input"
+                    value={form.firstName}
+                    onChange={(e) => setField('firstName', e.target.value)}
+                    placeholder="Введите имя"
+                    required
+                  />
+                </div>
+
+                <div className="admin-edit-user-modal__field">
+                  <label className="admin-edit-user-modal__label" htmlFor="admin-edit-middle-name">
+                    Отчество
+                  </label>
+                  <input
+                    id="admin-edit-middle-name"
+                    type="text"
+                    className="admin-edit-user-modal__input"
+                    value={form.middleName}
+                    onChange={(e) => setField('middleName', e.target.value)}
+                    placeholder="Введите отчество"
+                  />
+                </div>
+
+                <div className="admin-edit-user-modal__field">
+                  <label className="admin-edit-user-modal__label" htmlFor="admin-edit-email">
+                    Email <span className="admin-edit-user-modal__required">*</span>
+                  </label>
+                  <input
+                    id="admin-edit-email"
+                    type="email"
+                    className="admin-edit-user-modal__input"
+                    value={form.email}
+                    onChange={(e) => setField('email', e.target.value)}
+                    placeholder="example@mail.ru"
+                    required
+                  />
+                </div>
+
+                <div className="admin-edit-user-modal__field">
+                  <label className="admin-edit-user-modal__label" htmlFor="admin-edit-phone">
+                    Телефон
+                  </label>
+                  <input
+                    id="admin-edit-phone"
+                    type="tel"
+                    inputMode="tel"
+                    className="admin-edit-user-modal__input"
+                    value={form.phone}
+                    onChange={handlePhoneChange}
+                    onBlur={handlePhoneBlur}
+                    placeholder="+7 (___) ___-__-__"
+                  />
+                </div>
+              </div>
+              </ModalSection>
+
+              <ModalSection title="Параметры доступа" variant="soft">
+              <div className="admin-edit-user-modal__grid">
+                <div className="admin-edit-user-modal__field">
+                  <label className="admin-edit-user-modal__label" htmlFor="admin-edit-login-label">
+                    Логин
+                  </label>
+                  <div className="admin-edit-user-modal__readonly" id="admin-edit-login">
+                    {form.login || '—'}
+                  </div>
+                  <div className="admin-edit-user-modal__hint-text">Задаётся при создании, не меняется</div>
+                </div>
+
+                <div className="admin-edit-user-modal__field">
+                  <label className="admin-edit-user-modal__label" htmlFor="admin-edit-role">
+                    Роль <span className="admin-edit-user-modal__required">*</span>
+                  </label>
+                  <select
+                    id="admin-edit-role"
+                    className="admin-edit-user-modal__select"
+                    value={form.role}
+                    onChange={(e) => {
+                      const role = e.target.value;
+                      setForm((prev) => ({
+                        ...prev,
+                        role,
+                        groupId: role === 'student' ? prev.groupId : '',
+                        department: role === 'student' ? '' : prev.department,
+                      }));
+                    }}
+                    required
+                  >
+                    {ROLE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {groupRequired ? (
+                  <div className="admin-edit-user-modal__field">
+                    <label className="admin-edit-user-modal__label" htmlFor="admin-edit-group">
+                      Группа <span className="admin-edit-user-modal__required">*</span>
+                    </label>
+                    <select
+                      id="admin-edit-group"
+                      className="admin-edit-user-modal__select"
+                      value={form.groupId}
+                      onChange={(e) => setField('groupId', e.target.value)}
+                      required
+                    >
+                      <option value="">Выберите группу</option>
+                      {groups.map((g) => (
+                        <option key={g.id} value={String(g.id)}>
+                          {g.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="admin-edit-user-modal__field">
+                    <label className="admin-edit-user-modal__label" htmlFor="admin-edit-department">
+                      Кафедра
+                    </label>
+                    <input
+                      id="admin-edit-department"
+                      type="text"
+                      className="admin-edit-user-modal__input"
+                      value={form.department}
+                      onChange={(e) => setField('department', e.target.value)}
+                      placeholder="Необязательно"
+                    />
+                  </div>
+                )}
+
+                <div className="admin-edit-user-modal__field admin-edit-user-modal__field--full">
+                  <label className="admin-edit-user-modal__checkbox">
+                    <input
+                      type="checkbox"
+                      checked={form.isActive}
+                      disabled={isEditingSelf && !form.isActive}
+                      onChange={(e) => setField('isActive', e.target.checked)}
+                    />
+                    <span>Аккаунт активен (не заблокирован)</span>
+                  </label>
+                  {isEditingSelf && form.isActive && (
+                    <div className="admin-edit-user-modal__hint-text admin-edit-user-modal__hint-text--warning">
+                      Собственную учётную запись нельзя заблокировать
+                    </div>
+                  )}
+                </div>
+              </div>
+              </ModalSection>
+          </form>
     </Modal>
   );
 };

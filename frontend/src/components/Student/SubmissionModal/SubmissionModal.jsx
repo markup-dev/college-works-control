@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
+import Modal from '../../UI/Modal/Modal';
 import { useNotification } from '../../../context/NotificationContext';
 import { formatDate, getAllowedFormatsFromAssignment } from '../../../utils';
-import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './SubmissionModal.scss';
 
 const SubmissionModal = ({ 
@@ -23,8 +22,6 @@ const SubmissionModal = ({
   const submitButtonLabel = isRetake
     ? (assignment?.submissionType === 'demo' ? 'Сообщить о готовности к пересдаче' : 'Пересдать работу')
     : (assignment?.submissionType === 'demo' ? 'Сообщить о готовности' : 'Сдать работу');
-
-  useBodyScrollLock(isOpen);
 
   useEffect(() => {
     if (!isOpen) {
@@ -82,16 +79,34 @@ const SubmissionModal = ({
     }
   };
 
-  return createPortal(
-    (
-      <div className="modal-overlay student-submission-modal" onClick={onClose}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>{isRetake ? 'Пересдача работы' : 'Сдача работы'}: {assignment.title}</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`${isRetake ? 'Пересдача работы' : 'Сдача работы'}: ${assignment.title}`}
+      size="medium"
+      className="student-submission-modal"
+      contentClassName="student-submission-modal__body"
+      footer={(
+        <div className="student-submission-modal__actions">
+          <Button variant="secondary" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            loading={submitting}
+            disabled={
+              submitting ||
+              !canSubmitCurrentAttempt ||
+              (assignment.submissionType === 'file' && !submissionFile)
+            }
+          >
+            {submitButtonLabel}
+          </Button>
         </div>
-        
-        <div className="modal-body">
+      )}
+    >
           {assignment.submissionType === 'demo' && (
             <div className="submission-status-note">
               <span className="submission-status-note__badge">Демонстрация</span>
@@ -111,29 +126,7 @@ const SubmissionModal = ({
           ) : (
             <DemoSubmission />
           )}
-        </div>
-        
-        <div className="modal-actions">
-          <Button variant="secondary" onClick={onClose}>
-            Отмена
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleSubmit}
-            loading={submitting}
-            disabled={
-              submitting ||
-              !canSubmitCurrentAttempt ||
-              (assignment.submissionType === 'file' && !submissionFile)
-            }
-          >
-            {submitButtonLabel}
-          </Button>
-        </div>
-      </div>
-    </div>
-    ),
-    document.body,
+    </Modal>
   );
 };
 

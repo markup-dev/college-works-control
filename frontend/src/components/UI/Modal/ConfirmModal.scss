@@ -1,22 +1,14 @@
 .confirm-modal {
   &__message {
     margin: 0 0 1.5rem 0;
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
     color: #374151;
     line-height: 1.6;
     font-size: 0.95rem;
-  }
-
-  &__actions {
-    position: sticky;
-    bottom: -1.5rem;
-    z-index: 2;
-    display: flex;
-    gap: 0.75rem;
-    justify-content: flex-end;
-    margin: 1.5rem -1.5rem -1.5rem;
-    padding: 1rem 1.5rem;
-    border-top: 1px solid #e5e7eb;
-    background: #ffffff;
   }
 }
 

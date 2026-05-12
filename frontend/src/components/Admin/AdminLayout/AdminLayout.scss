@@ -1,15 +1,19 @@
 @import '../../../styles/base/variables';
 @import '../../../styles/base/mixins';
 
+.admin-dashboard {
+  min-height: calc(100vh - 80px);
+  background: #f8f9fa;
+}
+
 .admin-layout {
   display: flex;
   min-height: calc(100vh - 80px);
-  max-width: 1400px;
-  margin: 0 auto;
   gap: 0;
 
   @include mobile {
     flex-direction: column;
+    min-height: calc(100vh - 70px);
   }
 
   &__sidebar {
@@ -18,11 +22,17 @@
     padding: 1.25rem 1rem;
     background: $background-primary;
     border-right: 1px solid $border-color;
+    box-sizing: border-box;
+    align-self: flex-start;
+    position: sticky;
+    top: 80px;
+    z-index: 40;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 
     @include mobile {
-      width: 100%;
-      border-right: none;
-      border-bottom: 1px solid $border-color;
+      display: none;
     }
   }
 
@@ -67,5 +77,9 @@
     min-width: 0;
     padding: 1.25rem 1.5rem 2rem;
     background: $background-white;
+
+    @include mobile {
+      padding: 1rem 1rem 1.75rem;
+    }
   }
 }

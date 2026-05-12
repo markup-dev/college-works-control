@@ -3,8 +3,11 @@ import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
 import Button from '../../UI/Button/Button';
-import Card from '../../UI/Card/Card';
+import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
+import InfoCard from '../../UI/InfoCard/InfoCard';
+import LoadingState from '../../UI/LoadingState/LoadingState';
 import Modal from '../../UI/Modal/Modal';
+import ModalSection from '../../UI/Modal/ModalSection';
 import './AdminSettingsManagement.scss';
 
 const defaultForm = () => ({
@@ -177,7 +180,7 @@ const AdminSettingsManagement = () => {
   };
 
   if (loading) {
-    return <p className="admin-settings-management__muted">Загрузка настроек…</p>;
+    return <LoadingState message="Загрузка настроек..." className="admin-settings-management__state" />;
   }
 
   return (
@@ -192,12 +195,16 @@ const AdminSettingsManagement = () => {
       </div>
 
       {error && (
-        <div className="admin-settings-management__banner admin-settings-management__banner--error" role="alert">
-          {error}
-        </div>
+        <ErrorBanner
+          className="admin-settings-management__error"
+          title="Ошибка загрузки настроек"
+          message={error}
+          actionLabel="Повторить"
+          onAction={() => void load()}
+        />
       )}
 
-      <Card padding="medium" shadow="small" bordered className="admin-settings-management__section">
+      <InfoCard className="admin-settings-management__section">
         <h2 className="admin-settings-management__section-title">Глобальное уведомление</h2>
         <label className="admin-settings-management__checkbox">
           <input
@@ -300,9 +307,9 @@ const AdminSettingsManagement = () => {
             </div>
           </div>
         )}
-      </Card>
+      </InfoCard>
 
-      <Card padding="medium" shadow="small" bordered className="admin-settings-management__section">
+      <InfoCard className="admin-settings-management__section">
         <h2 className="admin-settings-management__section-title">Требования к паролю</h2>
         <div className="admin-settings-management__field">
           <label className="admin-settings-management__label" htmlFor="set-pw-len">
@@ -366,9 +373,9 @@ const AdminSettingsManagement = () => {
             <option value="90">90 дней</option>
           </select>
         </div>
-      </Card>
+      </InfoCard>
 
-      <Card padding="medium" shadow="small" bordered className="admin-settings-management__section">
+      <InfoCard className="admin-settings-management__section">
         <h2 className="admin-settings-management__section-title">Шаблон письма для новых пользователей</h2>
         <div className="admin-settings-management__field">
           <label className="admin-settings-management__label" htmlFor="set-mail-from">
@@ -425,9 +432,9 @@ const AdminSettingsManagement = () => {
         <Button type="button" variant="outline" size="small" onClick={() => setPreviewOpen(true)}>
           Предпросмотр текста
         </Button>
-      </Card>
+      </InfoCard>
 
-      <Card padding="medium" shadow="small" bordered className="admin-settings-management__section">
+      <InfoCard className="admin-settings-management__section">
         <h2 className="admin-settings-management__section-title">Безопасность</h2>
         <div className="admin-settings-management__field">
           <label className="admin-settings-management__label" htmlFor="set-session">
@@ -503,9 +510,9 @@ const AdminSettingsManagement = () => {
               }))
             }
           />
-          Уведомлять администратора о блокировках (при появлении механизма блокировки)
+          Уведомлять администратора о блокировках входа
         </label>
-      </Card>
+      </InfoCard>
 
       <div className="admin-settings-management__actions">
         <Button type="submit" loading={saving}>
@@ -516,9 +523,19 @@ const AdminSettingsManagement = () => {
         </Button>
       </div>
 
-      <Modal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} title="Предпросмотр письма" size="large">
-        <p className="admin-settings-management__muted">Тема: {form.emailTemplate.subject}</p>
-        <pre className="admin-settings-management__preview-sample">{previewBody}</pre>
+      <Modal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title="Предпросмотр письма"
+        size="large"
+        contentClassName="admin-settings-management__preview-modal"
+      >
+        <ModalSection title="Тема" variant="soft">
+          <p className="admin-settings-management__muted">{form.emailTemplate.subject}</p>
+        </ModalSection>
+        <ModalSection title="Текст письма">
+          <pre className="admin-settings-management__preview-sample">{previewBody}</pre>
+        </ModalSection>
       </Modal>
     </form>
   );

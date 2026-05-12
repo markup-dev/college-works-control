@@ -1,29 +1,20 @@
+import { formatDateLong } from './dateHelpers.js';
+
 export const formatDate = (dateString) => {
   if (!dateString) return 'Дата не указана';
-  
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return 'Неверная дата';
-    
-    return new Intl.DateTimeFormat('ru-RU', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    }).format(date);
-  } catch (error) {
-    return 'Неверная дата';
-  }
+
+  return formatDateLong(dateString, 'Неверная дата');
 };
 
 export const getSubmissionStatusInfo = (status) => {
   const statusMap = {
-    'submitted': { label: 'На проверке', variant: 'warning', icon: '📋' },
-    'graded': { label: 'Зачтена', variant: 'success', icon: '✅' },
-    'returned': { label: 'Возвращена', variant: 'danger', icon: '↩️' },
-    'draft': { label: 'Черновик', variant: 'default', icon: '📝' }
+    submitted: { label: 'На проверке', variant: 'warning', icon: '' },
+    graded: { label: 'Зачтена', variant: 'success', icon: '' },
+    returned: { label: 'Возвращена', variant: 'danger', icon: '' },
+    draft: { label: 'Черновик', variant: 'default', icon: '' },
   };
   
-  return statusMap[status] || { label: status, variant: 'default', icon: '❓' };
+  return statusMap[status] || { label: status, variant: 'default', icon: '' };
 };
 
 export const formatFileSize = (bytes) => {

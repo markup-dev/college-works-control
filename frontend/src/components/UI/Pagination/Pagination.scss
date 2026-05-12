@@ -24,6 +24,11 @@
     font-size: 0.85rem;
     order: -1;
   }
+
+  .ui-pagination .ui-button {
+    width: 100%;
+    box-sizing: border-box;
+  }
 }
 
 @media (max-width: 480px) {

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
+import Modal from '../../UI/Modal/Modal';
 import { useNotification } from '../../../context/NotificationContext';
-import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './PublishFromBankModal.scss';
 
 const normalizeGroupSelection = (value) => {
@@ -55,8 +55,6 @@ const PublishFromBankModal = ({
       maxHeight: maxH,
     });
   }, []);
-
-  useBodyScrollLock(isOpen);
 
   useEffect(() => {
     if (!isOpen) {
@@ -139,22 +137,27 @@ const PublishFromBankModal = ({
 
   const subjectName = template.subject?.name || template.subject || '';
 
-  return createPortal(
-    <div className="modal-overlay publish-bank-modal" onClick={onClose}>
-      <div className="modal-content" onClick={(ev) => ev.stopPropagation()}>
-        <div className="modal-header">
-          <div>
-            <h3>Выдать задание из банка</h3>
-            <p className="modal-subtitle">
-              Содержимое берётся из заготовки «{template.title}». Уже выданные задания не меняются.
-            </p>
-          </div>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Закрыть">
-            ×
-          </button>
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Выдать задание из банка"
+      subtitle={`Содержимое берётся из заготовки «${template.title}». Уже выданные задания не меняются.`}
+      size="medium"
+      className="publish-bank-modal"
+      contentClassName="publish-bank-modal__body"
+      footer={(
+        <div className="publish-bank-modal__actions">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
+            Отмена
+          </Button>
+          <Button type="submit" form="publish-bank-form" variant="primary" disabled={isSubmitting}>
+            {isSubmitting ? 'Создание…' : 'Выдать задание'}
+          </Button>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body">
+      )}
+    >
+        <form id="publish-bank-form" onSubmit={handleSubmit}>
             <div className="publish-bank-meta">
               <span className="publish-bank-meta__subject">{subjectName || '—'}</span>
             </div>
@@ -232,19 +235,8 @@ const PublishFromBankModal = ({
                 />
               </label>
             </div>
-          </div>
-          <div className="modal-footer">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
-              Отмена
-            </Button>
-            <Button type="submit" variant="primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Создание…' : 'Выдать задание'}
-            </Button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body
+    </Modal>
   );
 };
 

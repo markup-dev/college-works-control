@@ -3,26 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
+import { formatDateTimeShortMonth } from '../../utils/dateHelpers';
 import { getNotificationNavigatePath } from '../../utils/notificationNavigation';
 import Button from '../../components/UI/Button/Button';
 import ConfirmModal from '../../components/UI/Modal/ConfirmModal';
 import Pagination from '../../components/UI/Pagination/Pagination';
 import './Notifications.scss';
-
-const formatWhen = (iso) => {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleString('ru-RU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
-};
 
 const notificationText = (value, fallback = '') => {
   if (value == null) {
@@ -240,7 +226,7 @@ const Notifications = () => {
                     <div className="notifications-page__card-top">
                       <span className="notifications-page__title">{title}</span>
                       <time className="notifications-page__time" dateTime={n.createdAt || undefined}>
-                        {formatWhen(n.createdAt)}
+                        {formatDateTimeShortMonth(n.createdAt, '')}
                       </time>
                     </div>
                     {teacherName ? (

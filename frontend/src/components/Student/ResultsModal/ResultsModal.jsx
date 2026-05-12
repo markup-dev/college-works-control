@@ -1,8 +1,7 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import Button from '../../UI/Button/Button';
+import Modal from '../../UI/Modal/Modal';
 import { formatDate } from '../../../utils';
-import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import './ResultsModal.scss';
 
 const ResultsModal = ({ 
@@ -10,8 +9,6 @@ const ResultsModal = ({
   isOpen, 
   onClose 
 }) => {
-  useBodyScrollLock(isOpen);
-
   if (!isOpen || !assignment) return null;
 
   const maxScore = assignment.maxScore || 100;
@@ -53,16 +50,22 @@ const ResultsModal = ({
     return 'poor';
   };
 
-  return createPortal(
-    (
-      <div className="modal-overlay student-results-modal" onClick={onClose}>
-        <div className="modal-content results-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <h3>Результаты проверки работы</h3>
-            <button className="modal-close" onClick={onClose}>×</button>
-          </div>
-          
-          <div className="modal-body">
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Результаты проверки работы"
+      size="large"
+      className="student-results-modal"
+      contentClassName="student-results-modal__body"
+      footer={(
+        <div className="student-results-modal__actions">
+          <Button variant="primary" onClick={onClose}>
+            Закрыть
+          </Button>
+        </div>
+      )}
+    >
           <div className={`result-overview result-overview--${resultStatus.variant}`}>
             <span className="result-overview__label">{resultStatus.label}</span>
             {assignment.submittedAt && (
@@ -156,17 +159,7 @@ const ResultsModal = ({
               </ul>
             </div>
           )}
-        </div>
-        
-        <div className="modal-actions">
-          <Button variant="primary" onClick={onClose}>
-            Закрыть
-          </Button>
-        </div>
-      </div>
-    </div>
-    ),
-    document.body,
+    </Modal>
   );
 };
 
