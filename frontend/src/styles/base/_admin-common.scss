@@ -1,0 +1,410 @@
+// Shared admin panel form and layout tokens (aligned with teacher dashboard sections).
+
+@mixin admin-page-shell {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+@mixin admin-page-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+@mixin admin-page-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+@mixin admin-state-block {
+  background: #ffffff;
+  border: 1px solid #eef2f8;
+  border-radius: 20px;
+}
+
+@mixin admin-form-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+
+  > .ui-button:last-child {
+    margin-top: auto;
+  }
+}
+
+@mixin admin-form-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+@mixin admin-form-label {
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+@mixin admin-control {
+  width: 100%;
+  min-height: 42px;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  font: inherit;
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #1f2937;
+
+  &:focus {
+    outline: none;
+    border-color: #8db7e6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  &:disabled {
+    background: #f8fafc;
+    color: #94a3b8;
+    cursor: not-allowed;
+  }
+}
+
+@mixin admin-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px 16px 0 0;
+  background: #ffffff;
+  overflow: hidden;
+
+  @media (max-width: 640px) {
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    overflow: visible;
+  }
+}
+
+@mixin admin-tab-button {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.9rem 1.15rem;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  @media (max-width: 640px) {
+    flex: 1 0 auto;
+    justify-content: flex-start;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 0.9rem 1rem;
+    font-size: 0.88rem;
+  }
+
+  &:hover:not(.admin-tab--active) {
+    background: #f8fafc;
+    color: #475569;
+  }
+
+  &--active {
+    background: #f8fafc;
+    color: #2c5aa0;
+
+    @media (max-width: 640px) {
+      border-color: #2c5aa0;
+      background: #f0f7ff;
+    }
+  }
+}
+
+@mixin admin-card-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: nowrap;
+
+  @media (max-width: 520px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+}
+
+@mixin admin-card-header-title-block {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+@mixin admin-card-header-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+@mixin admin-card-header-status {
+  flex-shrink: 0;
+  align-self: flex-start;
+
+  @media (max-width: 520px) {
+    order: -1;
+    align-self: stretch;
+    width: 100%;
+
+    &.ui-status-badge {
+      display: inline-flex;
+      width: 100%;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+  }
+}
+
+@mixin admin-tab-indicator {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(135deg, #2c5aa0 0%, #4a76a8 100%);
+  border-radius: 2px 2px 0 0;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+}
+
+@mixin admin-modal-footer-button-text {
+  .ui-button {
+    width: 100%;
+    justify-content: center;
+
+    .ui-button__text {
+      white-space: normal;
+      line-height: 1.35;
+    }
+  }
+}
+
+@mixin admin-modal-footer-button-grid-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+
+  @include admin-modal-footer-button-text;
+
+  .ui-button:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+// 768px: до двух кнопок в ряд; нечётная последняя — на всю ширину
+@mixin admin-modal-footer-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  justify-content: stretch;
+  align-items: stretch;
+  flex-wrap: unset;
+
+  @include admin-modal-footer-button-text;
+
+  > .ui-button:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  > [class*='__actions'],
+  > [class*='__footer-actions'] {
+    @include admin-modal-footer-button-grid-two-col;
+    grid-column: 1 / -1;
+  }
+
+  > [class*='__footer']:not(.modal__footer) {
+    grid-column: 1 / -1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .admin-assignment-detail__footer {
+    grid-column: 1 / -1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .admin-assignment-detail__lock-hint {
+    width: 100%;
+  }
+
+  .admin-assignment-detail__actions {
+    @include admin-modal-footer-button-grid-two-col;
+  }
+
+  .admin-assignment-detail__footer > .ui-button {
+    width: 100%;
+  }
+
+  .admin-ta-detail__footer {
+    grid-column: 1 / -1;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-ta-detail__footer-actions {
+    @include admin-modal-footer-button-grid-two-col;
+  }
+
+  .admin-ta-detail__footer > .ui-button {
+    width: 100%;
+  }
+
+}
+
+// ≤540px: одна кнопка в строку (как __form-actions на страницах)
+@mixin admin-modal-footer-stacked {
+  grid-template-columns: 1fr;
+
+  > .ui-button {
+    grid-column: 1 / -1;
+  }
+
+  > .ui-button:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  [class*='__actions'],
+  [class*='__footer-actions'],
+  .admin-assignment-detail__actions,
+  .admin-ta-detail__footer-actions {
+    grid-template-columns: 1fr;
+
+    .ui-button {
+      grid-column: 1 / -1;
+    }
+
+    .ui-button:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+@mixin admin-textarea-overrides {
+  margin-bottom: 0;
+
+  .textarea {
+    min-height: 96px;
+    border-color: #dbe3ee;
+    border-radius: 10px;
+    color: #1f2937;
+  }
+
+  .textarea-label {
+    @include admin-form-label;
+  }
+}
+
+@mixin admin-file-dropzone-overrides {
+  .file-dropzone__surface {
+    border-color: #dbe6f4;
+    background: #f8fbff;
+  }
+}
+
+// Global utility classes (usable in admin pages and portaled modals)
+.admin-form-card {
+  @include admin-form-card;
+}
+
+.admin-form-field {
+  @include admin-form-field;
+
+  > span,
+  > label:not(.admin-radio):not(.admin-checkbox),
+  &__label {
+    @include admin-form-label;
+  }
+}
+
+.admin-control {
+  @include admin-control;
+}
+
+.admin-textarea {
+  @include admin-textarea-overrides;
+}
+
+.admin-file-dropzone {
+  @include admin-file-dropzone-overrides;
+}
+
+.admin-tabs {
+  @include admin-tabs;
+}
+
+.admin-tab {
+  @include admin-tab-button;
+
+  &__label {
+    white-space: nowrap;
+  }
+
+  &__indicator {
+    @include admin-tab-indicator;
+  }
+}
+
+.admin-radio,
+.admin-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.admin-muted {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.admin-item-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.7rem;
+  border: 1px solid #edf2f7;
+  border-radius: 12px;
+  background: #f8fafc;
+}

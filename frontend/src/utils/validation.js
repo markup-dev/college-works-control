@@ -1,6 +1,14 @@
 export const LOGIN_REGEX = /^[a-zA-Z0-9_]+$/;
 export const CYRILLIC_NAME_REGEX = /^[А-Яа-яЁё-]+$/u;
 export const GROUP_REGEX = /^[А-ЯЁA-Z0-9-]+$/i;
+export const SUBJECT_CODE_MAX_LENGTH = 32;
+export const SUBJECT_CODE_REGEX = /^[А-ЯЁA-Z0-9_.-]+$/u;
+
+/** Фильтрует ввод кода дисциплины и приводит буквы к верхнему регистру (как на бэкенде). */
+export const sanitizeSubjectCodeInput = (value) => {
+  const stripped = String(value ?? '').replace(/[^А-ЯЁа-яёA-Za-z0-9_.-]/gu, '');
+  return stripped.toLocaleUpperCase('ru-RU').slice(0, SUBJECT_CODE_MAX_LENGTH);
+};
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/;
 export const PHONE_REGEX = /^(\+7\s?\(?\d{3}\)?\s?\d{3}[- ]?\d{2}[- ]?\d{2}|8\(\d{3}\)\d{3}-\d{2}-\d{2})$/;
@@ -174,7 +182,7 @@ export const validateBankTemplateForm = (formData) => {
   }
 
   if (!formData.subjectId) {
-    errors.subject = 'Выберите предмет';
+    errors.subject = 'Выберите дисциплину';
   }
 
   const trimmedDescription = formData.description?.trim() || '';
@@ -229,9 +237,9 @@ export const validateAssignmentForm = (formData) => {
 
   const trimmedSubject = formData.subject?.trim() || '';
   if (!trimmedSubject) {
-    errors.subject = 'Введите название предмета';
+    errors.subject = 'Введите название дисциплины';
   } else if (trimmedSubject.length > 255) {
-    errors.subject = 'Название предмета не должно превышать 255 символов';
+    errors.subject = 'Название дисциплины не должно превышать 255 символов';
   }
 
   const trimmedDescription = formData.description?.trim() || '';

@@ -1,3 +1,5 @@
+@import '../../../styles/base/admin-common';
+
 body.modal-open {
   overflow: hidden;
 }
@@ -14,6 +16,7 @@ body.modal-open {
     max(1rem, env(safe-area-inset-right, 0px))
     max(1rem, env(safe-area-inset-bottom, 0px))
     max(1rem, env(safe-area-inset-left, 0px));
+  overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -22,7 +25,10 @@ body.modal-open {
   background: white;
   border-radius: 12px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   max-height: min(92vh, 100dvh - 2rem);
   margin: auto;
   display: flex;
@@ -30,15 +36,15 @@ body.modal-open {
   overflow: hidden;
 
   &--small {
-    max-width: 400px;
+    max-width: min(400px, 100%);
   }
 
   &--medium {
-    max-width: 600px;
+    max-width: min(600px, 100%);
   }
 
   &--large {
-    max-width: 800px;
+    max-width: min(800px, 100%);
   }
 }
 
@@ -71,6 +77,7 @@ body.modal-open {
   color: #64748b;
   font-size: 0.9rem;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .modal__close {
@@ -92,14 +99,30 @@ body.modal-open {
     background: #f3f4f6;
     color: #374151;
   }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &:disabled:hover {
+    background: none;
+    color: #6b7280;
+  }
 }
 
 .modal__content {
   padding: 1.5rem;
+  overflow-x: hidden;
   overflow-y: auto;
   flex: 1;
   min-width: 0;
   position: relative;
+
+  > * {
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
 .modal__footer {
@@ -113,8 +136,9 @@ body.modal-open {
   padding: 1rem 1.5rem;
   border-top: 1px solid #e5e7eb;
   background: #ffffff;
-  box-shadow: 0 -12px 24px rgba(15, 23, 42, 0.06);
   flex-shrink: 0;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .modal:has(.modal__content [class*='admin-']) {
@@ -206,5 +230,17 @@ body.modal-open {
 
   .modal__title {
     font-size: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .modal__footer {
+    @include admin-modal-footer-two-col;
+  }
+}
+
+@media (max-width: 540px) {
+  .modal__footer {
+    @include admin-modal-footer-stacked;
   }
 }

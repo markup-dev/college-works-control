@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../../services/api';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import Modal from '../../UI/Modal/Modal';
 import ModalSection from '../../UI/Modal/ModalSection';
 import Button from '../../UI/Button/Button';
@@ -29,7 +29,7 @@ const AdminUserPasswordResetModal = ({ isOpen, onClose, userRow, onSuccess }) =>
       onSuccess?.(data);
       onClose();
     } catch (err) {
-      setErrorMessage(firstApiErrorMessage(err.response?.data) || 'Не удалось выполнить операцию');
+      setErrorMessage(getApiErrorMessage(err, 'Не удалось выполнить операцию'));
     } finally {
       setSubmitting(false);
     }
@@ -44,9 +44,6 @@ const AdminUserPasswordResetModal = ({ isOpen, onClose, userRow, onSuccess }) =>
       contentClassName="admin-user-password-reset-modal"
       footer={(
         <>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
-            Отмена
-          </Button>
           <Button type="button" variant="primary" loading={submitting} disabled={submitting} onClick={() => void handleSubmit()}>
             Продолжить
           </Button>

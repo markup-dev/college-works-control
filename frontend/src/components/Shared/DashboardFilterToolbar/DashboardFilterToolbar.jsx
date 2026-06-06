@@ -28,6 +28,7 @@ const DashboardFilterToolbar = ({
   const toolbarRef = useRef(null);
   const reactId = useId();
   const popoverDomId = `dashboard-filter-popover-${reactId.replace(/:/g, '')}`;
+  const searchInputId = `dashboard-filter-search-${reactId.replace(/:/g, '')}`;
 
   const closeAndReset = useCallback(() => {
     setFiltersOpen(false);
@@ -62,28 +63,40 @@ const DashboardFilterToolbar = ({
     [
       'dashboard-filter-toolbar',
       popoverAlign === 'end' ? 'dashboard-filter-toolbar--popover-end' : '',
+      showFilterPanel ? 'dashboard-filter-toolbar--has-filter-panel' : '',
       className,
     ]
       .filter(Boolean)
       .join(' ') || 'dashboard-filter-toolbar';
 
+  const renderSearchField = (variant = 'inline') => (
+    <div
+      className={[
+        'dashboard-filter-toolbar__search',
+        searchBoxClassName,
+        variant === 'inline' ? 'dashboard-filter-toolbar__search--inline' : 'dashboard-filter-toolbar__search--in-popover',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <input
+        id={variant === 'in-popover' ? searchInputId : undefined}
+        type={searchInputType}
+        className={searchInputClassName.trim()}
+        placeholder={searchPlaceholder}
+        value={searchValue}
+        onChange={(event) => onSearchChange?.(event.target.value)}
+        disabled={searchDisabled}
+        aria-disabled={searchDisabled}
+        autoComplete="off"
+      />
+    </div>
+  );
+
   return (
     <div className={rootClass}>
       <div className="search-toolbar">
-        {showSearch && (
-          <div className={`dashboard-filter-toolbar__search ${searchBoxClassName}`.trim()}>
-            <input
-              type={searchInputType}
-              className={searchInputClassName.trim()}
-              placeholder={searchPlaceholder}
-              value={searchValue}
-              onChange={(event) => onSearchChange?.(event.target.value)}
-              disabled={searchDisabled}
-              aria-disabled={searchDisabled}
-              autoComplete="off"
-            />
-          </div>
-        )}
+        {showSearch && renderSearchField('inline')}
 
         {showToolbarActions && (
           <div className="filters-toolbar" ref={toolbarRef}>
@@ -121,6 +134,14 @@ const DashboardFilterToolbar = ({
                 role="dialog"
                 aria-label={popoverAriaLabel}
               >
+                {showSearch && (
+                  <div className="filter-popover__field filter-popover__field--search">
+                    <label className="filter-popover__label" htmlFor={searchInputId}>
+                      Поиск
+                    </label>
+                    {renderSearchField('in-popover')}
+                  </div>
+                )}
                 {children}
               </div>
             )}

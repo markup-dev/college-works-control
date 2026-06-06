@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import { formatDateLong } from '../../../utils/dateHelpers';
+import { sanitizeSubjectCodeInput, SUBJECT_CODE_MAX_LENGTH } from '../../../utils/validation';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
 import EmptyState from '../../UI/EmptyState/EmptyState';
@@ -11,14 +12,18 @@ import EntityCard from '../../UI/EntityCard/EntityCard';
 import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
 import LoadingState from '../../UI/LoadingState/LoadingState';
 import Modal from '../../UI/Modal/Modal';
+import ModalDangerZone from '../../UI/Modal/ModalDangerZone';
 import ModalSection from '../../UI/Modal/ModalSection';
-import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
+import { ADMIN_CARD_GRID_PAGE_SIZE } from '../../../config/adminPagination';
+import usePaginationClamp from '../../../hooks/usePaginationClamp';
+import { parsePaginationMeta } from '../../../utils/pagination';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
+import TeacherRequestModeration from '../TeacherRequestModeration/TeacherRequestModeration';
+import AdminSubjectsImportModal from '../AdminSubjectsImportModal/AdminSubjectsImportModal';
 import './AdminSubjectManagement.scss';
 
-const PER_PAGE = 18;
 
 const SUBJECT_STATUS_OPTIONS = [
   { value: '', label: 'Все' },
@@ -65,6 +70,7 @@ const AdminSubjectManagement = () => {
   const [createName, setCreateName] = useState('');
   const [createCode, setCreateCode] = useState('');
   const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const [editRow, setEditRow] = useState(null);
   const [editName, setEditName] = useState('');
@@ -88,51 +94,28 @@ const AdminSubjectManagement = () => {
   const [addLoadGroups, setAddLoadGroups] = useState([]);
   const [addLoadSubmitting, setAddLoadSubmitting] = useState(false);
 
-  const [changeLoad, setChangeLoad] = useState(null);
-  const [changeLoadGroupId, setChangeLoadGroupId] = useState('');
-  const [changeLoadSubmitting, setChangeLoadSubmitting] = useState(false);
-
-  const [removeLoadConfirm, setRemoveLoadConfirm] = useState(null);
-
-  const [changeLoadGroups, setChangeLoadGroups] = useState([]);
-
   useEffect(() => {
-    if (!changeLoad) {
-      setChangeLoadGroups([]);
-      return;
+    const st = location.state;
+    if (!st || typeof st !== 'object') return;
+    let consumed = false;
+
+    if (st.openCreateSubject) {
+      setCreateOpen(true);
+      consumed = true;
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await api.get('/admin/groups', { params: { status: 'active', per_page: 100, sort: 'name_asc' } });
-        if (!cancelled) setChangeLoadGroups(Array.isArray(data?.data) ? data.data : []);
-      } catch (e) {
-        if (!cancelled) {
-          setChangeLoadGroups([]);
-          showError(firstApiErrorMessage(e, 'Не удалось загрузить группы'));
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [changeLoad, showError]);
+    if (st.openImportSubjects) {
+      setImportOpen(true);
+      consumed = true;
+    }
+    if (st.viewSubjectId != null && st.viewSubjectId !== '') {
+      setViewId(Number(st.viewSubjectId));
+      consumed = true;
+    }
 
-  const openCreateFromRoute = Boolean(location.state?.openCreateSubject);
-
-  useEffect(() => {
-    if (!openCreateFromRoute) return;
-    setCreateOpen(true);
-    navigate(location.pathname, { replace: true, state: {} });
-  }, [openCreateFromRoute, location.pathname, navigate]);
-
-  const viewSubjectIdFromRoute = location.state?.viewSubjectId;
-
-  useEffect(() => {
-    if (viewSubjectIdFromRoute == null || viewSubjectIdFromRoute === '') return;
-    setViewId(Number(viewSubjectIdFromRoute));
-    navigate(location.pathname, { replace: true, state: {} });
-  }, [viewSubjectIdFromRoute, location.pathname, navigate]);
+    if (consumed) {
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   const fetchSubjects = useCallback(async () => {
     setLoading(true);
@@ -140,7 +123,7 @@ const AdminSubjectManagement = () => {
     try {
       const params = {
         page,
-        per_page: PER_PAGE,
+        per_page: ADMIN_CARD_GRID_PAGE_SIZE,
         sort: sort || 'name_asc',
       };
       const q = debouncedSearch.trim();
@@ -149,18 +132,16 @@ const AdminSubjectManagement = () => {
       const { data } = await api.get('/admin/subjects', { params });
       setSubjects(Array.isArray(data?.data) ? data.data : []);
       const m = data?.meta;
-      setMeta({
-        currentPage: m?.currentPage ?? page,
-        lastPage: m?.lastPage ?? 1,
-        total: m?.total ?? 0,
-      });
+      setMeta(parsePaginationMeta(m, page));
     } catch (e) {
       setSubjects([]);
-      setError(e.response?.data?.message || 'Не удалось загрузить предметы');
+      setError(getApiErrorMessage(e, 'Не удалось загрузить дисциплины'));
     } finally {
       setLoading(false);
     }
   }, [page, debouncedSearch, status, sort]);
+
+  usePaginationClamp(page, meta.lastPage, setPage);
 
   useEffect(() => {
     void fetchSubjects();
@@ -184,7 +165,7 @@ const AdminSubjectManagement = () => {
       } catch (e) {
         if (!cancelled) {
           setViewData(null);
-          showError(firstApiErrorMessage(e, 'Не удалось загрузить предмет'));
+          showError(getApiErrorMessage(e, 'Не удалось загрузить дисциплину'));
         }
       } finally {
         if (!cancelled) setViewLoading(false);
@@ -196,30 +177,65 @@ const AdminSubjectManagement = () => {
   }, [viewId, showError]);
 
   useEffect(() => {
-    if (!addLoadOpen || !viewId) return;
+    if (!addLoadOpen || !viewId || !viewData?.subject?.id) return;
     let cancelled = false;
     (async () => {
       try {
-        const [u, g] = await Promise.all([
-          api.get('/admin/users', { params: { role: 'teacher', per_page: 100, sort: 'name_asc' } }),
-          api.get('/admin/groups', { params: { status: 'active', per_page: 100, sort: 'name_asc' } }),
-        ]);
+        const { data } = await api.get('/admin/teaching-loads/form-options', {
+          params: { subject_id: Number(viewData.subject.id) },
+        });
         if (!cancelled) {
-          setAddLoadTeachers(Array.isArray(u.data?.data) ? u.data.data : []);
-          setAddLoadGroups(Array.isArray(g.data?.data) ? g.data.data : []);
+          setAddLoadTeachers(Array.isArray(data?.teachers) ? data.teachers : []);
         }
       } catch (e) {
         if (!cancelled) {
           setAddLoadTeachers([]);
-          setAddLoadGroups([]);
-          showError(firstApiErrorMessage(e, 'Не удалось загрузить преподавателей или группы'));
+          showError(getApiErrorMessage(e, 'Не удалось загрузить преподавателей'));
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [addLoadOpen, viewId, showError]);
+  }, [addLoadOpen, viewId, viewData?.subject?.id, showError]);
+
+  useEffect(() => {
+    if (!addLoadOpen || !viewData?.subject?.id || !addLoadTeacherId) {
+      setAddLoadGroups([]);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get('/admin/teaching-loads/form-options', {
+          params: {
+            subject_id: Number(viewData.subject.id),
+            teacher_id: Number(addLoadTeacherId),
+          },
+        });
+        if (!cancelled) {
+          setAddLoadGroups(Array.isArray(data?.groups) ? data.groups : []);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setAddLoadGroups([]);
+          showError(getApiErrorMessage(e, 'Не удалось загрузить группы'));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [addLoadOpen, viewData?.subject?.id, addLoadTeacherId, showError]);
+
+  useEffect(() => {
+    if (!addLoadTeacherId) {
+      setAddLoadGroupIds(new Set());
+      return;
+    }
+    const available = new Set(addLoadGroups.map((g) => Number(g.id)));
+    setAddLoadGroupIds((prev) => new Set([...prev].filter((id) => available.has(Number(id)))));
+  }, [addLoadTeacherId, addLoadGroups]);
 
   const resetFilters = useCallback(() => {
     setSearch('');
@@ -244,11 +260,11 @@ const AdminSubjectManagement = () => {
         code: createCode.trim(),
         status: 'active',
       });
-      showSuccess('Предмет создан');
+      showSuccess('Дисциплина создан');
       setCreateOpen(false);
       void fetchSubjects();
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось создать предмет'));
+      showError(getApiErrorMessage(e, 'Не удалось создать дисциплину'));
     } finally {
       setCreateSubmitting(false);
     }
@@ -282,7 +298,7 @@ const AdminSubjectManagement = () => {
         }
       }
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось сохранить'));
+      showError(getApiErrorMessage(e, 'Не удалось сохранить'));
     } finally {
       setEditSubmitting(false);
     }
@@ -292,7 +308,7 @@ const AdminSubjectManagement = () => {
     const nextStatus = row.status === 'inactive' ? 'active' : 'inactive';
     try {
       await api.put(`/admin/subjects/${row.id}`, { status: nextStatus });
-      showSuccess(nextStatus === 'active' ? 'Предмет активирован' : 'Предмет деактивирован');
+      showSuccess(nextStatus === 'active' ? 'Дисциплина активирован' : 'Дисциплина деактивирован');
       void fetchSubjects();
       if (viewId === row.id) {
         try {
@@ -303,7 +319,7 @@ const AdminSubjectManagement = () => {
         }
       }
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось изменить статус предмета'));
+      showError(getApiErrorMessage(e, 'Не удалось изменить статус дисциплины'));
     }
   };
 
@@ -321,20 +337,20 @@ const AdminSubjectManagement = () => {
 
   const submitDelete = async () => {
     if (!deleteTarget || deleteConfirmCode.trim() !== deleteTarget.code) {
-      showError('Введите точный код предмета');
+      showError('Введите точный код дисциплины');
       return;
     }
     setDeleteSubmitting(true);
     try {
       await api.delete(`/admin/subjects/${deleteTarget.id}`);
-      showSuccess('Предмет удалён');
+      showSuccess('Дисциплина удалён');
       setDeleteTarget(null);
       setDeletePreview(null);
       setDeleteConfirmCode('');
       if (viewId === deleteTarget.id) setViewId(null);
       void fetchSubjects();
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось удалить'));
+      showError(getApiErrorMessage(e, 'Не удалось удалить'));
     } finally {
       setDeleteSubmitting(false);
     }
@@ -378,74 +394,55 @@ const AdminSubjectManagement = () => {
       }
       void fetchSubjects();
     } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось добавить назначение'));
+      showError(getApiErrorMessage(e, 'Не удалось добавить назначение'));
     } finally {
       setAddLoadSubmitting(false);
     }
   };
 
-  const submitChangeLoadGroup = async () => {
-    if (!changeLoad?.teachingLoadId || !changeLoadGroupId) return;
-    setChangeLoadSubmitting(true);
-    try {
-      await api.put(`/admin/teaching-loads/${changeLoad.teachingLoadId}`, {
-        groupId: Number(changeLoadGroupId),
-      });
-      showSuccess('Группа обновлена');
-      setChangeLoad(null);
-      setChangeLoadGroupId('');
-      if (viewData?.subject?.id) {
-        try {
-          const { data } = await api.get(`/admin/subjects/${viewData.subject.id}`);
-          setViewData(data);
-        } catch {
-          /* ignore */
-        }
+  const refreshAfterDisciplineRequest = async () => {
+    await fetchSubjects();
+    if (viewData?.subject?.id) {
+      try {
+        const { data } = await api.get(`/admin/subjects/${viewData.subject.id}`);
+        setViewData(data);
+      } catch {
+        /* ignore */
       }
-      void fetchSubjects();
-    } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось сохранить'));
-    } finally {
-      setChangeLoadSubmitting(false);
     }
   };
 
-  const confirmRemoveLoad = async () => {
-    if (!removeLoadConfirm?.id) return;
-    try {
-      await api.delete(`/admin/teaching-loads/${removeLoadConfirm.id}`);
-      showSuccess('Назначение снято');
-      setRemoveLoadConfirm(null);
-      if (viewData?.subject?.id) {
-        try {
-          const { data } = await api.get(`/admin/subjects/${viewData.subject.id}`);
-          setViewData(data);
-        } catch {
-          /* ignore */
-        }
-      }
+  const handleSubjectsImported = useCallback(
+    (data) => {
+      const created = data?.summary?.created ?? 0;
+      showSuccess(`Импорт завершён: добавлено дисциплин — ${created}.`);
       void fetchSubjects();
-    } catch (e) {
-      showError(firstApiErrorMessage(e, 'Не удалось удалить назначение'));
-      throw e;
-    }
-  };
+    },
+    [fetchSubjects, showSuccess],
+  );
 
   return (
     <div className="admin-subject-management">
       <div className="admin-subject-management__head">
-        <h1 className="admin-subject-management__title">Предметы</h1>
+        <h1 className="admin-subject-management__title">Дисциплины</h1>
       </div>
+
+      <TeacherRequestModeration
+        kind="discipline"
+        title="Заявки на допуск к дисциплинам"
+        emptyMessage="Новых заявок на допуск нет"
+        onResolved={refreshAfterDisciplineRequest}
+      />
 
       <DashboardFilterToolbar
         className="admin-subject-management__filter-toolbar"
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Поиск по названию или коду предмета…"
+        searchPlaceholder="Поиск по названию или коду дисциплины…"
         onReset={resetFilters}
         resetDisabled={resetDisabled}
         popoverAlign="end"
-        popoverAriaLabel="Фильтры списка предметов"
+        popoverAriaLabel="Фильтры списка дисциплин"
       >
         <div className="filter-popover__field">
           <label className="filter-popover__label" htmlFor="admin-subject-status-filter">
@@ -483,16 +480,19 @@ const AdminSubjectManagement = () => {
         </div>
       </DashboardFilterToolbar>
 
-      <div>
+      <div className="admin-subject-management__actions">
         <Button type="button" variant="primary" onClick={openCreate}>
-          Новый предмет
+          Новая дисциплина
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => setImportOpen(true)}>
+          Импорт CSV
         </Button>
       </div>
 
       {error && (
         <ErrorBanner
           className="admin-subject-management__error"
-          title="Ошибка загрузки предметов"
+          title="Ошибка загрузки дисциплин"
           message={error}
           actionLabel="Повторить"
           onAction={() => void fetchSubjects()}
@@ -500,10 +500,10 @@ const AdminSubjectManagement = () => {
       )}
 
       <div className={`admin-subject-management__grid-wrap${loading ? ' admin-subject-management__grid-wrap--loading' : ''}`}>
-        {loading && <LoadingState message="Загрузка предметов..." className="admin-subject-management__state" />}
+        {loading && <LoadingState message="Загрузка дисциплин..." className="admin-subject-management__state" />}
         {!loading && subjects.length === 0 && !error && (
           <EmptyState
-            title="Предметы не найдены"
+            title="Дисциплины не найдены"
             message="Попробуйте изменить параметры поиска или фильтрации"
             className="admin-subject-management__state"
           />
@@ -519,7 +519,8 @@ const AdminSubjectManagement = () => {
                 <EntityCard
                   key={row.id}
                   className="admin-subject-card"
-                  padding="medium"
+                  padding="small"
+                  interactive
                   role="button"
                   tabIndex={0}
                   onClick={() => setViewId(row.id)}
@@ -530,45 +531,32 @@ const AdminSubjectManagement = () => {
                     }
                   }}
                 >
-                  <div className="admin-subject-card__title">{row.name}</div>
-                  <div className="admin-subject-card__code">Код: {row.code}</div>
-                  <StatusBadge tone={isActive ? 'success' : 'neutral'} className="admin-subject-card__status">
-                    {subjectStatusLabel(row.status)}
-                  </StatusBadge>
-                  <div className="admin-subject-card__meta">
-                    <span>Преподавателей: {t}</span>
-                    <span>Групп: {g}</span>
-                    <span>Заданий: {a}</span>
-                  </div>
-                  <div
-                    className="admin-subject-card__actions"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                  >
-                    <Button
-                      type="button"
-                      size="small"
-                      variant="outline"
-                      onClick={() => openEdit(row)}
-                    >
-                      Редактировать
-                    </Button>
-                    <Button
-                      type="button"
-                      size="small"
-                      variant={isActive ? 'secondary' : 'primary'}
-                      onClick={() => void toggleSubjectStatus(row)}
-                    >
-                      {isActive ? 'Деактивировать' : 'Активировать'}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="small"
-                      variant="danger"
-                      onClick={() => void openDelete(row)}
-                    >
-                      Удалить
-                    </Button>
+                  <div className="admin-subject-card__body">
+                    <div className="admin-subject-card__top">
+                      <div className="admin-subject-card__title-block">
+                        <div className="admin-subject-card__title">{row.name}</div>
+                        {row.code ? (
+                          <span className="admin-subject-card__code">{row.code}</span>
+                        ) : null}
+                      </div>
+                      <StatusBadge tone={isActive ? 'success' : 'neutral'} className="admin-subject-card__status">
+                        {subjectStatusLabel(row.status)}
+                      </StatusBadge>
+                    </div>
+                    <div className="admin-subject-card__fields">
+                      <div className="admin-subject-card__row admin-subject-card__row--labeled">
+                        <span className="admin-subject-card__label">Преподавателей</span>
+                        <span className="admin-subject-card__value">{t}</span>
+                      </div>
+                      <div className="admin-subject-card__row admin-subject-card__row--labeled">
+                        <span className="admin-subject-card__label">Групп</span>
+                        <span className="admin-subject-card__value">{g}</span>
+                      </div>
+                      <div className="admin-subject-card__row admin-subject-card__row--labeled">
+                        <span className="admin-subject-card__label">Заданий</span>
+                        <span className="admin-subject-card__value">{a}</span>
+                      </div>
+                    </div>
                   </div>
                 </EntityCard>
               );
@@ -584,21 +572,18 @@ const AdminSubjectManagement = () => {
         total={meta.total}
         fallbackCount={subjects.length}
         disabled={loading}
-        onPrev={() => setPage((p) => Math.max(1, p - 1))}
-        onNext={() => setPage((p) => p + 1)}
+        hideWhenSinglePage
+        onPageChange={setPage}
       />
 
       <Modal
         isOpen={createOpen}
         onClose={() => !createSubmitting && setCreateOpen(false)}
-        title="Новый предмет"
+        title="Новая дисциплина"
         size="medium"
         contentClassName="admin-subject-form"
         footer={(
           <>
-            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} disabled={createSubmitting}>
-              Отмена
-            </Button>
             <Button
               type="button"
               variant="primary"
@@ -611,28 +596,31 @@ const AdminSubjectManagement = () => {
           </>
         )}
       >
-        <ModalSection title="Данные предмета">
+        <ModalSection title="Данные дисциплины">
           <label className="admin-subject-form__label">
             Название
             <input
               className="admin-subject-form__input"
               value={createName}
               onChange={(e) => setCreateName(e.target.value)}
+              placeholder="Например: Базы данных"
               autoComplete="off"
             />
           </label>
           <label className="admin-subject-form__label">
             Код
             <input
-              className="admin-subject-form__input"
+              className="admin-subject-form__input admin-subject-form__input--code"
               value={createCode}
-              onChange={(e) => setCreateCode(e.target.value)}
+              onChange={(e) => setCreateCode(sanitizeSubjectCodeInput(e.target.value))}
               placeholder="БД-301"
+              maxLength={SUBJECT_CODE_MAX_LENGTH}
               autoComplete="off"
+              spellCheck={false}
             />
           </label>
           <p className="admin-subject-form__hint">
-            Код должен быть уникальным и используется в отчётах.
+            Только заглавные буквы (А–Я или A–Z), цифры, точка, дефис и подчёркивание. Код уникален в каталоге.
           </p>
         </ModalSection>
       </Modal>
@@ -640,14 +628,11 @@ const AdminSubjectManagement = () => {
       <Modal
         isOpen={!!editRow}
         onClose={() => !editSubmitting && setEditRow(null)}
-        title="Редактировать предмет"
+        title="Редактировать дисциплину"
         size="medium"
         contentClassName="admin-subject-form"
         footer={(
           <>
-            <Button type="button" variant="secondary" onClick={() => setEditRow(null)} disabled={editSubmitting}>
-              Отмена
-            </Button>
             <Button
               type="button"
               variant="primary"
@@ -660,23 +645,27 @@ const AdminSubjectManagement = () => {
           </>
         )}
       >
-        <ModalSection title="Данные предмета">
+        <ModalSection title="Данные дисциплины">
           <label className="admin-subject-form__label">
             Название
             <input
               className="admin-subject-form__input"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
+              placeholder="Например: Базы данных"
               autoComplete="off"
             />
           </label>
           <label className="admin-subject-form__label">
             Код
             <input
-              className="admin-subject-form__input"
+              className="admin-subject-form__input admin-subject-form__input--code"
               value={editCode}
-              onChange={(e) => setEditCode(e.target.value)}
+              onChange={(e) => setEditCode(sanitizeSubjectCodeInput(e.target.value))}
+              placeholder="БД-301"
+              maxLength={SUBJECT_CODE_MAX_LENGTH}
               autoComplete="off"
+              spellCheck={false}
             />
           </label>
           <label className="admin-subject-form__label">
@@ -691,7 +680,7 @@ const AdminSubjectManagement = () => {
             </select>
           </label>
           <p className="admin-subject-form__hint">
-            При изменении кода задания сохраняют привязку к этой же записи предмета.
+            При изменении кода задания сохраняют привязку к этой же записи дисциплины.
           </p>
         </ModalSection>
       </Modal>
@@ -699,38 +688,24 @@ const AdminSubjectManagement = () => {
       <Modal
         isOpen={viewId != null}
         onClose={() => setViewId(null)}
-        title={viewData?.subject ? viewData.subject.name : 'Предмет'}
+        title="Дисциплина"
         size="large"
+        contentClassName="admin-subject-view-modal"
         footer={!viewLoading && viewData?.subject ? (
           <>
             <Button
               type="button"
-              variant="secondary"
+              variant="primary"
               onClick={() => {
                 const s = viewData.subject;
                 setViewId(null);
                 openEdit({ id: s.id, name: s.name, code: s.code, status: s.status });
               }}
             >
-              Редактировать предмет
+              Редактировать
             </Button>
-            <Button
-              type="button"
-              variant={viewData.subject.status === 'inactive' ? 'primary' : 'secondary'}
-              onClick={() => void toggleSubjectStatus(viewData.subject)}
-            >
-              {viewData.subject.status === 'inactive' ? 'Активировать предмет' : 'Деактивировать предмет'}
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              onClick={() => {
-                const s = viewData.subject;
-                setViewId(null);
-                void openDelete({ id: s.id, name: s.name, code: s.code });
-              }}
-            >
-              Удалить предмет
+            <Button type="button" variant="outline" onClick={openAddLoad}>
+              Добавить назначение
             </Button>
           </>
         ) : null}
@@ -740,7 +715,7 @@ const AdminSubjectManagement = () => {
           <div className="admin-subject-view">
             <section className="admin-subject-view__hero">
               <div>
-                <span className="admin-subject-view__eyebrow">Предмет</span>
+                <span className="admin-subject-view__eyebrow">Дисциплина</span>
                 <h3 className="admin-subject-view__name">{viewData.subject.name}</h3>
                 <p className="admin-subject-view__code">Код: {viewData.subject.code}</p>
                 <StatusBadge
@@ -756,77 +731,94 @@ const AdminSubjectManagement = () => {
               </div>
             </section>
             {viewData.stats && (
-              <ModalSection title="Показатели">
-                <dl className="admin-subject-view__stats">
-                  <div className="admin-subject-view__stat">
-                    <dt>Преподавателей</dt>
-                    <dd>{viewData.stats.teachersCount}</dd>
+              <ModalSection title="Показатели" variant="soft">
+                <div className="admin-subject-view__stats-grid">
+                  <div className="admin-subject-view__stat-card">
+                    <span>Преподавателей</span>
+                    <strong>{viewData.stats.teachersCount}</strong>
                   </div>
-                  <div className="admin-subject-view__stat">
-                    <dt>Групп по назначениям</dt>
-                    <dd>{viewData.stats.groupsCount}</dd>
+                  <div className="admin-subject-view__stat-card">
+                    <span>Групп</span>
+                    <strong>{viewData.stats.groupsCount}</strong>
                   </div>
-                  <div className="admin-subject-view__stat">
-                    <dt>Заданий</dt>
-                    <dd>{viewData.stats.assignmentsCount}</dd>
+                  <div className="admin-subject-view__stat-card">
+                    <span>Назначений</span>
+                    <strong>{viewData.stats.teachingLoadsCount ?? viewData.teachingLoads?.length ?? 0}</strong>
                   </div>
-                  <div className="admin-subject-view__stat">
-                    <dt>Активных заданий</dt>
-                    <dd>{viewData.stats.activeAssignmentsCount}</dd>
+                  <div className="admin-subject-view__stat-card">
+                    <span>Заданий</span>
+                    <strong>{viewData.stats.assignmentsCount}</strong>
                   </div>
-                  <div className="admin-subject-view__stat">
-                    <dt>Сданных работ</dt>
-                    <dd>{viewData.stats.submissionsCount}</dd>
+                  <div className="admin-subject-view__stat-card">
+                    <span>Активных заданий</span>
+                    <strong>{viewData.stats.activeAssignmentsCount}</strong>
                   </div>
-                </dl>
+                  <div className="admin-subject-view__stat-card">
+                    <span>Сданных работ</span>
+                    <strong>{viewData.stats.submissionsCount}</strong>
+                  </div>
+                </div>
               </ModalSection>
             )}
-            <ModalSection title="Назначения">
-              {!viewData.teachingLoads?.length && <p className="admin-subject-management__hint">Назначений пока нет</p>}
+            <ModalSection title={`Назначения (${viewData.teachingLoads?.length ?? 0})`}>
+              {!viewData.teachingLoads?.length && (
+                <EmptyState
+                  title="Назначений пока нет"
+                  message="Добавьте преподавателя и группу через кнопку «Добавить назначение»."
+                />
+              )}
               {viewData.teachingLoads?.length > 0 && (
                 <ul className="admin-subject-view__loads">
                   {viewData.teachingLoads.map((row) => (
-                    <li key={row.teachingLoadId} className="admin-subject-view__load-row">
-                      <div className="admin-subject-view__load-meta">
-                        <strong className="admin-subject-view__load-title">
+                    <li key={row.teachingLoadId} className="admin-subject-view__load-card">
+                      <div className="admin-subject-view__load-top">
+                        <strong>
                           {row.teacher
                             ? shortName(row.teacher.lastName, row.teacher.firstName, row.teacher.middleName)
                             : '—'}
                         </strong>
-                        <span>{row.group ? `Группа: ${row.group.name}` : 'Группа не указана'}</span>
-                        <span>Активных заданий: {row.activeAssignmentsCount ?? 0}</span>
                       </div>
-                      <div className="admin-subject-view__load-actions">
-                        <Button
-                          type="button"
-                          size="small"
-                          variant="outline"
-                          onClick={() => {
-                            setChangeLoad({ teachingLoadId: row.teachingLoadId, groupId: row.group?.id });
-                            setChangeLoadGroupId(row.group?.id ? String(row.group.id) : '');
-                          }}
-                        >
-                          Изменить группу
-                        </Button>
-                        <Button
-                          type="button"
-                          size="small"
-                          variant="danger"
-                          onClick={() => setRemoveLoadConfirm({ id: row.teachingLoadId })}
-                        >
-                          Убрать
-                        </Button>
+                      <div className="admin-subject-view__load-fields">
+                        <div className="admin-subject-view__load-row">
+                          <span>Группа</span>
+                          <span>{row.group?.name || '—'}</span>
+                        </div>
+                        <div className="admin-subject-view__load-row">
+                          <span>Активных заданий</span>
+                          <span>{row.activeAssignmentsCount ?? 0}</span>
+                        </div>
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
-              <div className="admin-subject-view__section-action">
-                <Button type="button" variant="secondary" onClick={openAddLoad}>
-                  Добавить назначение
-                </Button>
-              </div>
             </ModalSection>
+
+            <ModalDangerZone
+              title="Статус и удаление"
+              description="Деактивация скрывает дисциплину из новых назначений. Удаление доступно, если нет активных связей."
+            >
+              <Button
+                type="button"
+                variant={viewData.subject.status === 'inactive' ? 'primary' : 'warning'}
+                size="small"
+                onClick={() => void toggleSubjectStatus(viewData.subject)}
+              >
+                {viewData.subject.status === 'inactive' ? 'Активировать' : 'Деактивировать'}
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="small"
+                onClick={() => {
+                  const s = viewData.subject;
+                  setViewId(null);
+                  void openDelete({ id: s.id, name: s.name, code: s.code });
+                }}
+              >
+                Удалить дисциплину
+              </Button>
+            </ModalDangerZone>
           </div>
         )}
       </Modal>
@@ -839,9 +831,6 @@ const AdminSubjectManagement = () => {
         contentClassName="admin-subject-form admin-subject-add-load"
         footer={(
           <>
-            <Button type="button" variant="secondary" onClick={() => setAddLoadOpen(false)} disabled={addLoadSubmitting}>
-              Отмена
-            </Button>
             <Button type="button" variant="primary" loading={addLoadSubmitting} onClick={() => void submitAddLoad()}>
               Создать
             </Button>
@@ -854,7 +843,10 @@ const AdminSubjectManagement = () => {
             <select
               className="admin-subject-form__input"
               value={addLoadTeacherId}
-              onChange={(e) => setAddLoadTeacherId(e.target.value)}
+              onChange={(e) => {
+                setAddLoadTeacherId(e.target.value);
+                setAddLoadGroupIds(new Set());
+              }}
             >
               <option value="">Выберите</option>
               {addLoadTeachers.map((u) => (
@@ -864,7 +856,17 @@ const AdminSubjectManagement = () => {
               ))}
             </select>
           </label>
+          {addLoadTeachers.length === 0 && (
+            <p className="admin-subject-management__hint">Нет преподавателей с допуском к этой дисциплине.</p>
+          )}
           <div className="admin-subject-form__label">Группы</div>
+          {!addLoadTeacherId ? (
+            <p className="admin-subject-management__hint">Сначала выберите преподавателя.</p>
+          ) : addLoadGroups.length === 0 ? (
+            <p className="admin-subject-management__hint">
+              Нет свободных групп: все подходящие уже назначены этому преподавателю или нет групп с дисциплиной на текущем курсе.
+            </p>
+          ) : (
           <div className="admin-subject-add-load__groups">
             {addLoadGroups.map((gr) => (
               <label key={gr.id} className="admin-subject-add-load__cb">
@@ -882,56 +884,18 @@ const AdminSubjectManagement = () => {
               </label>
             ))}
           </div>
-        </ModalSection>
-      </Modal>
-
-      <Modal
-        isOpen={!!changeLoad}
-        onClose={() => !changeLoadSubmitting && setChangeLoad(null)}
-        title="Изменить группу в назначении"
-        size="small"
-        contentClassName="admin-subject-form"
-        footer={(
-          <>
-            <Button type="button" variant="secondary" onClick={() => setChangeLoad(null)} disabled={changeLoadSubmitting}>
-              Отмена
-            </Button>
-            <Button type="button" variant="primary" loading={changeLoadSubmitting} onClick={() => void submitChangeLoadGroup()}>
-              Сохранить
-            </Button>
-          </>
-        )}
-      >
-        <ModalSection title="Группа назначения">
-          <label className="admin-subject-form__label">
-            Группа
-            <select
-              className="admin-subject-form__input"
-              value={changeLoadGroupId}
-              onChange={(e) => setChangeLoadGroupId(e.target.value)}
-            >
-              <option value="">Выберите</option>
-              {changeLoadGroups.map((gr) => (
-                <option key={gr.id} value={String(gr.id)}>
-                  {gr.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          )}
         </ModalSection>
       </Modal>
 
       <Modal
         isOpen={!!deleteTarget}
         onClose={() => !deleteSubmitting && setDeleteTarget(null)}
-        title={deleteTarget ? `Удалить предмет ${deleteTarget.name}` : 'Удаление'}
+        title={deleteTarget ? `Удалить дисциплину «${deleteTarget.name}»` : 'Удаление'}
         size="medium"
         contentClassName="admin-subject-form"
         footer={(
           <>
-            <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleteSubmitting}>
-              Отмена
-            </Button>
             <Button type="button" variant="danger" loading={deleteSubmitting} onClick={() => void submitDelete()}>
               Удалить
             </Button>
@@ -943,32 +907,25 @@ const AdminSubjectManagement = () => {
             <p className="admin-subject-form__warn">
               Связано: преподавателей {deletePreview.stats.teachersCount}, групп {deletePreview.stats.groupsCount},
               заданий {deletePreview.stats.assignmentsCount}, сданных работ {deletePreview.stats.submissionsCount}.
-              Назначения будут удалены; задания останутся без привязки к предмету.
+              Назначения будут удалены; задания останутся без привязки к дисциплине.
             </p>
           )}
           <label className="admin-subject-form__label">
-            Введите код предмета для подтверждения
+            Введите код дисциплины для подтверждения
             <input
               className="admin-subject-form__input"
               value={deleteConfirmCode}
               onChange={(e) => setDeleteConfirmCode(e.target.value)}
+              placeholder={deleteTarget?.code || ''}
               autoComplete="off"
             />
           </label>
         </ModalSection>
       </Modal>
-
-      <ConfirmModal
-        isOpen={!!removeLoadConfirm}
-        onClose={() => setRemoveLoadConfirm(null)}
-        title="Снять назначение"
-        message="Преподаватель потеряет доступ к этому предмету в выбранной группе. Задания сохранятся."
-        confirmText="Убрать"
-        cancelText="Отмена"
-        danger
-        onConfirm={async () => {
-          await confirmRemoveLoad();
-        }}
+      <AdminSubjectsImportModal
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={handleSubjectsImported}
       />
     </div>
   );

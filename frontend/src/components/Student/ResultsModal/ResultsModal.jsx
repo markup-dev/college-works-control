@@ -1,5 +1,4 @@
 import React from 'react';
-import Button from '../../UI/Button/Button';
 import Modal from '../../UI/Modal/Modal';
 import { formatDate } from '../../../utils';
 import './ResultsModal.scss';
@@ -58,13 +57,6 @@ const ResultsModal = ({
       size="large"
       className="student-results-modal"
       contentClassName="student-results-modal__body"
-      footer={(
-        <div className="student-results-modal__actions">
-          <Button variant="primary" onClick={onClose}>
-            Закрыть
-          </Button>
-        </div>
-      )}
     >
           <div className={`result-overview result-overview--${resultStatus.variant}`}>
             <span className="result-overview__label">{resultStatus.label}</span>
@@ -106,7 +98,7 @@ const ResultsModal = ({
                 <span>{assignment.title || '—'}</span>
               </div>
               <div className="info-item">
-                <strong>Предмет:</strong>
+                <strong>Дисциплина:</strong>
                 <span>{assignment.subject || '—'}</span>
               </div>
               <div className="info-item">
@@ -206,7 +198,7 @@ const getResultStatusInfo = (status) => {
     case 'graded':
       return { label: 'Работа проверена', variant: 'success' };
     case 'returned':
-      return { label: 'Возвращено на доработку', variant: 'warning' };
+      return { label: 'Возвращено на доработку', variant: 'danger' };
     case 'submitted':
       return { label: 'Ожидает проверки', variant: 'default' };
     default:

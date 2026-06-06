@@ -1,14 +1,8 @@
 @import '../../../styles/base/variables';
+@import '../../../styles/base/admin-common';
 
 .admin-log-management {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-
-  @media (max-width: 768px) {
-    gap: 1rem;
-  }
+  @include admin-page-shell;
 
   &__head {
     display: flex;
@@ -19,19 +13,12 @@
   }
 
   &__title {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #1e293b;
-    letter-spacing: -0.01em;
+    @include admin-page-title;
   }
 
   &__hint {
-    margin: 0;
-    font-size: 0.88rem;
-    color: $text-secondary;
+    @include admin-page-hint;
     max-width: 48rem;
-    line-height: 1.45;
   }
 
   &__actions {
@@ -59,9 +46,7 @@
   }
 
   &__state {
-    background: #ffffff;
-    border: 1px solid #eef2f8;
-    border-radius: 20px;
+    @include admin-state-block;
   }
 
   &__list {

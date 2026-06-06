@@ -234,14 +234,42 @@
   }
 
   @media (max-width: 480px) {
+    &.dashboard-filter-toolbar--has-filter-panel {
+      .dashboard-filter-toolbar__search--inline {
+        display: none;
+      }
+
+      .search-toolbar {
+        flex-direction: row;
+        align-items: stretch;
+        gap: 0;
+      }
+
+      .search-toolbar .filters-toolbar {
+        width: 100%;
+      }
+    }
+
     .search-toolbar .filters-toolbar__actions {
       flex-direction: column;
+      gap: 0.625rem;
 
       .filter-panel-trigger,
       .reset-filters-btn {
-        width: 100%;
         flex: none;
+        width: 100%;
+        min-width: 0;
       }
+    }
+
+    .filter-popover__field--search {
+      display: flex;
+    }
+  }
+
+  @media (min-width: 481px) {
+    .filter-popover__field--search {
+      display: none;
     }
   }
 }

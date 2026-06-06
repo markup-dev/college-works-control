@@ -10,13 +10,14 @@ const ConfirmModal = ({
   title,
   message,
   confirmText = 'Подтвердить',
-  cancelText = 'Отмена',
   danger = false,
+  loading: externalLoading = false,
 }) => {
-  const [loading, setLoading] = useState(false);
+  const [internalLoading, setInternalLoading] = useState(false);
+  const loading = externalLoading || internalLoading;
 
   useEffect(() => {
-    if (isOpen) setLoading(false);
+    if (isOpen) setInternalLoading(false);
   }, [isOpen]);
 
   const handleConfirm = async () => {
@@ -24,14 +25,14 @@ const ConfirmModal = ({
     try {
       const ret = onConfirm?.();
       if (ret != null && typeof ret.then === 'function') {
-        setLoading(true);
+        setInternalLoading(true);
         await ret;
       }
       onClose();
     } catch {
       /* Ошибки обрабатывает вызывающий код (toast и т.д.). */
     } finally {
-      setLoading(false);
+      setInternalLoading(false);
     }
   };
 
@@ -41,20 +42,16 @@ const ConfirmModal = ({
       onClose={onClose}
       title={title}
       size="small"
+      closeDisabled={loading}
       footer={(
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
-            {cancelText}
-          </Button>
-          <Button
-            variant={danger ? 'danger' : 'primary'}
-            onClick={() => void handleConfirm()}
-            loading={loading}
-            disabled={loading}
-          >
-            {confirmText}
-          </Button>
-        </>
+        <Button
+          variant={danger ? 'danger' : 'primary'}
+          onClick={() => void handleConfirm()}
+          loading={loading}
+          disabled={loading}
+        >
+          {confirmText}
+        </Button>
       )}
     >
       <div className="confirm-modal">

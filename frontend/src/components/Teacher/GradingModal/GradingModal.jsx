@@ -145,9 +145,6 @@ const GradingModal = ({
           >
             Назад к деталям
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Отмена
-          </Button>
           <Button
             type="submit"
             form="teacher-grading-form"
@@ -161,7 +158,7 @@ const GradingModal = ({
       )}
     >
           <form id="teacher-grading-form" onSubmit={handleSubmit} aria-busy={isSubmitting}>
-              <SubmissionInfo submission={submission} assignment={assignment} maxScore={maxScore} />
+              <SubmissionInfo submission={submission} assignment={assignment} />
 
               <div className="grading-form">
                 <div className="teacher-grading-modal__field">
@@ -278,7 +275,7 @@ const GradingModal = ({
   );
 };
 
-const SubmissionInfo = ({ submission, assignment, maxScore }) => (
+const SubmissionInfo = ({ submission, assignment }) => (
   <div className="submission-info">
     <h4>{submission.assignmentTitle}</h4>
     <div className="info-grid">
@@ -289,10 +286,6 @@ const SubmissionInfo = ({ submission, assignment, maxScore }) => (
       <div className="info-item">
         <strong>Группа:</strong>
         <span>{submission.group}</span>
-      </div>
-      <div className="info-item">
-        <strong>Максимальный балл:</strong>
-        <span>{maxScore}</span>
       </div>
       <div className="info-item">
         <strong>Дата создания задания:</strong>

@@ -7,7 +7,10 @@ import { formatDateTimeShortMonth } from '../../utils/dateHelpers';
 import { getNotificationNavigatePath } from '../../utils/notificationNavigation';
 import Button from '../../components/UI/Button/Button';
 import ConfirmModal from '../../components/UI/Modal/ConfirmModal';
+import Modal from '../../components/UI/Modal/Modal';
+import ModalSection from '../../components/UI/Modal/ModalSection';
 import Pagination from '../../components/UI/Pagination/Pagination';
+import { getApiErrorMessage } from '../../utils/adminApiErrors';
 import './Notifications.scss';
 
 const notificationText = (value, fallback = '') => {
@@ -23,6 +26,18 @@ const notificationText = (value, fallback = '') => {
   return fallback;
 };
 
+const getNotificationKind = (data = {}) => data.kind ?? data.type ?? null;
+
+const isAdminBroadcastNotification = (data = {}) => getNotificationKind(data) === 'admin_broadcast';
+
+const previewText = (text, maxLength = 180) => {
+  const value = String(text || '').trim();
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength).trim()}…`;
+};
+
 const Notifications = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -34,6 +49,7 @@ const Notifications = () => {
   const [markAllReading, setMarkAllReading] = useState(false);
   const [page, setPage] = useState(1);
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
   const itemCountRef = useRef(0);
   const markAllGuardRef = useRef(false);
 
@@ -46,7 +62,7 @@ const Notifications = () => {
   }, []);
 
   const refreshUnreadCount = useCallback(async () => {
-    if (user?.role !== 'student' && user?.role !== 'teacher') {
+    if (!user?.role) {
       setUnreadTotal(0);
       return;
     }
@@ -83,8 +99,8 @@ const Notifications = () => {
       });
       refreshUnreadGlobally();
       void refreshUnreadCount();
-    } catch {
-      showError('Не удалось загрузить уведомления');
+    } catch (err) {
+      showError(getApiErrorMessage(err, 'Не удалось загрузить уведомления'));
       setItems([]);
     } finally {
       if (blockUi) {
@@ -104,27 +120,37 @@ const Notifications = () => {
     );
   };
 
+  const markNotificationRead = useCallback((notification) => {
+    if (!notification || notification.readAt) {
+      return;
+    }
+    void api
+      .post(`/notifications/${notification.id}/read`)
+      .then(() => {
+        refreshUnreadGlobally();
+        markItemReadLocally(notification.id);
+        void refreshUnreadCount();
+      })
+      .catch((err) => {
+        showError(getApiErrorMessage(err, 'Не удалось отметить прочитанным'));
+      });
+  }, [refreshUnreadCount, refreshUnreadGlobally, showError]);
+
   const handleCardActivate = (n) => {
     const d = n.data || {};
     const target = user?.role ? getNotificationNavigatePath(user.role, d) : null;
-    const unread = !n.readAt;
+
+    if (isAdminBroadcastNotification(d)) {
+      setSelectedNotification(n);
+      markNotificationRead(n);
+      return;
+    }
 
     if (target) {
       navigate(target);
     }
 
-    if (unread) {
-      void api
-        .post(`/notifications/${n.id}/read`)
-        .then(() => {
-          refreshUnreadGlobally();
-          markItemReadLocally(n.id);
-          void refreshUnreadCount();
-        })
-        .catch(() => {
-          showError('Не удалось отметить прочитанным');
-        });
-    }
+    markNotificationRead(n);
   };
 
   const markAllRead = async () => {
@@ -141,8 +167,8 @@ const Notifications = () => {
       setItems((prev) => prev.map((item) => ({ ...item, readAt: item.readAt || ts })));
       await load(page);
       showSuccess('Все уведомления отмечены прочитанными');
-    } catch {
-      showError('Не удалось выполнить действие');
+    } catch (err) {
+      showError(getApiErrorMessage(err, 'Не удалось выполнить действие'));
       await refreshUnreadCount();
     } finally {
       markAllGuardRef.current = false;
@@ -159,8 +185,8 @@ const Notifications = () => {
       setItems([]);
       setMeta({ currentPage: 1, lastPage: 1, total: 0 });
       setPage(1);
-    } catch {
-      showError('Не удалось очистить уведомления');
+    } catch (err) {
+      showError(getApiErrorMessage(err, 'Не удалось очистить уведомления'));
     }
   };
 
@@ -170,10 +196,12 @@ const Notifications = () => {
         <header className="notifications-page__header">
           <div>
             <h1>Уведомления</h1>
-            <p className="notifications-page__hint">
-              События по заданиям и срокам. Нажмите на карточку, чтобы перейти к заданию или сдаче.
-              Письма на почту — если в профиле включено «Дублировать уведомления на email».
-            </p>
+            {!loading && items.length > 0 ? (
+              <p className="notifications-page__hint">
+                {unreadTotal > 0 ? `Непрочитанных: ${unreadTotal}. ` : ''}
+                Нажмите на уведомление, чтобы перейти к заданию или открыть текст.
+              </p>
+            ) : null}
           </div>
           {!loading && meta.total > 0 ? (
             <div className="notifications-page__actions">
@@ -208,6 +236,7 @@ const Notifications = () => {
             {items.map((n) => {
               const d = n.data || {};
               const title = notificationText(d.title, 'Уведомление') || 'Уведомление';
+              const isBroadcast = isAdminBroadcastNotification(d);
               const body = notificationText(d.body, '');
               const teacherName = user?.role === 'student'
                 ? notificationText(d.teacherName ?? d.teacher_name, '')
@@ -219,7 +248,7 @@ const Notifications = () => {
                   <button
                     type="button"
                     className={`notifications-page__card${unread ? ' is-unread' : ''}${
-                      navigable ? ' is-navigable' : ''
+                      navigable || isBroadcast ? ' is-navigable' : ''
                     }`}
                     onClick={() => handleCardActivate(n)}
                   >
@@ -232,7 +261,14 @@ const Notifications = () => {
                     {teacherName ? (
                       <p className="notifications-page__teacher">{teacherName}</p>
                     ) : null}
-                    <p className="notifications-page__body">{body}</p>
+                    <p className="notifications-page__body">
+                      {isBroadcast ? previewText(body) : body}
+                    </p>
+                    {isBroadcast ? (
+                      <span className="notifications-page__badge notifications-page__badge--muted">
+                        Открыть текст
+                      </span>
+                    ) : null}
                     {unread ? (
                       <span className="notifications-page__badge">Новое</span>
                     ) : null}
@@ -255,6 +291,33 @@ const Notifications = () => {
         ) : null}
       </div>
 
+      <Modal
+        isOpen={!!selectedNotification}
+        onClose={() => setSelectedNotification(null)}
+        title={notificationText(selectedNotification?.data?.title, 'Уведомление')}
+        size="medium"
+        contentClassName="notifications-page__modal"
+      >
+        {selectedNotification ? (
+          <>
+            <ModalSection title="Информация" variant="soft">
+              <p className="notifications-page__modal-meta">
+                {selectedNotification.data?.adminName || selectedNotification.data?.admin_name
+                  ? `Отправитель: ${selectedNotification.data?.adminName || selectedNotification.data?.admin_name}`
+                  : 'Администрация'}
+                <br />
+                {formatDateTimeShortMonth(selectedNotification.createdAt, '')}
+              </p>
+            </ModalSection>
+            <ModalSection title="Текст уведомления">
+              <div className="notifications-page__modal-body">
+                {notificationText(selectedNotification.data?.body, 'Текст отсутствует')}
+              </div>
+            </ModalSection>
+          </>
+        ) : null}
+      </Modal>
+
       <ConfirmModal
         isOpen={showClearAllConfirm}
         onClose={() => setShowClearAllConfirm(false)}
@@ -262,7 +325,6 @@ const Notifications = () => {
         title="Очистить уведомления?"
         message="Все записи из списка будут удалены без возможности восстановления."
         confirmText="Очистить"
-        cancelText="Отмена"
         danger
       />
     </div>

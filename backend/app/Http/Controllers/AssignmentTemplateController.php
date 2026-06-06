@@ -181,11 +181,11 @@ class AssignmentTemplateController extends Controller
 
         $subjectId = (int) $assignmentTemplate->subject_id;
         if ($subjectId < 1 || ! Subject::query()->where('id', $subjectId)->where('status', 'active')->exists()) {
-            return response()->json(['message' => 'У заготовки не указан действующий предмет. Отредактируйте её в банке.'], 422);
+            return response()->json(['message' => 'У заготовки не указан действующий дисциплина. Отредактируйте её в банке.'], 422);
         }
 
         if (! $this->assignments->teacherCanTeachSubject($user->id, $subjectId)) {
-            return response()->json(['message' => 'Нет прав выдавать задание по этому предмету.'], 422);
+            return response()->json(['message' => 'Нет прав выдавать задание по этому дисциплине.'], 422);
         }
 
         $description = trim((string) $assignmentTemplate->description);

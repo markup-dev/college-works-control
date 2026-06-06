@@ -5,9 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Admin\Concerns\LogsAdminActions;
 use App\Http\Controllers\Controller;
 use App\Models\Assignment;
+use App\Models\Group;
 use App\Models\Submission;
+use App\Models\Subject;
+use App\Models\TeacherSubject;
 use App\Models\TeachingLoad;
 use App\Models\User;
+use App\Services\AcademicProgramService;
+use App\Services\AdminActionNotificationService;
 use App\Services\AssignmentNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -22,6 +27,7 @@ class AdminAssignmentController extends Controller
     use LogsAdminActions;
 
     private const ASSIGNMENTS_PER_PAGE = 18;
+    private const FILTER_OPTIONS_LIMIT = 20;
 
     public function adminAssignments(Request $request)
     {
@@ -30,7 +36,7 @@ class AdminAssignmentController extends Controller
             'teacher_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where(fn ($q) => $q->where('role', 'teacher'))],
             'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
             'group_id' => ['nullable', 'integer', 'exists:groups,id'],
-            'status' => ['nullable', 'in:all,active,inactive,archived,overdue'],
+            'status' => ['nullable', 'in:all,active,archived,overdue'],
             'filter' => ['nullable', 'in:all,overdue,overdue_checks,review_stale'],
             'sort' => ['nullable', 'in:deadline_asc,deadline_desc,created_asc,created_desc,submissions_desc,submissions_asc'],
             'page' => ['nullable', 'integer', 'min:1'],
@@ -73,8 +79,6 @@ class AdminAssignmentController extends Controller
         $status = $validated['status'] ?? 'all';
         if ($status === 'active') {
             $query->where('status', 'active');
-        } elseif ($status === 'inactive') {
-            $query->where('status', 'inactive');
         } elseif ($status === 'archived') {
             $query->where('status', 'archived');
         } elseif ($status === 'overdue') {
@@ -117,6 +121,36 @@ class AdminAssignmentController extends Controller
         ]);
     }
 
+    public function filterOptions(Request $request)
+    {
+        $validated = $request->validate([
+            'type' => ['required', 'in:teacher,subject,group'],
+            'search' => ['nullable', 'string', 'max:255'],
+            'selected_id' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $type = $validated['type'];
+        $search = trim((string) ($validated['search'] ?? ''));
+        $selectedId = (int) ($validated['selected_id'] ?? 0);
+        $limit = (int) ($validated['limit'] ?? self::FILTER_OPTIONS_LIMIT);
+
+        $options = match ($type) {
+            'teacher' => $this->teacherFilterOptions($search, $limit),
+            'subject' => $this->subjectFilterOptions($search, $limit),
+            'group' => $this->groupFilterOptions($search, $limit),
+        };
+
+        if ($selectedId > 0 && ! collect($options)->contains(fn ($option) => (int) $option['id'] === $selectedId)) {
+            $selectedOption = $this->selectedFilterOption($type, $selectedId);
+            if ($selectedOption !== null) {
+                array_unshift($options, $selectedOption);
+            }
+        }
+
+        return response()->json(['data' => array_slice($options, 0, $limit + 1)]);
+    }
+
     public function showAdminAssignment(Request $request, Assignment $assignment)
     {
         $assignment->load([
@@ -153,20 +187,48 @@ class AdminAssignmentController extends Controller
         $deadline = $assignment->deadline;
         $deadlinePassed = $assignment->status === 'active' && $deadline && $deadline->lt(now()->startOfDay());
 
+        $studentGroupMeta = [];
+        foreach ($assignment->groups as $group) {
+            foreach ($group->students as $student) {
+                if ($student->role !== 'student') {
+                    continue;
+                }
+                $studentGroupMeta[(int) $student->id] = [
+                    'group_id' => (int) $group->id,
+                    'group_name' => $group->name,
+                ];
+            }
+        }
+
         $notSubmitted = [];
         foreach ($targetIds as $sid) {
+            $sid = (int) $sid;
             $sub = $byStudent->get($sid);
             $hasDone = $sub && in_array($sub->status, ['submitted', 'graded', 'returned'], true);
             if ($hasDone) {
                 continue;
             }
-            $student = User::query()->find($sid);
+            $meta = $studentGroupMeta[$sid] ?? null;
+            $student = $assignment->groups
+                ->flatMap(fn ($g) => $g->students)
+                ->firstWhere('id', $sid);
             $notSubmitted[] = [
-                'id' => (int) $sid,
+                'id' => $sid,
                 'short_name' => $student?->full_name ?? '—',
+                'group_id' => $meta['group_id'] ?? null,
+                'group_name' => $meta['group_name'] ?? null,
                 'overdue' => $deadlinePassed,
             ];
         }
+
+        usort($notSubmitted, function (array $a, array $b): int {
+            $groupCmp = strcmp((string) ($a['group_name'] ?? ''), (string) ($b['group_name'] ?? ''));
+            if ($groupCmp !== 0) {
+                return $groupCmp;
+            }
+
+            return strcmp((string) $a['short_name'], (string) $b['short_name']);
+        });
 
         return response()->json([
             'assignment' => [
@@ -180,7 +242,9 @@ class AdminAssignmentController extends Controller
                 'teacher' => $listItem['teacher'],
                 'subject' => $listItem['subject'],
                 'groups' => $listItem['groups'],
+                'is_naturally_closed' => $listItem['is_naturally_closed'],
             ],
+            'is_naturally_closed' => $listItem['is_naturally_closed'],
             'stats' => $listItem['stats'],
             'grade_distribution' => $gradeDist,
             'not_submitted' => $notSubmitted,
@@ -189,11 +253,13 @@ class AdminAssignmentController extends Controller
 
     public function updateAdminAssignment(Request $request, Assignment $assignment)
     {
+        $this->assertAssignmentEditable($assignment);
+
         $validated = $request->validate([
             'title' => ['sometimes', 'required', 'string', 'min:3', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'deadline' => ['sometimes', 'required', 'date'],
-            'status' => ['nullable', 'in:active,inactive,archived'],
+            'status' => ['nullable', 'in:active,archived'],
         ]);
 
         $assignment->update($validated);
@@ -219,21 +285,52 @@ class AdminAssignmentController extends Controller
         ]);
     }
 
-    public function updateAdminAssignmentTeacher(Request $request, Assignment $assignment)
+    public function updateAdminAssignmentTeacher(Request $request, Assignment $assignment, AcademicProgramService $programs)
     {
+        $this->assertAssignmentEditable($assignment);
+
         $validated = $request->validate([
-            'teacher_id' => ['required', Rule::exists('users', 'id')->where(fn ($q) => $q->where('role', 'teacher'))],
+            'teacher_id' => ['required', Rule::exists('users', 'id')->where(fn ($q) => $q->where('role', 'teacher')->where('is_active', true))],
         ]);
 
         $newId = (int) $validated['teacher_id'];
-        $this->assertTeacherCoversAssignmentGroups($assignment, $newId);
+        $assignment->loadMissing('groups');
+        foreach ($assignment->groups as $group) {
+            $programs->assertTeachingLoadAllowed($newId, (int) $assignment->subject_id, (int) $group->id);
+        }
 
+        $oldTeacher = User::query()->find($assignment->teacher_id);
         $assignment->update(['teacher_id' => $newId]);
         $fresh = $assignment->fresh()->load([
             'teacher:id,last_name,first_name,middle_name,login',
             'subject:id,name,code',
             'groups:id,name',
         ]);
+
+        if ($oldTeacher) {
+            app(AdminActionNotificationService::class)->notify(
+                $oldTeacher,
+                $request->user(),
+                'Задание передано другому преподавателю',
+                'Администратор снял с вас задание «'.$fresh->title.'».',
+                [
+                    'action' => 'assignment_teacher_removed',
+                    'assignment_id' => $fresh->id,
+                ],
+            );
+        }
+        if ($fresh->teacher) {
+            app(AdminActionNotificationService::class)->notify(
+                $fresh->teacher,
+                $request->user(),
+                'Вам передано задание',
+                'Администратор назначил вас преподавателем задания «'.$fresh->title.'».',
+                [
+                    'action' => 'assignment_teacher_assigned',
+                    'assignment_id' => $fresh->id,
+                ],
+            );
+        }
 
         $this->log($request, 'reassign_assignment_teacher', "Смена преподавателя у задания «{$fresh->title}» (id {$fresh->id})");
 
@@ -255,33 +352,41 @@ class AdminAssignmentController extends Controller
             return response()->json(['data' => []]);
         }
 
-        $teacherIds = TeachingLoad::query()
+        $teacherIds = TeacherSubject::query()
             ->where('subject_id', $subjectId)
             ->where('status', 'active')
-            ->whereIn('group_id', $groupIds)
-            ->selectRaw('teacher_id, COUNT(DISTINCT group_id) as c')
-            ->groupBy('teacher_id')
-            ->havingRaw('COUNT(DISTINCT group_id) = ?', [count($groupIds)])
             ->pluck('teacher_id')
             ->all();
 
-        $teachers = User::query()
+        $eligibleTeachers = User::query()
             ->where('role', 'teacher')
+            ->where('is_active', true)
             ->whereIn('id', $teacherIds)
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get(['id', 'last_name', 'first_name', 'middle_name', 'login']);
 
-        $data = $teachers->map(fn (User $u) => [
-            'id' => $u->id,
-            'short_name' => $u->full_name,
-        ])->values()->all();
+        $currentTeacherId = (int) $assignment->teacher_id;
+        $eligiblePayload = $eligibleTeachers
+            ->filter(fn (User $u) => (int) $u->id !== $currentTeacherId)
+            ->map(fn (User $u) => [
+                'id' => $u->id,
+                'short_name' => $u->full_name,
+                'match_type' => 'teacher_subject',
+                'match_label' => 'Есть допуск к дисциплине',
+            ]);
+
+        $data = $eligiblePayload
+            ->values()
+            ->all();
 
         return response()->json(['data' => $data]);
     }
 
     public function deleteAdminAssignment(Request $request, Assignment $assignment)
     {
+        $this->assertAssignmentEditable($assignment);
+
         $assignment->loadMissing('materialItems');
         foreach ($assignment->materialItems as $material) {
             if (! empty($material->file_path) && Storage::disk('public')->exists($material->file_path)) {
@@ -345,7 +450,21 @@ class AdminAssignmentController extends Controller
                 'not_submitted' => $notSubmitted,
                 'avg_score' => $avgScore,
             ],
+            'is_naturally_closed' => $assignment->isNaturallyClosed([
+                'total_students' => $total,
+                'submitted_students' => $submitted,
+                'graded_students' => $graded,
+            ]),
         ];
+    }
+
+    private function assertAssignmentEditable(Assignment $assignment): void
+    {
+        if ($assignment->isNaturallyClosed()) {
+            throw ValidationException::withMessages([
+                'status' => 'Задание закрыто автоматически: все работы сданы и проверены. Редактирование запрещено.',
+            ]);
+        }
     }
 
     private function adminTeacherShortPayload(?User $u): ?array
@@ -360,12 +479,125 @@ class AdminAssignmentController extends Controller
         ];
     }
 
+    private function teacherFilterOptions(string $search, int $limit): array
+    {
+        $query = User::query()
+            ->where('role', 'teacher')
+            ->select(['id', 'last_name', 'first_name', 'middle_name', 'login', 'department']);
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('last_name', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('middle_name', 'like', "%{$search}%")
+                    ->orWhere('login', 'like', "%{$search}%")
+                    ->orWhere('department', 'like', "%{$search}%");
+            });
+        }
+
+        return $query
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->limit($limit)
+            ->get()
+            ->map(fn (User $teacher) => $this->teacherFilterOptionPayload($teacher))
+            ->values()
+            ->all();
+    }
+
+    private function subjectFilterOptions(string $search, int $limit): array
+    {
+        $query = Subject::query()->select(['id', 'name', 'code']);
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('code', 'like', "%{$search}%");
+            });
+        }
+
+        return $query
+            ->orderBy('name')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Subject $subject) => $this->subjectFilterOptionPayload($subject))
+            ->values()
+            ->all();
+    }
+
+    private function groupFilterOptions(string $search, int $limit): array
+    {
+        $query = Group::query()->select(['id', 'name', 'specialty']);
+
+        if ($search !== '') {
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('specialty', 'like', "%{$search}%");
+            });
+        }
+
+        return $query
+            ->orderBy('name')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Group $group) => $this->groupFilterOptionPayload($group))
+            ->values()
+            ->all();
+    }
+
+    private function selectedFilterOption(string $type, int $id): ?array
+    {
+        return match ($type) {
+            'teacher' => ($teacher = User::query()
+                ->where('role', 'teacher')
+                ->find($id, ['id', 'last_name', 'first_name', 'middle_name', 'login', 'department']))
+                    ? $this->teacherFilterOptionPayload($teacher)
+                    : null,
+            'subject' => ($subject = Subject::query()->find($id, ['id', 'name', 'code']))
+                ? $this->subjectFilterOptionPayload($subject)
+                : null,
+            'group' => ($group = Group::query()->find($id, ['id', 'name', 'specialty']))
+                ? $this->groupFilterOptionPayload($group)
+                : null,
+        };
+    }
+
+    private function teacherFilterOptionPayload(User $teacher): array
+    {
+        return [
+            'id' => $teacher->id,
+            'label' => $teacher->full_name ?: ($teacher->login ?? 'Преподаватель'),
+            'meta' => collect([$teacher->login, $teacher->department])->filter()->implode(' · '),
+        ];
+    }
+
+    private function subjectFilterOptionPayload(Subject $subject): array
+    {
+        return [
+            'id' => $subject->id,
+            'label' => $subject->name,
+            'meta' => $subject->code,
+        ];
+    }
+
+    private function groupFilterOptionPayload(Group $group): array
+    {
+        return [
+            'id' => $group->id,
+            'label' => $group->name,
+            'meta' => $group->specialty,
+        ];
+    }
+
     private function assertTeacherCoversAssignmentGroups(Assignment $assignment, int $teacherId): void
     {
         $assignment->loadMissing('groups');
         $subjectId = (int) $assignment->subject_id;
         if ($subjectId === 0) {
-            throw ValidationException::withMessages(['teacher_id' => 'У задания не указан предмет.']);
+            throw ValidationException::withMessages(['teacher_id' => 'У задания не указан дисциплина.']);
         }
         $groupIds = $assignment->groups->pluck('id')->map(fn ($id) => (int) $id)->all();
         if ($groupIds === []) {
@@ -380,7 +612,7 @@ class AdminAssignmentController extends Controller
                 ->exists();
             if (! $ok) {
                 throw ValidationException::withMessages([
-                    'teacher_id' => 'Преподаватель должен быть назначен на этот предмет по всем группам задания.',
+                    'teacher_id' => 'Преподаватель должен быть назначен на этот дисциплина по всем группам задания.',
                 ]);
             }
         }

@@ -14,6 +14,7 @@ const Modal = ({
   className = '',
   contentClassName = '',
   footerClassName = '',
+  closeDisabled = false,
 }) => {
   useBodyScrollLock(isOpen);
 
@@ -21,7 +22,7 @@ const Modal = ({
 
   return createPortal(
     (
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay" onClick={closeDisabled ? undefined : onClose}>
         <div 
           className={`modal modal--${size} ${className}`}
           onClick={(e) => e.stopPropagation()}
@@ -31,7 +32,13 @@ const Modal = ({
               <h2 className="modal__title">{title}</h2>
               {subtitle ? <p className="modal__subtitle">{subtitle}</p> : null}
             </div>
-            <button type="button" className="modal__close" onClick={onClose}>
+            <button
+              type="button"
+              className="modal__close"
+              onClick={onClose}
+              disabled={closeDisabled}
+              aria-disabled={closeDisabled}
+            >
               ×
             </button>
           </div>

@@ -1,4 +1,5 @@
 @import '../../../styles/base/variables';
+@import '../../../styles/base/admin-common';
 
 .admin-edit-user-modal {
   max-width: 720px;
@@ -53,9 +54,7 @@
   }
 
   &__field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
+    @include admin-form-field;
     min-width: 0;
 
     &--full {
@@ -64,11 +63,7 @@
   }
 
   &__label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #475569;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
+    @include admin-form-label;
 
     .admin-edit-user-modal__required {
       color: #ef4444;
@@ -78,28 +73,7 @@
 
   &__input,
   &__select {
-    width: 100%;
-    padding: 0.65rem 0.85rem;
-    border: 1px solid #d7dfeb;
-    border-radius: 10px;
-    font-size: 0.9rem;
-    color: #1e293b;
-    background: #ffffff;
-    transition: all 0.2s ease;
-
-    &:hover {
-      border-color: #c8d4e5;
-    }
-
-    &:focus {
-      outline: none;
-      border-color: $primary-color;
-      box-shadow: 0 0 0 3px rgba($primary-color, 0.1);
-    }
-
-    &::placeholder {
-      color: #94a3b8;
-    }
+    @include admin-control;
   }
 
   &__select {
@@ -163,13 +137,5 @@
       padding-right: 14px;
     }
 
-    .admin-edit-user-modal__actions {
-      flex-direction: column-reverse;
-
-      .ui-button {
-        width: 100%;
-        justify-content: center;
-      }
-    }
   }
 }

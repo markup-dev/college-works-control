@@ -26,6 +26,11 @@ const SubmissionDetailsModal = ({
     returned: { label: 'Возвращена', variant: 'danger' }
   }[submission.status] || { label: 'На проверке', variant: 'warning' };
 
+  const showFooter =
+    submission.status === 'submitted'
+    || submission.status === 'graded'
+    || submission.status === 'returned';
+
   return (
     <Modal
       isOpen={isOpen}
@@ -35,7 +40,7 @@ const SubmissionDetailsModal = ({
       size="large"
       className="teacher-submission-details-modal"
       contentClassName="teacher-submission-details-modal__body"
-      footer={(
+      footer={showFooter ? (
         <div className="teacher-submission-details-modal__actions">
           {submission.status === 'submitted' && !submission.isResubmission && (
             <Button
@@ -73,11 +78,8 @@ const SubmissionDetailsModal = ({
               Работа у студента на доработке. Оценить можно только после новой сдачи файла.
             </p>
           )}
-          <Button variant="secondary" onClick={onClose}>
-            Закрыть
-          </Button>
         </div>
-      )}
+      ) : null}
     >
           <div className="details-overview">
             <StatusBadge tone={statusInfo.variant}>
@@ -104,20 +106,24 @@ const SubmissionDetailsModal = ({
               </div>
               {assignment?.subject && (
                 <div className="info-item">
-                  <strong>Предмет:</strong>
+                  <strong>Дисциплина:</strong>
                   <span>{assignment.subject}</span>
                 </div>
               )}
+              <div className="info-item">
+                <strong>Дата создания:</strong>
+                <span>
+                  {assignment?.createdAt || assignment?.created_at
+                    ? formatDate(assignment.createdAt || assignment.created_at)
+                    : '—'}
+                </span>
+              </div>
               {assignment?.deadline && (
                 <div className="info-item">
                   <strong>Срок сдачи:</strong>
                   <span>{formatDate(assignment.deadline)}</span>
                 </div>
               )}
-              <div className="info-item">
-                <strong>Максимальный балл:</strong>
-                <span>{maxScore}</span>
-              </div>
             </div>
           </div>
 

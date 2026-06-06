@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import authService from '../services/authService';
 
 const AuthContext = createContext();
@@ -14,7 +14,9 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState(null);
+  const logoutPromiseRef = useRef(null);
 
   useEffect(() => {
     const savedUser = authService.getCurrentUser();
@@ -47,9 +49,24 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(async () => {
-    await authService.logout();
-    setUser(null);
-    setError(null);
+    if (logoutPromiseRef.current) {
+      return logoutPromiseRef.current;
+    }
+
+    const logoutPromise = (async () => {
+      setLoggingOut(true);
+      try {
+        await authService.logout();
+        setUser(null);
+        setError(null);
+      } finally {
+        setLoggingOut(false);
+        logoutPromiseRef.current = null;
+      }
+    })();
+
+    logoutPromiseRef.current = logoutPromise;
+    return logoutPromise;
   }, []);
 
   const updateProfile = useCallback(async (updates) => {
@@ -92,6 +109,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     loading,
+    loggingOut,
     error,
     login,
     logout,

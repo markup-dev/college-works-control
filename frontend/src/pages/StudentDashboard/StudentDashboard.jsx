@@ -14,6 +14,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useStudent, normalizeStudentAssignment } from '../../context/StudentContext';
 import { useNotification } from '../../context/NotificationContext';
 import api from '../../services/api';
+import { getApiErrorMessage } from '../../utils/adminApiErrors';
 import { 
   assignmentFilters,
   getDaysUntilDeadline,
@@ -109,6 +110,9 @@ const StudentDashboard = () => {
   const [searchTerm, setSearchTerm] = useState(storedFilters?.searchTerm || '');
   const [subjectFilter, setSubjectFilter] = useState(storedFilters?.subjectFilter || 'all');
   const [teacherFilter, setTeacherFilter] = useState(storedFilters?.teacherFilter || 'all');
+  const [submissionFormatFilter, setSubmissionFormatFilter] = useState(
+    storedFilters?.submissionFormatFilter || 'all'
+  );
   const [page, setPage] = useState(1);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
@@ -236,11 +240,17 @@ const StudentDashboard = () => {
     setPage(1);
   }, []);
 
+  const handleSubmissionFormatFilterChange = useCallback((value) => {
+    setSubmissionFormatFilter(value);
+    setPage(1);
+  }, []);
+
   const handleResetFilters = useCallback(() => {
     setSearchTerm('');
     setActiveFilter('all');
     setSubjectFilter('all');
     setTeacherFilter('all');
+    setSubmissionFormatFilter('all');
     setPage(1);
   }, []);
 
@@ -249,8 +259,9 @@ const StudentDashboard = () => {
       !searchTerm.trim() &&
       activeFilter === 'all' &&
       subjectFilter === 'all' &&
-      teacherFilter === 'all',
-    [searchTerm, activeFilter, subjectFilter, teacherFilter]
+      teacherFilter === 'all' &&
+      submissionFormatFilter === 'all',
+    [searchTerm, activeFilter, subjectFilter, teacherFilter, submissionFormatFilter]
   );
 
   const loadAttentionAssignments = useCallback(async () => {
@@ -284,13 +295,19 @@ const StudentDashboard = () => {
         ? deadlinesResponse.data.data
         : (deadlinesResponse.data || []);
 
-      setAttentionAssignments(buildAttentionAssignments([...retakesData, ...deadlinesData]));
+      const attentionPool = [...retakesData, ...deadlinesData].map(normalizeStudentAssignment);
+
+      setAttentionAssignments(buildAttentionAssignments(attentionPool));
     } catch {
       setAttentionAssignments({ retakes: [], deadlines: [] });
     }
   }, [user]);
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     loadStudentAssignments({
       page,
       perPage: PAGINATION_DEFAULTS.studentAssignments,
@@ -298,8 +315,18 @@ const StudentDashboard = () => {
       search: debouncedSearchTerm || undefined,
       subject: subjectFilter !== 'all' ? subjectFilter : undefined,
       teacherId: selectedTeacherId,
+      submissionType: submissionFormatFilter !== 'all' ? submissionFormatFilter : undefined,
     });
-  }, [page, activeFilter, debouncedSearchTerm, subjectFilter, selectedTeacherId, loadStudentAssignments]);
+  }, [
+    user,
+    page,
+    activeFilter,
+    debouncedSearchTerm,
+    subjectFilter,
+    selectedTeacherId,
+    submissionFormatFilter,
+    loadStudentAssignments,
+  ]);
 
   useEffect(() => {
     loadAttentionAssignments();
@@ -313,9 +340,10 @@ const StudentDashboard = () => {
         searchTerm,
         subjectFilter,
         teacherFilter,
+        submissionFormatFilter,
       })
     );
-  }, [activeFilter, searchTerm, subjectFilter, teacherFilter]);
+  }, [activeFilter, searchTerm, subjectFilter, teacherFilter, submissionFormatFilter]);
 
   const filteredAssignments = useMemo(() => (
     Array.isArray(assignments) ? assignments : []
@@ -483,7 +511,7 @@ const StudentDashboard = () => {
         showError(result.error || 'Ошибка при сдаче работы');
       }
     } catch (error) {
-      showError('Ошибка при сдаче работы');
+      showError(getApiErrorMessage(error, 'Ошибка при сдаче работы'));
     }
   }, [submissionFile, selectedAssignment, submitWork, showSuccess, showError, showWarning, loadAttentionAssignments]);
 
@@ -514,6 +542,26 @@ const StudentDashboard = () => {
     }
   }, [showError]);
 
+  const handleRetryLoad = useCallback(() => {
+    loadStudentAssignments({
+      page,
+      perPage: PAGINATION_DEFAULTS.studentAssignments,
+      status: activeFilter !== 'all' ? activeFilter : undefined,
+      search: debouncedSearchTerm || undefined,
+      subject: subjectFilter !== 'all' ? subjectFilter : undefined,
+      teacherId: selectedTeacherId,
+      submissionType: submissionFormatFilter !== 'all' ? submissionFormatFilter : undefined,
+    });
+  }, [
+    page,
+    activeFilter,
+    debouncedSearchTerm,
+    subjectFilter,
+    selectedTeacherId,
+    submissionFormatFilter,
+    loadStudentAssignments,
+  ]);
+
   if (!user) {
     return <LoadingState />;
   }
@@ -524,7 +572,7 @@ const StudentDashboard = () => {
         title="Ошибка загрузки"
         message={error}
         actionLabel="Повторить попытку"
-        onAction={loadStudentAssignments}
+        onAction={handleRetryLoad}
       />
     );
   }
@@ -546,6 +594,8 @@ const StudentDashboard = () => {
           teacherFilter={teacherFilter}
           onTeacherFilterChange={handleTeacherFilterChange}
           availableTeachers={availableTeachers}
+          submissionFormatFilter={submissionFormatFilter}
+          onSubmissionFormatFilterChange={handleSubmissionFormatFilterChange}
           onResetFilters={handleResetFilters}
           filtersResetDisabled={filtersResetDisabled}
           attentionAssignments={attentionAssignments}

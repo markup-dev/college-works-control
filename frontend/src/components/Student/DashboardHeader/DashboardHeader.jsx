@@ -18,6 +18,8 @@ const DashboardHeader = ({
   teacherFilter = "all",
   onTeacherFilterChange,
   availableTeachers = [],
+  submissionFormatFilter = "all",
+  onSubmissionFormatFilterChange,
   onResetFilters,
   filtersResetDisabled = false,
   attentionAssignments = { retakes: [], deadlines: [] },
@@ -53,6 +55,8 @@ const DashboardHeader = ({
         teacherFilter={teacherFilter}
         onTeacherFilterChange={onTeacherFilterChange}
         availableTeachers={availableTeachers}
+        submissionFormatFilter={submissionFormatFilter}
+        onSubmissionFormatFilterChange={onSubmissionFormatFilterChange}
         onResetFilters={onResetFilters}
         filtersResetDisabled={filtersResetDisabled}
       />

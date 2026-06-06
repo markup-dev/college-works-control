@@ -1,9 +1,12 @@
 export * from './teacherHelpers.js';
 export * from './assignmentHelpers.js';
 export * from './validation.js';
+export { firstApiErrorMessage, getApiErrorMessage } from './adminApiErrors.js';
 export * from './fileFormats.js';
 export * from './filterHelpers.js';
 export * from './paginationDefaults.js';
 export * from './submissionReviewQueue.js';
 export * from './gradeScale.js';
 export * from './dateHelpers.js';
+export * from './phoneMask.js';
+export * from './teacherRequestMessages.js';

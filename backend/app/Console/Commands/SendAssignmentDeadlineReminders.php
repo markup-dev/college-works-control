@@ -38,10 +38,9 @@ class SendAssignmentDeadlineReminders extends Command
             // Дата дедлайна, к которой относится это напоминание (например «сегодня + 3 дня»).
             $targetDate = $today->copy()->addDays($window['days']);
 
-            // Задания с нужным днём сдачи; archived не берём — работа с архивом обычно закрыта.
-            // inactive оставляем: задание ещё может требовать сдачи по графику.
+            // Задания с нужным днём сдачи; archived не берём — работа с архивом закрыта.
             $assignments = Assignment::query()
-                ->whereIn('status', ['active', 'inactive'])
+                ->where('status', 'active')
                 ->whereDate('deadline', $targetDate->toDateString())
                 ->with(['groups:id'])
                 ->get();

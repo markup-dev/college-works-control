@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { useNotification } from '../../../context/NotificationContext';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
 import EmptyState from '../../UI/EmptyState/EmptyState';
@@ -14,6 +14,9 @@ import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
+import { ADMIN_USERS_PAGE_SIZE } from '../../../config/adminPagination';
+import usePaginationClamp from '../../../hooks/usePaginationClamp';
+import { parsePaginationMeta } from '../../../utils/pagination';
 import AdminCreateUserModal from '../AdminCreateUserModal/AdminCreateUserModal';
 import AdminEditUserModal from '../AdminEditUserModal/AdminEditUserModal';
 import AdminUserCredentialsModal from '../AdminUserCredentialsModal/AdminUserCredentialsModal';
@@ -23,7 +26,6 @@ import AdminUserWarningsModal from '../AdminUserWarningsModal/AdminUserWarningsM
 import AdminUsersImportModal from '../AdminUsersImportModal/AdminUsersImportModal';
 import './AdminUserManagement.scss';
 
-const PER_PAGE = 12;
 
 const ROLE_OPTIONS = [
   { value: '', label: 'Все' },
@@ -46,6 +48,30 @@ const SORT_OPTIONS = [
   { value: 'name_desc', label: 'По ФИО (Я-А)' },
   { value: 'last_login_desc', label: 'По последнему входу' },
 ];
+
+const ROLE_VALUES = new Set(ROLE_OPTIONS.map((option) => option.value));
+const ACCOUNT_STATUS_VALUES = new Set(ACCOUNT_STATUS_OPTIONS.map((option) => option.value));
+const SORT_VALUES = new Set(SORT_OPTIONS.map((option) => option.value));
+
+const parsePositiveId = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? String(n) : '';
+};
+
+const getFiltersFromSearchParams = (params) => {
+  const roleParam = params.get('role') || '';
+  const accountStatusParam = params.get('account_status') || '';
+  const sortParam = params.get('sort') || 'newest';
+  const withoutGroup = params.get('without_group') === '1';
+
+  return {
+    search: params.get('search') || '',
+    role: ROLE_VALUES.has(roleParam) ? roleParam : '',
+    accountStatus: ACCOUNT_STATUS_VALUES.has(accountStatusParam) ? accountStatusParam : '',
+    groupId: withoutGroup ? 'none' : parsePositiveId(params.get('group_id')),
+    sort: SORT_VALUES.has(sortParam) ? sortParam : 'newest',
+  };
+};
 
 const roleLabel = (role) => {
   switch (role) {
@@ -82,6 +108,10 @@ const accountStatusPresentation = (row) => {
   return { label: 'Активен', tone: 'active' };
 };
 
+const warningTone = (key) => (
+  key === 'overdue_assignments' || key === 'stale_reviews' ? 'danger' : 'warning'
+);
+
 const secondLineOnUserCard = (row) => {
   if (row.role === 'admin') {
     return null;
@@ -101,12 +131,11 @@ const AdminUserManagement = () => {
   const { user: authUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlFilters = useMemo(() => getFiltersFromSearchParams(searchParams), [searchParams]);
+  const { role, accountStatus, groupId, sort } = urlFilters;
+  const [search, setSearch] = useState(() => getFiltersFromSearchParams(searchParams).search);
   const debouncedSearch = useDebouncedValue(search, 300);
-  const [role, setRole] = useState('');
-  const [accountStatus, setAccountStatus] = useState('');
-  const [groupId, setGroupId] = useState('');
-  const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
 
   const [groups, setGroups] = useState([]);
@@ -130,6 +159,42 @@ const AdminUserManagement = () => {
   const [warningsLoading, setWarningsLoading] = useState(false);
 
   const currentUserId = authUser?.id != null ? Number(authUser.id) : null;
+  const pendingViewUserIdRef = useRef(null);
+
+  useEffect(() => {
+    setSearch(urlFilters.search);
+    setPage(1);
+  }, [urlFilters.search, searchParams]);
+
+  const applyUserFilter = useCallback((patch) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if ('role' in patch) {
+        if (patch.role) next.set('role', patch.role);
+        else next.delete('role');
+        if (patch.role !== 'student') {
+          next.delete('group_id');
+          next.delete('without_group');
+        }
+      }
+      if ('groupId' in patch) {
+        next.delete('without_group');
+        next.delete('group_id');
+        if (patch.groupId === 'none') next.set('without_group', '1');
+        else if (patch.groupId) next.set('group_id', patch.groupId);
+      }
+      if ('accountStatus' in patch) {
+        if (patch.accountStatus) next.set('account_status', patch.accountStatus);
+        else next.delete('account_status');
+      }
+      if ('sort' in patch) {
+        if (patch.sort && patch.sort !== 'newest') next.set('sort', patch.sort);
+        else next.delete('sort');
+      }
+      return next;
+    }, { replace: true });
+    setPage(1);
+  }, [setSearchParams]);
 
   useEffect(() => {
     const st = location.state;
@@ -143,13 +208,30 @@ const AdminUserManagement = () => {
       setImportOpen(true);
       consumed = true;
     }
+    let nextSearch = location.search || '';
     if (st.filterGroupId != null && st.filterGroupId !== '') {
-      setRole('student');
-      setGroupId(String(st.filterGroupId));
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('role', 'student');
+      nextParams.set('group_id', String(st.filterGroupId));
+      nextSearch = `?${nextParams.toString()}`;
       consumed = true;
     }
-    if (consumed) navigate(location.pathname, { replace: true, state: {} });
-  }, [location.state, location.pathname, navigate]);
+    if (st.viewUserId != null && st.viewUserId !== '') {
+      pendingViewUserIdRef.current = Number(st.viewUserId);
+      consumed = true;
+    }
+    if (consumed) navigate(`${location.pathname}${nextSearch}`, { replace: true, state: {} });
+  }, [location.state, location.pathname, location.search, navigate, searchParams]);
+
+  useEffect(() => {
+    const pendingId = pendingViewUserIdRef.current;
+    if (!pendingId || loading) return;
+    const row = users.find((user) => Number(user.id) === pendingId);
+    if (row) {
+      setViewUserRow(row);
+      pendingViewUserIdRef.current = null;
+    }
+  }, [users, loading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,25 +256,13 @@ const AdminUserManagement = () => {
     setPage(1);
   }, [debouncedSearch, role, accountStatus, groupId, sort]);
 
-  useEffect(() => {
-    setGroupId((prev) => {
-      if (role === 'teacher' || role === 'admin') {
-        return '';
-      }
-      if (role !== 'student' && prev === 'none') {
-        return '';
-      }
-      return prev;
-    });
-  }, [role]);
-
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const params = {
         page,
-        per_page: PER_PAGE,
+        per_page: ADMIN_USERS_PAGE_SIZE,
         sort: sort || 'newest',
       };
       const q = debouncedSearch.trim();
@@ -208,18 +278,16 @@ const AdminUserManagement = () => {
       const { data } = await api.get('/admin/users', { params });
       setUsers(Array.isArray(data?.data) ? data.data : []);
       const m = data?.meta;
-      setMeta({
-        currentPage: m?.currentPage ?? page,
-        lastPage: m?.lastPage ?? 1,
-        total: m?.total ?? 0,
-      });
+      setMeta(parsePaginationMeta(m, page));
     } catch (e) {
       setUsers([]);
-      setError(e.response?.data?.message || 'Не удалось загрузить пользователей');
+      setError(getApiErrorMessage(e, 'Не удалось загрузить пользователей'));
     } finally {
       setLoading(false);
     }
   }, [page, debouncedSearch, role, accountStatus, groupId, sort]);
+
+  usePaginationClamp(page, meta.lastPage, setPage);
 
   useEffect(() => {
     void fetchUsers();
@@ -240,7 +308,7 @@ const AdminUserManagement = () => {
           setWarningsDetail(data);
         }
       } catch (e) {
-        showError(firstApiErrorMessage(e.response?.data) || 'Не удалось загрузить предупреждения');
+        showError(getApiErrorMessage(e, 'Не удалось загрузить предупреждения'));
         if (!cancelled) {
           setWarningsUser(null);
         }
@@ -257,12 +325,9 @@ const AdminUserManagement = () => {
 
   const resetFilters = useCallback(() => {
     setSearch('');
-    setRole('');
-    setAccountStatus('');
-    setGroupId('');
-    setSort('newest');
     setPage(1);
-  }, []);
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
 
   const resetDisabled = useMemo(
     () =>
@@ -285,21 +350,31 @@ const AdminUserManagement = () => {
     setResetModal(viewUserRow);
   }, [viewUserRow]);
 
-  const handleViewModalToggleBlock = useCallback(async () => {
+  const [blockConfirmRow, setBlockConfirmRow] = useState(null);
+
+  const handleViewModalToggleBlock = useCallback(() => {
     if (!viewUserRow) return;
     if (currentUserId != null && Number(viewUserRow.id) === currentUserId && viewUserRow.isActive) {
       showError('Нельзя заблокировать собственную учётную запись.');
       return;
     }
+    setBlockConfirmRow(viewUserRow);
+  }, [viewUserRow, currentUserId, showError]);
+
+  const executeToggleBlock = useCallback(async () => {
+    if (!blockConfirmRow) return;
     try {
-      await api.put(`/admin/users/${viewUserRow.id}`, { isActive: !viewUserRow.isActive });
-      showSuccess(viewUserRow.isActive ? 'Пользователь заблокирован' : 'Пользователь разблокирован');
+      await api.put(`/admin/users/${blockConfirmRow.id}`, { isActive: !blockConfirmRow.isActive });
+      showSuccess(blockConfirmRow.isActive ? 'Пользователь заблокирован' : 'Пользователь разблокирован');
       await fetchUsers();
-      setViewUserRow(null);
+      setViewUserRow((prev) => (
+        prev && Number(prev.id) === Number(blockConfirmRow.id) ? null : prev
+      ));
     } catch (e) {
-      showError(firstApiErrorMessage(e.response?.data) || 'Не удалось изменить статус');
+      showError(getApiErrorMessage(e, 'Не удалось изменить статус'));
+      throw e;
     }
-  }, [viewUserRow, currentUserId, fetchUsers, showError, showSuccess]);
+  }, [blockConfirmRow, fetchUsers, showError, showSuccess]);
 
   const handleViewModalDelete = useCallback(() => {
     if (!viewUserRow) return;
@@ -324,7 +399,8 @@ const AdminUserManagement = () => {
   );
 
   const handleUsersImported = useCallback(
-    (_data, created) => {
+    (data) => {
+      const created = data?.summary?.created ?? 0;
       showSuccess(`Импорт завершён: создано пользователей — ${created}.`);
       void fetchUsers();
     },
@@ -378,10 +454,7 @@ const AdminUserManagement = () => {
             id="admin-users-role"
             className="filter-select"
             value={role}
-            onChange={(e) => {
-              setRole(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => applyUserFilter({ role: e.target.value })}
           >
             {ROLE_OPTIONS.map((o) => (
               <option key={String(o.value)} value={o.value}>
@@ -399,10 +472,7 @@ const AdminUserManagement = () => {
               id="admin-users-group"
               className="filter-select"
               value={groupId}
-              onChange={(e) => {
-                setGroupId(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => applyUserFilter({ groupId: e.target.value })}
             >
               <option value="">Все группы</option>
               {role === 'student' && <option value="none">Без группы</option>}
@@ -422,10 +492,7 @@ const AdminUserManagement = () => {
             id="admin-users-acc-status"
             className="filter-select"
             value={accountStatus}
-            onChange={(e) => {
-              setAccountStatus(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => applyUserFilter({ accountStatus: e.target.value })}
           >
             {ACCOUNT_STATUS_OPTIONS.map((o) => (
               <option key={String(o.value)} value={o.value}>
@@ -442,10 +509,7 @@ const AdminUserManagement = () => {
             id="admin-users-sort"
             className="filter-select"
             value={sort}
-            onChange={(e) => {
-              setSort(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => applyUserFilter({ sort: e.target.value })}
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -499,65 +563,70 @@ const AdminUserManagement = () => {
                   />
                   <div className="admin-user-card__body">
                     <div className="admin-user-card__top">
-                      <div className="admin-user-card__avatar" aria-hidden>
-                        {userInitials(row)}
-                      </div>
-                      <div className="admin-user-card__title-block">
-                        <div className="admin-user-card__lastname">{row.lastName || '—'}</div>
-                        <div className="admin-user-card__first-middle">
-                          {[row.firstName, row.middleName].filter(Boolean).join(' ') || '—'}
+                      <div className="admin-user-card__top-main">
+                        <div className="admin-user-card__avatar" aria-hidden>
+                          {userInitials(row)}
+                        </div>
+                        <div className="admin-user-card__title-block">
+                          <div className="admin-user-card__lastname">{row.lastName || '—'}</div>
+                          <div className="admin-user-card__first-middle">
+                            {[row.firstName, row.middleName].filter(Boolean).join(' ') || '—'}
+                          </div>
                         </div>
                       </div>
+                      <StatusBadge tone={st.tone} className="admin-user-card__status">
+                        {st.label}
+                      </StatusBadge>
                     </div>
 
-                    <div className="admin-user-card__row admin-user-card__row--labeled">
-                      <span className="admin-user-card__label">Роль</span>
-                      <span className="admin-user-card__value">{roleLabel(row.role)}</span>
-                    </div>
-
-                    {cardSecondLine && (
+                    <div className="admin-user-card__fields">
                       <div className="admin-user-card__row admin-user-card__row--labeled">
-                        <span className="admin-user-card__label">{cardSecondLine.label}</span>
-                        <span className="admin-user-card__value admin-user-card__multiline">{cardSecondLine.value}</span>
+                        <span className="admin-user-card__label">Роль</span>
+                        <span className="admin-user-card__value">{roleLabel(row.role)}</span>
                       </div>
-                    )}
 
-                    <div className="admin-user-card__row admin-user-card__row--labeled">
-                      <span className="admin-user-card__label">Email</span>
-                      <span className="admin-user-card__value admin-user-card__ellipsis" title={row.email || ''}>
-                        {row.email || '—'}
-                      </span>
+                      {cardSecondLine && (
+                        <div className="admin-user-card__row admin-user-card__row--labeled">
+                          <span className="admin-user-card__label">{cardSecondLine.label}</span>
+                          <span className="admin-user-card__value admin-user-card__multiline">{cardSecondLine.value}</span>
+                        </div>
+                      )}
+
+                      <div className="admin-user-card__row admin-user-card__row--labeled">
+                        <span className="admin-user-card__label">Email</span>
+                        <span className="admin-user-card__value admin-user-card__ellipsis" title={row.email || ''}>
+                          {row.email || '—'}
+                        </span>
+                      </div>
+
+                      <div className="admin-user-card__row admin-user-card__row--labeled">
+                        <span className="admin-user-card__label">Телефон</span>
+                        <span className="admin-user-card__value">{phone || 'Не указан'}</span>
+                      </div>
                     </div>
-
-                    <div className="admin-user-card__row admin-user-card__row--labeled">
-                      <span className="admin-user-card__label">Телефон</span>
-                      <span className="admin-user-card__value">{phone || 'Не указан'}</span>
-                    </div>
-
-                    <StatusBadge tone={st.tone} className="admin-user-card__status">
-                      {st.label}
-                    </StatusBadge>
 
                     {warnings.length > 0 && (
                       <div className="admin-user-card__warnings">
-                        <button
-                          type="button"
-                          className="admin-user-card__warn-summary"
-                          onClick={() => setWarningsUser(row)}
-                          aria-label={`Предупреждения: ${warnings.map((w) => w.text).join(', ')}`}
-                        >
-                          <span className="admin-user-card__warn-icon" aria-hidden>
-                            !
-                          </span>
-                          <span className="admin-user-card__warn-summary-text">
-                            <span className="admin-user-card__warn-summary-title">
-                              {warnings.length === 1 ? 'Предупреждение' : `Предупреждения (${warnings.length})`}
-                            </span>
-                            <span className="admin-user-card__warn-summary-hint">
-                              {warnings.map((w) => w.text).join(' · ')}
-                            </span>
-                          </span>
-                        </button>
+                        <div className="admin-user-card__warnings-head">
+                          <span className="admin-user-card__warnings-label">Внимание</span>
+                          <button
+                            type="button"
+                            className="admin-user-card__warnings-link"
+                            onClick={() => setWarningsUser(row)}
+                            aria-label={`Подробнее о предупреждениях: ${warnings.map((w) => w.text).join(', ')}`}
+                          >
+                            Подробнее
+                          </button>
+                        </div>
+                        <ul className="admin-user-card__warnings-list">
+                          {warnings.map((warning, warningIndex) => (
+                            <li key={`${warning.key}-${warningIndex}`}>
+                              <StatusBadge tone={warningTone(warning.key)}>
+                                {warning.text}
+                              </StatusBadge>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
 
@@ -569,18 +638,16 @@ const AdminUserManagement = () => {
         )}
       </div>
 
-      {users.length > 0 && (
-        <Pagination
-          className="admin-user-management__pagination"
-          currentPage={meta.currentPage}
-          lastPage={meta.lastPage}
-          total={meta.total}
-          fallbackCount={users.length}
-          disabled={loading}
-          onPrev={() => setPage((p) => Math.max(1, p - 1))}
-          onNext={() => setPage((p) => p + 1)}
-        />
-      )}
+      <Pagination
+        className="admin-user-management__pagination"
+        currentPage={meta.currentPage}
+        lastPage={meta.lastPage}
+        total={meta.total}
+        fallbackCount={users.length}
+        disabled={loading}
+        hideWhenSinglePage
+        onPageChange={setPage}
+      />
 
       <AdminCreateUserModal
         isOpen={createUserOpen}
@@ -644,6 +711,22 @@ const AdminUserManagement = () => {
       />
 
       <ConfirmModal
+        isOpen={blockConfirmRow != null}
+        onClose={() => setBlockConfirmRow(null)}
+        title={blockConfirmRow?.isActive ? 'Заблокировать пользователя?' : 'Разблокировать пользователя?'}
+        message={
+          blockConfirmRow
+            ? blockConfirmRow.isActive
+              ? `${[blockConfirmRow.lastName, blockConfirmRow.firstName].filter(Boolean).join(' ') || blockConfirmRow.login} потеряет доступ к системе. Активные сессии будут недоступны.`
+              : `${[blockConfirmRow.lastName, blockConfirmRow.firstName].filter(Boolean).join(' ') || blockConfirmRow.login} снова получит доступ к системе.`
+            : ''
+        }
+        confirmText={blockConfirmRow?.isActive ? 'Заблокировать' : 'Разблокировать'}
+        danger={Boolean(blockConfirmRow?.isActive)}
+        onConfirm={executeToggleBlock}
+      />
+
+      <ConfirmModal
         isOpen={deleteTargetRow != null}
         onClose={() => setDeleteTargetRow(null)}
         title="Удалить пользователя?"
@@ -662,7 +745,7 @@ const AdminUserManagement = () => {
             setViewUserRow((v) => (v && Number(v.id) === Number(deleteTargetRow.id) ? null : v));
             await fetchUsers();
           } catch (e) {
-            showError(firstApiErrorMessage(e.response?.data) || 'Не удалось удалить пользователя');
+            showError(getApiErrorMessage(e, 'Не удалось удалить пользователя'));
             throw e;
           }
         }}

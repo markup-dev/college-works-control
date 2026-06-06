@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import api from '../../../services/api';
 import { formatDateRelative, formatDateTime } from '../../../utils/dateHelpers';
 import Button from '../../UI/Button/Button';
+import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import Modal from '../../UI/Modal/Modal';
+import ModalDangerZone from '../../UI/Modal/ModalDangerZone';
 import ModalSection from '../../UI/Modal/ModalSection';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import './AdminUserViewModal.scss';
@@ -66,17 +69,91 @@ const AdminUserViewModal = ({
   onToggleBlock,
   onDelete,
 }) => {
-  if (!isOpen || !row) return null;
+  const [teacherDisciplines, setTeacherDisciplines] = useState([]);
+  const [disciplineOptions, setDisciplineOptions] = useState([]);
+  const [newDisciplineId, setNewDisciplineId] = useState('');
+  const [disciplineToRemove, setDisciplineToRemove] = useState(null);
+  const [disciplineRemoveSubmitting, setDisciplineRemoveSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || row?.role !== 'teacher' || !row?.id) {
+      setTeacherDisciplines([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [disciplinesRes, subjectsRes] = await Promise.all([
+          api.get(`/admin/teachers/${row.id}/disciplines`),
+          api.get('/admin/subjects', { params: { per_page: 100, sort: 'name_asc', status: 'active' } }),
+        ]);
+        if (cancelled) return;
+        setTeacherDisciplines(Array.isArray(disciplinesRes.data?.data) ? disciplinesRes.data.data : []);
+        setDisciplineOptions(Array.isArray(subjectsRes.data?.data) ? subjectsRes.data.data : []);
+      } catch {
+        if (!cancelled) {
+          setTeacherDisciplines([]);
+          setDisciplineOptions([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, row?.id, row?.role]);
+
+  const addTeacherDiscipline = async () => {
+    if (!row?.id || !newDisciplineId) return;
+    const { data } = await api.post(`/admin/teachers/${row.id}/disciplines`, { subjectId: Number(newDisciplineId) });
+    const next = data?.teacherSubject || data?.teacher_subject;
+    if (next) {
+      setTeacherDisciplines((prev) => [...prev.filter((item) => Number(item.subjectId) !== Number(next.subjectId)), next]);
+    }
+    setNewDisciplineId('');
+  };
+
+  const submitRemoveTeacherDiscipline = async () => {
+    if (!disciplineToRemove) return;
+    setDisciplineRemoveSubmitting(true);
+    try {
+      await api.delete(`/admin/teacher-disciplines/${disciplineToRemove.id}`);
+      setTeacherDisciplines((prev) => prev.map((rowItem) => (
+        rowItem.id === disciplineToRemove.id ? { ...rowItem, status: 'inactive' } : rowItem
+      )));
+      setDisciplineToRemove(null);
+    } finally {
+      setDisciplineRemoveSubmitting(false);
+    }
+  };
+
+  if (!isOpen || !row) {
+    return (
+      <ConfirmModal
+        isOpen={Boolean(disciplineToRemove)}
+        onClose={() => !disciplineRemoveSubmitting && setDisciplineToRemove(null)}
+        onConfirm={submitRemoveTeacherDiscipline}
+        title="Убрать допуск к дисциплине?"
+        message={disciplineToRemove
+          ? `Преподаватель потеряет допуск к дисциплине «${disciplineToRemove.subject?.name || 'Дисциплина'}». Существующие назначения и задания сохранятся.`
+          : ''}
+        confirmText="Убрать"
+        danger
+        loading={disciplineRemoveSubmitting}
+      />
+    );
+  }
 
   const st = statusPresentation(row);
   const canDelete = currentUserId == null || Number(row.id) !== Number(currentUserId);
   const isSelf = currentUserId != null && Number(row.id) === Number(currentUserId);
+  const teacherBlocked = row.role === 'teacher' && row.isActive === false;
   const showBlockToggle = !isSelf || row.isActive === false;
   const keyThird = thirdKeyField(row);
   const relativeLastLogin = formatDateRelative(row.lastLogin);
   const fullName = [row.lastName, row.firstName, row.middleName].filter(Boolean).join(' ');
 
   return (
+    <>
     <Modal
       isOpen={isOpen}
       onClose={onClose}
@@ -85,41 +162,17 @@ const AdminUserViewModal = ({
       className="admin-user-view-modal"
       contentClassName="admin-user-view-modal__body"
       footer={(
-        <div className="admin-user-view-modal__actions">
-          <div className="admin-user-view-modal__actions-primary">
-            <Button type="button" variant="primary" size="small" onClick={onEdit}>
-              Редактировать
-            </Button>
-            <Button type="button" variant="outline" size="small" onClick={onResetPassword}>
-              Сбросить пароль
-            </Button>
-          </div>
-          <div className="admin-user-view-modal__actions-danger">
-            {showBlockToggle && (
-              <Button
-                type="button"
-                variant="warning"
-                size="small"
-                onClick={onToggleBlock}
-              >
-                {row.isActive ? 'Заблокировать' : 'Разблокировать'}
-              </Button>
-            )}
-            {canDelete && (
-              <Button
-                type="button"
-                variant="danger"
-                size="small"
-                onClick={onDelete}
-              >
-                Удалить
-              </Button>
-            )}
-          </div>
-        </div>
+        <>
+          <Button type="button" variant="primary" size="small" onClick={onEdit}>
+            Редактировать
+          </Button>
+          <Button type="button" variant="outline" size="small" onClick={onResetPassword}>
+            Сбросить пароль
+          </Button>
+        </>
       )}
     >
-            {/* Шапка с аватаром и статусом */}
+            {/* Шапка: ФИО и бейджи */}
             <div className="profile-header">
               <div className="profile-header__avatar">
                 {fullName.charAt(0) || row.login?.charAt(0) || '?'}
@@ -127,7 +180,6 @@ const AdminUserViewModal = ({
               <div className="profile-header__info">
                 <div className="profile-header__identity">
                   <h4>{fullName || row.login || 'Пользователь'}</h4>
-                  <p>{row.email || row.login || '—'}</p>
                 </div>
                 <div className="profile-header__badges">
                   <div className={`role-badge role-badge--${roleVariant(row.role)}`}>
@@ -151,39 +203,43 @@ const AdminUserViewModal = ({
               </div>
             </div>
 
-            {/* Три ключевых поля в ряд */}
-            <div className={`key-fields${row.role === 'admin' ? ' key-fields--two' : ''}`}>
-              <div className="key-field">
-                <span className="key-field__label">Логин</span>
-                <span className="key-field__value">{row.login || '—'}</span>
-              </div>
+            {/* Роль и группа / кафедра */}
+            <div
+              className={`key-fields${
+                row.role === 'admin' ? ' key-fields--one' : ' key-fields--two'
+              }`}
+            >
               <div className="key-field">
                 <span className="key-field__label">Роль</span>
                 <span className="key-field__value">{roleLabel(row.role)}</span>
               </div>
-              {keyThird && (
+              {keyThird ? (
                 <div className="key-field">
                   <span className="key-field__label">{keyThird.label}</span>
                   <span className="key-field__value">{keyThird.value}</span>
                 </div>
-              )}
+              ) : null}
             </div>
 
             <ModalSection title="Личные данные">
-              <div className="info-grid">
-                <div className="info-item">
-                  <strong>Фамилия</strong>
-                  <span>{row.lastName || '—'}</span>
+              <div className="admin-user-view-modal__personal-grid">
+                <div className="admin-user-view-modal__personal-cell">
+                  <span className="admin-user-view-modal__personal-label">Фамилия</span>
+                  <span className="admin-user-view-modal__personal-value">{row.lastName || '—'}</span>
                 </div>
-                <div className="info-item">
-                  <strong>Имя</strong>
-                  <span>{row.firstName || '—'}</span>
+                <div className="admin-user-view-modal__personal-cell">
+                  <span className="admin-user-view-modal__personal-label">Имя</span>
+                  <span className="admin-user-view-modal__personal-value">{row.firstName || '—'}</span>
                 </div>
-                <div className="info-item">
-                  <strong>Отчество</strong>
-                  <span className={!row.middleName?.trim() ? 'muted' : ''}>
+                <div className="admin-user-view-modal__personal-cell">
+                  <span className="admin-user-view-modal__personal-label">Отчество</span>
+                  <span className={`admin-user-view-modal__personal-value${!row.middleName?.trim() ? ' admin-user-view-modal__personal-value--muted' : ''}`}>
                     {row.middleName?.trim() || '—'}
                   </span>
+                </div>
+                <div className="admin-user-view-modal__personal-cell">
+                  <span className="admin-user-view-modal__personal-label">Логин</span>
+                  <span className="admin-user-view-modal__personal-value">{row.login || '—'}</span>
                 </div>
               </div>
             </ModalSection>
@@ -203,6 +259,47 @@ const AdminUserViewModal = ({
               </div>
             </ModalSection>
 
+            {row.role === 'teacher' && (
+              <ModalSection title="Допуск к дисциплинам" variant="soft">
+                {teacherBlocked && (
+                  <p className="muted admin-user-view-modal__blocked-hint">
+                    Преподаватель заблокирован — добавлять и убирать дисциплины нельзя. Существующие допуски сохранены для истории назначений.
+                  </p>
+                )}
+                <div className="info-grid">
+                  {teacherDisciplines.filter((item) => item.status === 'active').map((item) => (
+                    <div key={item.id} className="info-item">
+                      <strong>{item.subject?.name || 'Дисциплина'}</strong>
+                      <span>{item.subject?.code || '—'}</span>
+                      {!teacherBlocked && (
+                        <Button type="button" size="small" variant="outline" onClick={() => setDisciplineToRemove(item)}>
+                          Убрать
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {teacherDisciplines.filter((item) => item.status === 'active').length === 0 && (
+                  <p className="muted">Активных дисциплин пока нет</p>
+                )}
+                {!teacherBlocked && (
+                  <div className="admin-user-view-modal__inline-form">
+                    <select value={newDisciplineId} onChange={(e) => setNewDisciplineId(e.target.value)}>
+                      <option value="">Добавить дисциплину</option>
+                      {disciplineOptions.map((subject) => (
+                        <option key={subject.id} value={String(subject.id)}>
+                          {subject.code ? `${subject.name} (${subject.code})` : subject.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button type="button" size="small" variant="primary" disabled={!newDisciplineId} onClick={() => void addTeacherDiscipline()}>
+                      Добавить
+                    </Button>
+                  </div>
+                )}
+              </ModalSection>
+            )}
+
             {/* Информация о последнем входе */}
             <div className="last-login">
               <div className="last-login__content">
@@ -221,7 +318,49 @@ const AdminUserViewModal = ({
                 {row.createdBy && <span>Создал: {row.createdBy}</span>}
               </div>
             )}
+
+            {(showBlockToggle || canDelete) && (
+              <ModalDangerZone
+                title="Доступ и удаление"
+                description="Блокировка запрещает вход в систему. Удаление пользователя необратимо."
+              >
+                {showBlockToggle && (
+                  <Button
+                    type="button"
+                    variant="warning"
+                    size="small"
+                    onClick={onToggleBlock}
+                  >
+                    {row.isActive ? 'Заблокировать' : 'Разблокировать'}
+                  </Button>
+                )}
+                {canDelete && (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="small"
+                    onClick={onDelete}
+                  >
+                    Удалить пользователя
+                  </Button>
+                )}
+              </ModalDangerZone>
+            )}
     </Modal>
+
+    <ConfirmModal
+      isOpen={Boolean(disciplineToRemove)}
+      onClose={() => !disciplineRemoveSubmitting && setDisciplineToRemove(null)}
+      onConfirm={submitRemoveTeacherDiscipline}
+      title="Убрать допуск к дисциплине?"
+      message={disciplineToRemove
+        ? `Преподаватель потеряет допуск к дисциплине «${disciplineToRemove.subject?.name || 'Дисциплина'}». Существующие назначения и задания сохранятся.`
+        : ''}
+      confirmText="Убрать"
+      danger
+      loading={disciplineRemoveSubmitting}
+    />
+    </>
   );
 };
 

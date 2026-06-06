@@ -9,7 +9,6 @@ export const getAssignmentStatusInfo = (assignmentOrStatus) => {
     'graded': { label: 'Оценено', variant: 'success', icon: '' },
     'returned': { label: 'Возвращено', variant: 'danger', icon: '' },
     'active': { label: 'Активно', variant: 'success', icon: '' },
-    'inactive': { label: 'Неактивно', variant: 'danger', icon: '' },
     'archived': { label: 'Завершено', variant: 'completed', icon: '' },
     'draft': { label: 'Черновик', variant: 'default', icon: '' }
   };
@@ -45,7 +44,6 @@ export const assignmentFilters = [
 export const teacherAssignmentFilters = [
   { key: 'all', label: 'Все задания', icon: '' },
   { key: 'active', label: 'Активные', icon: '' },
-  { key: 'inactive', label: 'Неактивные', icon: '' },
   { key: 'with_submissions', label: 'С работами', icon: '' },
   { key: 'without_submissions', label: 'Без работ', icon: '' },
 ];

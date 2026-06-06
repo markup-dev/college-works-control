@@ -4,6 +4,9 @@ import { formatDateLong } from '../../../utils/dateHelpers';
 import Modal from '../../UI/Modal/Modal';
 import ModalSection from '../../UI/Modal/ModalSection';
 import Button from '../../UI/Button/Button';
+import StatusBadge from '../../UI/StatusBadge/StatusBadge';
+import LoadingState from '../../UI/LoadingState/LoadingState';
+import EmptyState from '../../UI/EmptyState/EmptyState';
 import './AdminUserWarningsModal.scss';
 
 const userDisplayName = (row) => {
@@ -12,6 +15,21 @@ const userDisplayName = (row) => {
   if (p.length) return p.join(' ');
   return row.login || row.email || 'Пользователь';
 };
+
+const formatOptionalDate = (value) => {
+  if (!value) return 'Нет данных';
+  const formatted = formatDateLong(value);
+  return formatted && formatted !== '—' ? formatted : 'Нет данных';
+};
+
+const IssueGroup = ({ tone, label, children }) => (
+  <article className="admin-user-warnings-modal__issue">
+    <div className="admin-user-warnings-modal__issue-head">
+      <StatusBadge tone={tone}>{label}</StatusBadge>
+    </div>
+    <div className="admin-user-warnings-modal__issue-body">{children}</div>
+  </article>
+);
 
 const AdminUserWarningsModal = ({ isOpen, onClose, loading, detail, userRow }) => {
   const navigate = useNavigate();
@@ -42,113 +60,140 @@ const AdminUserWarningsModal = ({ isOpen, onClose, loading, detail, userRow }) =
     onClose();
   };
 
+  const overdueCount = studentPayload?.overdueAssignments?.length ?? 0;
+  const staleCount = teacherPayload?.staleReviews?.length ?? 0;
+
   const studentHasContent =
     detail?.role === 'student' &&
-    ((studentPayload?.overdueAssignments?.length ?? 0) > 0 || studentPayload?.noSubmissionsWeek != null);
+    (overdueCount > 0 || studentPayload?.noSubmissionsWeek != null);
+
+  const showFooterNav =
+    (detail?.role === 'student' && studentHasContent)
+    || (detail?.role === 'teacher' && staleCount > 0);
 
   const roleLabel = detail?.role === 'student' ? 'Студент' : detail?.role === 'teacher' ? 'Преподаватель' : null;
+  const roleTone = detail?.role === 'student' ? 'info' : 'neutral';
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Предупреждения: ${titleName}`}
+      title="Предупреждения"
+      subtitle={titleName}
       size="medium"
       className="admin-user-warnings-modal--root"
       contentClassName="admin-user-warnings-modal"
-      footer={(
+      footer={showFooterNav ? (
         <>
-          {detail?.role === 'student' && (
-            <Button type="button" variant="primary" onClick={goHomeworkStudent}>
+          {detail?.role === 'student' && studentHasContent && (
+            <Button type="button" variant="outline" onClick={goHomeworkStudent}>
               К заданиям студента
             </Button>
           )}
-          {detail?.role === 'teacher' && (
-            <Button type="button" variant="primary" onClick={goHomeworkTeacher}>
-              К заданиям (на проверке)
+          {detail?.role === 'teacher' && staleCount > 0 && (
+            <Button type="button" variant="outline" onClick={goHomeworkTeacher}>
+              К работам на проверке
             </Button>
           )}
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Закрыть
-          </Button>
         </>
-      )}
+      ) : null}
     >
-        {loading && <p className="admin-user-warnings-modal__muted">Загрузка…</p>}
+      {loading && (
+        <LoadingState message="Загрузка предупреждений…" className="admin-user-warnings-modal__loading" />
+      )}
 
-        {!loading && roleLabel && (
-          <ModalSection variant="soft">
-            <span className="admin-user-warnings-modal__summary-role">{roleLabel}</span>
-            <p className="admin-user-warnings-modal__summary-text">
-              Список ниже показывает активные сигналы риска по текущим правилам контроля.
-            </p>
-          </ModalSection>
-        )}
+      {!loading && roleLabel && (
+        <div className="admin-user-warnings-modal__intro">
+          <StatusBadge tone={roleTone}>{roleLabel}</StatusBadge>
+          <p className="admin-user-warnings-modal__intro-text">
+            Ниже — активные сигналы по правилам контроля системы.
+          </p>
+        </div>
+      )}
 
-        {!loading && detail?.role === 'admin' && (
-          <p className="admin-user-warnings-modal__muted">Для администраторов предупреждения не отображаются.</p>
-        )}
+      {!loading && detail?.role === 'admin' && (
+        <EmptyState
+          asCard={false}
+          title="Нет предупреждений"
+          message="Для администраторов предупреждения не формируются."
+          className="admin-user-warnings-modal__empty-state"
+        />
+      )}
 
-        {!loading && detail?.role === 'student' && (
-          <ModalSection title="Активные проблемы">
-            <div className="admin-user-warnings-modal__box admin-user-warnings-modal__box--student">
-              {(studentPayload?.overdueAssignments?.length ?? 0) > 0 && (
-                <div className="admin-user-warnings-modal__block admin-user-warnings-modal__block--danger">
-                  <div className="admin-user-warnings-modal__block-title">
-                    Просроченные дедлайны ({studentPayload.overdueAssignments.length})
-                  </div>
+      {!loading && detail?.role === 'student' && (
+        <ModalSection title="Активные проблемы">
+          {studentHasContent ? (
+            <div className="admin-user-warnings-modal__issues">
+              {overdueCount > 0 && (
+                <IssueGroup
+                  tone="danger"
+                  label={`Просроченные дедлайны (${overdueCount})`}
+                >
                   <ul className="admin-user-warnings-modal__list">
-                    {studentPayload.overdueAssignments.map((a, i) => (
-                      <li key={`${a.title}-${a.deadline}-${i}`}>
-                        {a.title} <span className="admin-user-warnings-modal__date">({formatDateLong(a.deadline)})</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {studentPayload?.noSubmissionsWeek != null && (
-                <div className="admin-user-warnings-modal__block admin-user-warnings-modal__block--warn">
-                  <div className="admin-user-warnings-modal__block-title">Нет сдач за 7 дней</div>
-                  <p className="admin-user-warnings-modal__para">
-                    Последняя сдача:{' '}
-                    <strong>{formatDateLong(studentPayload.noSubmissionsWeek.lastSubmissionAt)}</strong>
-                  </p>
-                </div>
-              )}
-
-              {!studentHasContent && (
-                <p className="admin-user-warnings-modal__empty">Нет активных проблем по текущим правилам.</p>
-              )}
-            </div>
-          </ModalSection>
-        )}
-
-        {!loading && detail?.role === 'teacher' && (
-          <ModalSection title="Активные проблемы">
-            <div className="admin-user-warnings-modal__box admin-user-warnings-modal__box--teacher">
-              {(teacherPayload?.staleReviews?.length ?? 0) > 0 ? (
-                <div className="admin-user-warnings-modal__block admin-user-warnings-modal__block--danger">
-                  <div className="admin-user-warnings-modal__block-title">
-                    Работы без проверки более 3 суток ({teacherPayload.staleReviews.length})
-                  </div>
-                  <ul className="admin-user-warnings-modal__list">
-                    {teacherPayload.staleReviews.map((r, i) => (
-                      <li key={`${r.assignmentTitle}-${i}`}>
-                        {r.assignmentTitle}{' '}
-                        <span className="admin-user-warnings-modal__date">
-                          (сдано {formatDateLong(r.submittedAt)})
+                    {studentPayload.overdueAssignments.map((assignment, index) => (
+                      <li key={`${assignment.title}-${assignment.deadline}-${index}`} className="admin-user-warnings-modal__item">
+                        <span className="admin-user-warnings-modal__item-title">{assignment.title}</span>
+                        <span className="admin-user-warnings-modal__item-meta">
+                          Дедлайн: {formatDateLong(assignment.deadline)}
                         </span>
                       </li>
                     ))}
                   </ul>
-                </div>
-              ) : (
-                <p className="admin-user-warnings-modal__empty">Нет работ в очереди проверки по этому правилу.</p>
+                </IssueGroup>
+              )}
+
+              {studentPayload?.noSubmissionsWeek != null && (
+                <IssueGroup tone="warning" label="Нет сдач за 7 дней">
+                  <p className="admin-user-warnings-modal__item-meta admin-user-warnings-modal__item-meta--solo">
+                    Последняя сдача:{' '}
+                    <strong>
+                      {formatOptionalDate(studentPayload.noSubmissionsWeek.lastSubmissionAt)}
+                    </strong>
+                  </p>
+                </IssueGroup>
               )}
             </div>
-          </ModalSection>
-        )}
+          ) : (
+            <EmptyState
+              asCard={false}
+              title="Активных проблем нет"
+              message="По текущим правилам контроля замечаний не найдено."
+              className="admin-user-warnings-modal__empty-state"
+            />
+          )}
+        </ModalSection>
+      )}
+
+      {!loading && detail?.role === 'teacher' && (
+        <ModalSection title="Активные проблемы">
+          {staleCount > 0 ? (
+            <div className="admin-user-warnings-modal__issues">
+              <IssueGroup
+                tone="danger"
+                label={`Работы без проверки > 3 суток (${staleCount})`}
+              >
+                <ul className="admin-user-warnings-modal__list">
+                  {teacherPayload.staleReviews.map((review, index) => (
+                    <li key={`${review.assignmentTitle}-${index}`} className="admin-user-warnings-modal__item">
+                      <span className="admin-user-warnings-modal__item-title">{review.assignmentTitle}</span>
+                      <span className="admin-user-warnings-modal__item-meta">
+                        Сдано: {formatDateLong(review.submittedAt)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </IssueGroup>
+            </div>
+          ) : (
+            <EmptyState
+              asCard={false}
+              title="Активных проблем нет"
+              message="Нет работ в очереди проверки по этому правилу."
+              className="admin-user-warnings-modal__empty-state"
+            />
+          )}
+        </ModalSection>
+      )}
     </Modal>
   );
 };

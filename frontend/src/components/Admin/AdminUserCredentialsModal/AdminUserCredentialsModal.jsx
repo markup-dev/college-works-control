@@ -44,11 +44,6 @@ const AdminUserCredentialsModal = ({ isOpen, onClose, login, plainPassword, cred
       title="Учётные данные"
       size="medium"
       contentClassName="admin-user-credentials"
-      footer={(
-        <Button type="button" variant="primary" onClick={onClose}>
-          Закрыть
-        </Button>
-      )}
     >
         {credentialsSent ? (
           <p className="admin-user-credentials__note admin-user-credentials__note--ok">

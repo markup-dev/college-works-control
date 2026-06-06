@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import { formatDateLong } from '../../../utils/dateHelpers';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
@@ -11,17 +11,22 @@ import EntityCard from '../../UI/EntityCard/EntityCard';
 import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
 import LoadingState from '../../UI/LoadingState/LoadingState';
 import Modal from '../../UI/Modal/Modal';
+import ModalDangerZone from '../../UI/Modal/ModalDangerZone';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
+import Pagination from '../../UI/Pagination/Pagination';
+import TeacherRequestModeration from '../TeacherRequestModeration/TeacherRequestModeration';
+import { ADMIN_CARD_GRID_PAGE_SIZE } from '../../../config/adminPagination';
+import usePaginationClamp from '../../../hooks/usePaginationClamp';
+import { parsePaginationMeta } from '../../../utils/pagination';
 import './AdminTeachingAssignmentsManagement.scss';
 
-const PER_PAGE = 18;
 const LIST_CAP = 100;
 
 const GROUP_BY_OPTIONS = [
   { value: 'none', label: 'Без группировки' },
   { value: 'teacher', label: 'По преподавателю' },
-  { value: 'subject', label: 'По предмету' },
+  { value: 'subject', label: 'По дисциплине' },
   { value: 'group', label: 'По группе' },
 ];
 
@@ -54,27 +59,60 @@ const teacherShort = (t) => {
   return io ? `${last} ${io}`.trim() : last || '—';
 };
 
+/** Показ среднего балла по связке (после правки расчёта на бэкенде). */
+const formatTeachingLoadAvgScore = (raw) => {
+  if (raw == null || raw === '') {
+    return { primary: 'Нет данных', muted: true };
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return { primary: 'Нет данных', muted: true };
+  }
+  const primary = `${new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  }).format(n)} из 100`;
+  return { primary, muted: false };
+};
+
 const assignmentStatusLabel = (status) => {
   if (status === 'archived') return 'Закрыто';
-  if (status === 'inactive') return 'Приостановлено';
   return 'Активно';
 };
+
+const parsePositiveId = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? String(n) : '';
+};
+
+const getTeachingAssignmentFiltersFromSearchParams = (params) => ({
+  teacherId: parsePositiveId(params.get('teacher_id')),
+  subjectId: parsePositiveId(params.get('subject_id')),
+  groupId: parsePositiveId(params.get('group_id')),
+});
 
 const AdminTeachingAssignmentsManagement = () => {
   const { showSuccess, showError } = useNotification();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
-  const [teacherId, setTeacherId] = useState('');
-  const [subjectId, setSubjectId] = useState('');
-  const [groupId, setGroupId] = useState('');
+  const { teacherId, subjectId, groupId } = useMemo(
+    () => getTeachingAssignmentFiltersFromSearchParams(searchParams),
+    [searchParams],
+  );
   const [groupBy, setGroupBy] = useState('none');
   const [page, setPage] = useState(1);
 
   const [loads, setLoads] = useState([]);
-  const [meta, setMeta] = useState({ currentPage: 1, lastPage: 1, total: 0, perPage: PER_PAGE });
+  const [meta, setMeta] = useState({
+    currentPage: 1,
+    lastPage: 1,
+    total: 0,
+    perPage: ADMIN_CARD_GRID_PAGE_SIZE,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -93,6 +131,9 @@ const AdminTeachingAssignmentsManagement = () => {
   const [createExistingGroupIds, setCreateExistingGroupIds] = useState(() => new Set());
   const [createPrefill, setCreatePrefill] = useState(null);
   const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createEligibleSubjects, setCreateEligibleSubjects] = useState([]);
+  const [createEligibleGroups, setCreateEligibleGroups] = useState([]);
+  const [createOptionsLoading, setCreateOptionsLoading] = useState(false);
 
   const [detailId, setDetailId] = useState(null);
   const [detailData, setDetailData] = useState(null);
@@ -102,11 +143,15 @@ const AdminTeachingAssignmentsManagement = () => {
   const [editGroupSearch, setEditGroupSearch] = useState('');
   const [editSelected, setEditSelected] = useState(() => new Set());
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editEligibleGroups, setEditEligibleGroups] = useState([]);
+  const [editGroupsLoading, setEditGroupsLoading] = useState(false);
 
   const [transferRow, setTransferRow] = useState(null);
   const [transferSearch, setTransferSearch] = useState('');
   const [transferTeacher, setTransferTeacher] = useState('');
   const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const [transferEligibleTeachers, setTransferEligibleTeachers] = useState([]);
+  const [transferTeachersLoading, setTransferTeachersLoading] = useState(false);
 
   const [deleteRow, setDeleteRow] = useState(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
@@ -117,7 +162,7 @@ const AdminTeachingAssignmentsManagement = () => {
       try {
         const [t, s, g] = await Promise.all([
           api.get('/admin/users', { params: { role: 'teacher', per_page: LIST_CAP, sort: 'name_asc' } }),
-          api.get('/admin/subjects', { params: { per_page: LIST_CAP, sort: 'name_asc' } }),
+          api.get('/admin/subjects', { params: { per_page: LIST_CAP, sort: 'name_asc', status: 'active' } }),
           api.get('/admin/groups', { params: { per_page: LIST_CAP, sort: 'name_asc' } }),
         ]);
         if (c) return;
@@ -138,27 +183,44 @@ const AdminTeachingAssignmentsManagement = () => {
   }, []);
 
   useEffect(() => {
+    setPage(1);
+  }, [searchParams]);
+
+  const applyListFilter = useCallback((key, value) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, String(value));
+      else next.delete(key);
+      return next;
+    }, { replace: true });
+    setPage(1);
+  }, [setSearchParams]);
+
+  useEffect(() => {
     const st = location.state;
     if (!st || typeof st !== 'object') return;
     let consumed = false;
+    const nextParams = new URLSearchParams(searchParams);
     if (st.filterTeacherId != null && st.filterTeacherId !== '') {
-      setTeacherId(String(st.filterTeacherId));
+      nextParams.set('teacher_id', String(st.filterTeacherId));
       consumed = true;
     }
     if (st.filterSubjectId != null && st.filterSubjectId !== '') {
-      setSubjectId(String(st.filterSubjectId));
+      nextParams.set('subject_id', String(st.filterSubjectId));
       consumed = true;
     }
     if (st.filterGroupId != null && st.filterGroupId !== '') {
-      setGroupId(String(st.filterGroupId));
+      nextParams.set('group_id', String(st.filterGroupId));
       consumed = true;
     }
     if (st.groupBy) {
       setGroupBy(st.groupBy);
       consumed = true;
     }
-    if (consumed) navigate(location.pathname, { replace: true, state: {} });
-  }, [location.state, location.pathname, navigate]);
+    if (consumed) {
+      navigate(`${location.pathname}?${nextParams.toString()}`, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate, searchParams]);
 
   const fetchLoads = useCallback(async () => {
     setLoading(true);
@@ -166,7 +228,7 @@ const AdminTeachingAssignmentsManagement = () => {
     try {
       const params = {
         page,
-        per_page: PER_PAGE,
+        per_page: ADMIN_CARD_GRID_PAGE_SIZE,
         sort: 'teacher_asc',
       };
       const q = debouncedSearch.trim();
@@ -179,18 +241,18 @@ const AdminTeachingAssignmentsManagement = () => {
       setLoads(Array.isArray(data?.data) ? data.data : []);
       const m = data?.meta;
       setMeta({
-        currentPage: m?.currentPage ?? page,
-        lastPage: m?.lastPage ?? 1,
-        total: m?.total ?? 0,
-        perPage: m?.perPage ?? PER_PAGE,
+        ...parsePaginationMeta(m, page),
+        perPage: m?.perPage ?? ADMIN_CARD_GRID_PAGE_SIZE,
       });
     } catch (e) {
       setLoads([]);
-      setError(firstApiErrorMessage(e?.response?.data) || 'Не удалось загрузить назначения');
+      setError(getApiErrorMessage(e, 'Не удалось загрузить назначения'));
     } finally {
       setLoading(false);
     }
   }, [page, debouncedSearch, teacherId, subjectId, groupId]);
+
+  usePaginationClamp(page, meta.lastPage, setPage);
 
   useEffect(() => {
     void fetchLoads();
@@ -202,11 +264,9 @@ const AdminTeachingAssignmentsManagement = () => {
 
   const resetFilters = useCallback(() => {
     setSearch('');
-    setTeacherId('');
-    setSubjectId('');
-    setGroupId('');
     setPage(1);
-  }, []);
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
 
   const resetDisabled = useMemo(
     () => !search.trim() && !teacherId && !subjectId && !groupId,
@@ -271,9 +331,10 @@ const AdminTeachingAssignmentsManagement = () => {
   };
 
   const filteredTeachersCreate = useMemo(() => {
+    const activeTeachers = teachers.filter((u) => u.isActive !== false);
     const q = createTeacherSearch.trim().toLowerCase();
-    if (!q) return teachers;
-    return teachers.filter((u) => {
+    if (!q) return activeTeachers;
+    return activeTeachers.filter((u) => {
       const blob = [u.lastName, u.firstName, u.middleName, u.login, u.email]
         .filter(Boolean)
         .join(' ')
@@ -284,21 +345,82 @@ const AdminTeachingAssignmentsManagement = () => {
 
   const filteredSubjectsCreate = useMemo(() => {
     const q = createSubjectSearch.trim().toLowerCase();
-    if (!q) return subjects;
-    return subjects.filter((s) => {
+    const list = createEligibleSubjects;
+    if (!q) return list;
+    return list.filter((s) => {
       const blob = `${s.name || ''} ${s.code || ''}`.toLowerCase();
       return blob.includes(q);
     });
-  }, [subjects, createSubjectSearch]);
+  }, [createEligibleSubjects, createSubjectSearch]);
 
   const groupsForCreate = useMemo(() => {
-    let list = groups.filter((g) => g.status !== 'inactive');
+    let list = createEligibleGroups.filter((g) => !createExistingGroupIds.has(Number(g.id)));
     const q = createGroupSearch.trim().toLowerCase();
     if (q) {
       list = list.filter((g) => `${g.name || ''} ${g.specialty || ''}`.toLowerCase().includes(q));
     }
     return list;
-  }, [groups, createGroupSearch]);
+  }, [createEligibleGroups, createGroupSearch, createExistingGroupIds]);
+
+  useEffect(() => {
+    if (!createOpen || !createTeacher) {
+      setCreateEligibleSubjects([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setCreateOptionsLoading(true);
+    (async () => {
+      try {
+        const { data } = await api.get('/admin/teaching-loads/form-options', {
+          params: { teacher_id: Number(createTeacher) },
+        });
+        if (cancelled) return;
+        const list = Array.isArray(data?.subjects) ? data.subjects : [];
+        setCreateEligibleSubjects(list);
+      } catch (e) {
+        if (!cancelled) {
+          setCreateEligibleSubjects([]);
+          showError(getApiErrorMessage(e, 'Не удалось загрузить дисциплины преподавателя'));
+        }
+      } finally {
+        if (!cancelled) setCreateOptionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen, createTeacher, showError]);
+
+  useEffect(() => {
+    if (!createOpen || !createTeacher || !createSubject) {
+      setCreateEligibleGroups([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setCreateOptionsLoading(true);
+    (async () => {
+      try {
+        const { data } = await api.get('/admin/teaching-loads/form-options', {
+          params: {
+            teacher_id: Number(createTeacher),
+            subject_id: Number(createSubject),
+          },
+        });
+        if (cancelled) return;
+        setCreateEligibleGroups(Array.isArray(data?.groups) ? data.groups : []);
+      } catch (e) {
+        if (!cancelled) {
+          setCreateEligibleGroups([]);
+          showError(getApiErrorMessage(e, 'Не удалось загрузить группы для дисциплины'));
+        }
+      } finally {
+        if (!cancelled) setCreateOptionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen, createTeacher, createSubject, showError]);
 
   useEffect(() => {
     if (!createOpen || !createTeacher || !createSubject) {
@@ -337,7 +459,7 @@ const AdminTeachingAssignmentsManagement = () => {
 
   const submitCreate = async () => {
     if (!createTeacher || !createSubject || createSelectedGroups.size === 0) {
-      showError('Выберите преподавателя, предмет и хотя бы одну группу.');
+      showError('Выберите преподавателя, дисциплину и хотя бы одну группу.');
       return;
     }
     setCreateSubmitting(true);
@@ -367,7 +489,7 @@ const AdminTeachingAssignmentsManagement = () => {
         void fetchLoads();
       }
     } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось создать назначения');
+      showError(getApiErrorMessage(e, 'Не удалось создать назначения'));
     } finally {
       setCreateSubmitting(false);
     }
@@ -380,8 +502,8 @@ const AdminTeachingAssignmentsManagement = () => {
     try {
       const { data } = await api.get(`/admin/teaching-loads/${id}/detail`);
       setDetailData(data);
-    } catch {
-      showError('Не удалось загрузить детали');
+    } catch (e) {
+      showError(getApiErrorMessage(e, 'Не удалось загрузить детали'));
       setDetailId(null);
     } finally {
       setDetailLoading(false);
@@ -402,18 +524,47 @@ const AdminTeachingAssignmentsManagement = () => {
       const ids = new Set(list.map((x) => Number(x.groupId ?? x.group_id)));
       setEditSelected(ids);
       setEditPair((p) => ({ ...p, existingRows: list }));
-    } catch {
-      showError('Не удалось загрузить текущие группы');
+    } catch (e) {
+      showError(getApiErrorMessage(e, 'Не удалось загрузить текущие группы'));
       setEditPair(null);
     }
   };
 
   const groupsForEdit = useMemo(() => {
-    let list = groups.filter((g) => g.status !== 'inactive');
+    let list = editEligibleGroups;
     const q = editGroupSearch.trim().toLowerCase();
     if (q) list = list.filter((g) => `${g.name || ''} ${g.specialty || ''}`.toLowerCase().includes(q));
     return list;
-  }, [groups, editGroupSearch]);
+  }, [editEligibleGroups, editGroupSearch]);
+
+  useEffect(() => {
+    if (!editPair?.subjectId) {
+      setEditEligibleGroups([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setEditGroupsLoading(true);
+    (async () => {
+      try {
+        const { data } = await api.get('/admin/teaching-loads/form-options', {
+          params: { subject_id: Number(editPair.subjectId) },
+        });
+        if (!cancelled) {
+          setEditEligibleGroups(Array.isArray(data?.groups) ? data.groups : []);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setEditEligibleGroups([]);
+          showError(getApiErrorMessage(e, 'Не удалось загрузить допустимые группы'));
+        }
+      } finally {
+        if (!cancelled) setEditGroupsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editPair?.subjectId, showError]);
 
   const submitEditGroups = async () => {
     if (!editPair || editSelected.size === 0) {
@@ -431,7 +582,7 @@ const AdminTeachingAssignmentsManagement = () => {
       setEditPair(null);
       void fetchLoads();
     } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось сохранить');
+      showError(getApiErrorMessage(e, 'Не удалось сохранить'));
     } finally {
       setEditSubmitting(false);
     }
@@ -448,7 +599,7 @@ const AdminTeachingAssignmentsManagement = () => {
       setTransferRow(null);
       void fetchLoads();
     } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось сменить преподавателя');
+      showError(getApiErrorMessage(e, 'Не удалось сменить преподавателя'));
     } finally {
       setTransferSubmitting(false);
     }
@@ -463,7 +614,7 @@ const AdminTeachingAssignmentsManagement = () => {
       setDeleteRow(null);
       void fetchLoads();
     } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось удалить');
+      showError(getApiErrorMessage(e, 'Не удалось удалить'));
       throw e;
     } finally {
       setDeleteSubmitting(false);
@@ -471,54 +622,78 @@ const AdminTeachingAssignmentsManagement = () => {
   };
 
   const eligibleTransferTeachers = useMemo(() => {
-    if (!transferRow) return [];
-    const tid = transferRow.teacherId ?? transferRow.teacher_id;
     const q = transferSearch.trim().toLowerCase();
-    return teachers
-      .filter((u) => Number(u.id) !== Number(tid))
-      .filter((u) => {
-        if (!q) return true;
-        const blob = [u.lastName, u.firstName, u.middleName, u.login].filter(Boolean).join(' ').toLowerCase();
-        return blob.includes(q);
-      });
-  }, [teachers, transferRow, transferSearch]);
+    return transferEligibleTeachers.filter((u) => {
+      if (!q) return true;
+      const blob = [u.lastName, u.firstName, u.middleName, u.login].filter(Boolean).join(' ').toLowerCase();
+      return blob.includes(q);
+    });
+  }, [transferEligibleTeachers, transferSearch]);
+
+  useEffect(() => {
+    if (!transferRow) {
+      setTransferEligibleTeachers([]);
+      return undefined;
+    }
+    const subjectId = transferRow.subjectId ?? transferRow.subject_id ?? transferRow.subject?.id;
+    const teacherId = transferRow.teacherId ?? transferRow.teacher_id ?? transferRow.teacher?.id;
+    if (!subjectId) {
+      setTransferEligibleTeachers([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setTransferTeachersLoading(true);
+    (async () => {
+      try {
+        const { data } = await api.get('/admin/teaching-loads/form-options', {
+          params: {
+            subject_id: Number(subjectId),
+            exclude_teacher_id: teacherId ? Number(teacherId) : undefined,
+          },
+        });
+        if (!cancelled) {
+          setTransferEligibleTeachers(Array.isArray(data?.teachers) ? data.teachers : []);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setTransferEligibleTeachers([]);
+          showError(getApiErrorMessage(e, 'Не удалось загрузить подходящих преподавателей'));
+        }
+      } finally {
+        if (!cancelled) setTransferTeachersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [transferRow, showError]);
 
   const renderCard = (row) => {
     const sc = row.studentsCount ?? row.students_count ?? 0;
     const ac = row.assignmentsCount ?? row.assignments_count ?? 0;
     return (
-      <EntityCard key={row.id} className="admin-ta-card" role="button" tabIndex={0} onClick={() => void openDetail(row.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void openDetail(row.id); } }}>
-        <div className="admin-ta-card__head">
-          <div className="admin-ta-card__teacher">{teacherShort(row.teacher)}</div>
-        </div>
-        <div className="admin-ta-card__subject">
+      <EntityCard
+        key={row.id}
+        className="admin-ta-card"
+        role="button"
+        tabIndex={0}
+        onClick={() => void openDetail(row.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            void openDetail(row.id);
+          }
+        }}
+      >
+        <h3 className="admin-ta-card__subject">
           {row.subject?.name || '—'}
           {row.subject?.code ? ` (${row.subject.code})` : ''}
-        </div>
-        <div className="admin-ta-card__group">{row.group?.name || '—'}</div>
-        <div className="admin-ta-card__stats">
-          <span className="admin-ta-card__stats-item admin-ta-card__stats-item--students">{ruStudents(sc)}</span>
-          <span className="admin-ta-card__stats-item admin-ta-card__stats-item--assignments">{ruAssignments(ac)}</span>
-        </div>
-        <div className="admin-ta-card__actions" onClick={(e) => e.stopPropagation()}>
-          <Button type="button" size="small" variant="outline" onClick={() => void openEditGroups(row)}>
-            Изменить группы
-          </Button>
-          <Button
-            type="button"
-            size="small"
-            variant="outline"
-            onClick={() => {
-              setTransferRow(row);
-              setTransferSearch('');
-              setTransferTeacher('');
-            }}
-          >
-            Сменить преподавателя
-          </Button>
-          <Button type="button" size="small" variant="danger" onClick={() => setDeleteRow(row)}>
-            Удалить
-          </Button>
+        </h3>
+        <p className="admin-ta-card__teacher">{teacherShort(row.teacher)}</p>
+        <span className="admin-ta-card__group-tag">{row.group?.name || '—'}</span>
+        <div className="admin-ta-card__metrics">
+          <span className="admin-ta-card__metric">{ruStudents(sc)}</span>
+          <span className="admin-ta-card__metric">{ruAssignments(ac)}</span>
         </div>
       </EntityCard>
     );
@@ -529,23 +704,81 @@ const AdminTeachingAssignmentsManagement = () => {
       <header className="admin-teaching-assignments__head">
         <div>
           <h1 className="admin-teaching-assignments__title">Назначения</h1>
-          <p className="admin-teaching-assignments__lead">
-            Одна карточка = преподаватель + предмет + группа. Поиск по ФИО, предмету, коду и названию группы.
-          </p>
         </div>
       </header>
+
+      <TeacherRequestModeration
+        kind="load"
+        title="Заявки на назначения"
+        emptyMessage="Новых заявок на назначения нет"
+        onResolved={fetchLoads}
+      />
 
       <DashboardFilterToolbar
         className="admin-teaching-assignments__toolbar"
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Глобальный поиск: преподаватель, предмет, код, группа…"
+        searchPlaceholder="Поиск по преподавателю, дисциплине, коду, группе или специальности…"
         onReset={resetFilters}
         resetDisabled={resetDisabled}
-        showFilterPanel={false}
         popoverAlign="end"
         popoverAriaLabel="Фильтры назначений"
-      />
+      >
+        <div className="filter-popover__field">
+          <label className="filter-popover__label" htmlFor="ta-filter-teacher">
+            Преподаватель
+          </label>
+          <select
+            id="ta-filter-teacher"
+            className="filter-select"
+            value={teacherId}
+            onChange={(e) => applyListFilter('teacher_id', e.target.value)}
+          >
+            <option value="">Все преподаватели</option>
+            {teachers.map((t) => (
+              <option key={t.id} value={String(t.id)}>
+                {teacherShort(t)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-popover__field">
+          <label className="filter-popover__label" htmlFor="ta-filter-subject">
+            Дисциплина
+          </label>
+          <select
+            id="ta-filter-subject"
+            className="filter-select"
+            value={subjectId}
+            onChange={(e) => applyListFilter('subject_id', e.target.value)}
+          >
+            <option value="">Все дисциплины</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={String(s.id)}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-popover__field">
+          <label className="filter-popover__label" htmlFor="ta-filter-group">
+            Группа
+          </label>
+          <select
+            id="ta-filter-group"
+            className="filter-select"
+            value={groupId}
+            onChange={(e) => applyListFilter('group_id', e.target.value)}
+          >
+            <option value="">Все группы</option>
+            {groups.map((g) => (
+              <option key={g.id} value={String(g.id)}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </DashboardFilterToolbar>
 
       <div className="admin-teaching-assignments__row">
         <div className="admin-teaching-assignments__grouping">
@@ -591,13 +824,10 @@ const AdminTeachingAssignmentsManagement = () => {
           <section key={section.key} className="admin-teaching-assignments__section">
             {section.title && (
               <div className="admin-teaching-assignments__section-head">
-                <div>
-                  <h2 className="admin-teaching-assignments__section-title">
-                    {groupBy === 'group' && <span className="admin-teaching-assignments__section-marker admin-teaching-assignments__section-marker--group" aria-hidden />}
-                    {groupBy === 'teacher' && <span className="admin-teaching-assignments__section-marker admin-teaching-assignments__section-marker--teacher" aria-hidden />}
-                    {groupBy === 'subject' && <span className="admin-teaching-assignments__section-marker admin-teaching-assignments__section-marker--subject" aria-hidden />}
+                <div className="admin-teaching-assignments__section-heading">
+                  <h2 className={`admin-teaching-assignments__section-title admin-teaching-assignments__section-title--${groupBy}`}>
                     {section.title}
-                    <span className="admin-teaching-assignments__section-count"> ({section.items.length})</span>
+                    <span className="admin-teaching-assignments__section-count">{section.items.length}</span>
                   </h2>
                   {section.subtitle && (
                     <p className="admin-teaching-assignments__section-sub">{section.subtitle}</p>
@@ -652,31 +882,16 @@ const AdminTeachingAssignmentsManagement = () => {
         ))
       )}
 
-      {!loading && meta.lastPage > 1 && (
-        <div className="admin-teaching-assignments__pager">
-          <Button
-            type="button"
-            variant="secondary"
-            size="small"
-            disabled={meta.currentPage <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            Назад
-          </Button>
-          <span>
-            {meta.currentPage} / {meta.lastPage}
-          </span>
-          <Button
-            type="button"
-            variant="secondary"
-            size="small"
-            disabled={meta.currentPage >= meta.lastPage}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Вперёд
-          </Button>
-        </div>
-      )}
+      <Pagination
+        className="admin-teaching-assignments__pagination"
+        currentPage={meta.currentPage}
+        lastPage={meta.lastPage}
+        total={meta.total}
+        fallbackCount={loads.length}
+        disabled={loading}
+        hideWhenSinglePage
+        onPageChange={setPage}
+      />
 
       <Modal
         isOpen={createOpen}
@@ -685,9 +900,6 @@ const AdminTeachingAssignmentsManagement = () => {
         onClose={() => !createSubmitting && setCreateOpen(false)}
         footer={(
           <>
-            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} disabled={createSubmitting}>
-              Отмена
-            </Button>
             {createStep < 3 ? (
               <Button
                 type="button"
@@ -712,7 +924,7 @@ const AdminTeachingAssignmentsManagement = () => {
                 1. Преподаватель
               </button>
               <button type="button" className={createStep === 2 ? 'is-active' : ''} onClick={() => createTeacher && setCreateStep(2)} disabled={!createTeacher}>
-                2. Предмет
+                2. Дисциплина
               </button>
               <button type="button" className={createStep === 3 ? 'is-active' : ''} onClick={() => createSubject && setCreateStep(3)} disabled={!createSubject}>
                 3. Группы
@@ -724,7 +936,7 @@ const AdminTeachingAssignmentsManagement = () => {
                 <input
                   type="search"
                   className="search-input"
-                  placeholder="Поиск преподавателя…"
+                  placeholder="Поиск по ФИО или логину преподавателя…"
                   value={createTeacherSearch}
                   onChange={(e) => setCreateTeacherSearch(e.target.value)}
                 />
@@ -736,7 +948,11 @@ const AdminTeachingAssignmentsManagement = () => {
                           type="radio"
                           name="cta-t"
                           checked={String(createTeacher) === String(u.id)}
-                          onChange={() => setCreateTeacher(String(u.id))}
+                          onChange={() => {
+                            setCreateTeacher(String(u.id));
+                            setCreateSubject('');
+                            setCreateSelectedGroups(new Set());
+                          }}
                         />
                         <span>
                           {teacherShort(u)}
@@ -754,27 +970,36 @@ const AdminTeachingAssignmentsManagement = () => {
                 <input
                   type="search"
                   className="search-input"
-                  placeholder="Поиск предмета…"
+                  placeholder="Поиск по названию или коду дисциплины…"
                   value={createSubjectSearch}
                   onChange={(e) => setCreateSubjectSearch(e.target.value)}
                 />
-                <ul className="admin-ta-wizard__list">
-                  {filteredSubjectsCreate.map((s) => (
-                    <li key={s.id}>
-                      <label className="admin-ta-wizard__radio">
-                        <input
-                          type="radio"
-                          name="cta-s"
-                          checked={String(createSubject) === String(s.id)}
-                          onChange={() => setCreateSubject(String(s.id))}
-                        />
-                        <span>
-                          {s.name} {s.code ? `(${s.code})` : ''}
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
+                {createOptionsLoading ? (
+                  <LoadingState message="Загрузка дисциплин..." />
+                ) : filteredSubjectsCreate.length === 0 ? (
+                  <p className="admin-ta-wizard__empty">У преподавателя нет допусков к активным дисциплинам.</p>
+                ) : (
+                  <ul className="admin-ta-wizard__list">
+                    {filteredSubjectsCreate.map((s) => (
+                      <li key={s.id}>
+                        <label className="admin-ta-wizard__radio">
+                          <input
+                            type="radio"
+                            name="cta-s"
+                            checked={String(createSubject) === String(s.id)}
+                            onChange={() => {
+                              setCreateSubject(String(s.id));
+                              setCreateSelectedGroups(new Set());
+                            }}
+                          />
+                          <span>
+                            {s.name} {s.code ? `(${s.code})` : ''}
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
 
@@ -783,38 +1008,45 @@ const AdminTeachingAssignmentsManagement = () => {
                 <input
                   type="search"
                   className="search-input"
-                  placeholder="Поиск группы или специальности…"
+                  placeholder="Поиск по группе или специальности…"
                   value={createGroupSearch}
                   onChange={(e) => setCreateGroupSearch(e.target.value)}
                 />
-                <ul className="admin-ta-wizard__checks">
-                  {groupsForCreate.map((g) => {
-                    const st = g.studentsCount ?? g.students_count;
-                    const labelSt = st != null ? ` (${st} студ.)` : '';
-                    const alreadyAssigned = createExistingGroupIds.has(Number(g.id));
-                    return (
-                      <li key={g.id}>
-                        <label className={alreadyAssigned ? 'is-disabled' : ''}>
-                          <input
-                            type="checkbox"
-                            checked={createSelectedGroups.has(Number(g.id))}
-                            disabled={alreadyAssigned}
-                            onChange={(e) => {
-                              const n = new Set(createSelectedGroups);
-                              if (e.target.checked) n.add(Number(g.id));
-                              else n.delete(Number(g.id));
-                              setCreateSelectedGroups(n);
-                            }}
-                          />
-                          {g.name}
-                          {labelSt}
-                          {g.specialty ? <small>{g.specialty}</small> : null}
-                          {alreadyAssigned ? <span className="admin-ta-wizard__exists">Уже назначено</span> : null}
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
+                {createOptionsLoading ? (
+                  <LoadingState message="Загрузка групп..." />
+                ) : groupsForCreate.length === 0 ? (
+                  <p className="admin-ta-wizard__empty">
+                    {createEligibleGroups.length > 0
+                      ? 'Все подходящие группы уже назначены этому преподавателю.'
+                      : 'Нет активных групп с этой дисциплиной на текущем курсе.'}
+                  </p>
+                ) : (
+                  <ul className="admin-ta-wizard__checks">
+                    {groupsForCreate.map((g) => {
+                      const st = g.studentsCount ?? g.students_count;
+                      const labelSt = st != null ? ` (${st} студ.)` : '';
+                      return (
+                        <li key={g.id}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={createSelectedGroups.has(Number(g.id))}
+                              onChange={(e) => {
+                                const n = new Set(createSelectedGroups);
+                                if (e.target.checked) n.add(Number(g.id));
+                                else n.delete(Number(g.id));
+                                setCreateSelectedGroups(n);
+                              }}
+                            />
+                            {g.name}
+                            {labelSt}
+                            {g.specialty ? <small>{g.specialty}</small> : null}
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
                 <p className="admin-ta-wizard__hint">
                   Выбрано групп: {createSelectedGroups.size}. Уже существующие назначения отмечаются сразу и не отправляются повторно.
                 </p>
@@ -828,12 +1060,14 @@ const AdminTeachingAssignmentsManagement = () => {
         isOpen={!!detailId}
         title="Детали назначения"
         size="medium"
+        contentClassName="admin-ta-detail-modal"
+        footerClassName="admin-ta-detail-modal__footer"
         onClose={() => setDetailId(null)}
         footer={!detailLoading && detailData?.teachingLoad ? (
           <>
             <Button
               type="button"
-              variant="secondary"
+              variant="primary"
               size="small"
               onClick={() => {
                 const tl = detailData.teachingLoad;
@@ -845,7 +1079,7 @@ const AdminTeachingAssignmentsManagement = () => {
             </Button>
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="small"
               onClick={() => {
                 const tl = detailData.teachingLoad;
@@ -857,51 +1091,43 @@ const AdminTeachingAssignmentsManagement = () => {
             >
               Сменить преподавателя
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="small"
-              onClick={() => {
-                const tl = detailData.teachingLoad;
-                setDetailId(null);
-                setDeleteRow(tl);
-              }}
-            >
-              Удалить назначение
-            </Button>
           </>
         ) : null}
       >
           {detailLoading && <LoadingState message="Загрузка..." className="admin-teaching-assignments__state" />}
-          {!detailLoading && detailData?.teachingLoad && (
-            <div className="admin-ta-detail">
-              <div className="admin-ta-detail__identity">
-                <div>
-                  <p className="admin-ta-detail__eyebrow">Назначение</p>
-                  <h3>
-                    {detailData.teachingLoad.subject?.name}{' '}
-                    {detailData.teachingLoad.subject?.code ? `(${detailData.teachingLoad.subject.code})` : ''}
-                  </h3>
+          {!detailLoading && detailData?.teachingLoad && (() => {
+            const tl = detailData.teachingLoad;
+            const dept = (tl.teacher?.department || '').trim();
+            const avg = formatTeachingLoadAvgScore(detailData.stats?.averageScore ?? detailData.stats?.average_score);
+
+            return (
+              <div className="admin-ta-detail">
+                <div className="admin-ta-detail__identity">
+                  <div>
+                    <p className="admin-ta-detail__eyebrow">Назначение</p>
+                    <h3>
+                      {tl.subject?.name} {tl.subject?.code ? `(${tl.subject.code})` : ''}
+                    </h3>
+                  </div>
+                  <div className="admin-ta-detail__meta-grid">
+                    <div className="admin-ta-detail__meta-item">
+                      <span>Преподаватель</span>
+                      <strong>{tl.teacher?.fullName || teacherShort(tl.teacher)}</strong>
+                    </div>
+                    <div className="admin-ta-detail__meta-item">
+                      <span>Кафедра</span>
+                      <strong className={!dept ? 'admin-ta-detail__value-muted' : undefined}>{dept || '—'}</strong>
+                    </div>
+                    <div className="admin-ta-detail__meta-item">
+                      <span>Группа</span>
+                      <strong>{tl.group?.name || '—'}</strong>
+                    </div>
+                    <div className="admin-ta-detail__meta-item">
+                      <span>Студенты</span>
+                      <strong>{ruStudents(detailData.stats?.studentsCount ?? detailData.stats?.students_count ?? 0)}</strong>
+                    </div>
+                  </div>
                 </div>
-                <div className="admin-ta-detail__meta-grid">
-                  <div className="admin-ta-detail__meta-item">
-                    <span>Преподаватель</span>
-                    <strong>{detailData.teachingLoad.teacher?.fullName || teacherShort(detailData.teachingLoad.teacher)}</strong>
-                  </div>
-                  <div className="admin-ta-detail__meta-item">
-                    <span>Email</span>
-                    <strong>{detailData.teachingLoad.teacher?.email || '—'}</strong>
-                  </div>
-                  <div className="admin-ta-detail__meta-item">
-                    <span>Группа</span>
-                    <strong>{detailData.teachingLoad.group?.name || '—'}</strong>
-                  </div>
-                  <div className="admin-ta-detail__meta-item">
-                    <span>Студенты</span>
-                    <strong>{ruStudents(detailData.stats?.studentsCount ?? detailData.stats?.students_count ?? 0)}</strong>
-                  </div>
-                </div>
-              </div>
               <div className="admin-ta-detail__stats">
                 <div className="admin-ta-detail__stat-card">
                   <span>Активных заданий</span>
@@ -917,7 +1143,7 @@ const AdminTeachingAssignmentsManagement = () => {
                 </div>
                 <div className="admin-ta-detail__stat-card">
                   <span>Средний балл</span>
-                  <strong>{detailData.stats?.averageScore ?? detailData.stats?.average_score ?? '—'}</strong>
+                  <strong className={avg.muted ? 'admin-ta-detail__value-muted' : undefined}>{avg.primary}</strong>
                 </div>
               </div>
               {Array.isArray(detailData.recentAssignments) && detailData.recentAssignments.length > 0 && (
@@ -925,7 +1151,10 @@ const AdminTeachingAssignmentsManagement = () => {
                   <strong>Последние задания</strong>
                   <ul>
                     {detailData.recentAssignments.map((a) => (
-                      <li key={a.id}>
+                      <li
+                        key={a.id}
+                        className={`admin-ta-detail__recent-item admin-ta-detail__recent-item--${a.status || 'active'}`}
+                      >
                         {a.title} — {assignmentStatusLabel(a.status)}
                         {a.deadline ? ` (до ${formatDateLong(a.deadline)})` : ''}
                       </li>
@@ -933,8 +1162,26 @@ const AdminTeachingAssignmentsManagement = () => {
                   </ul>
                 </div>
               )}
+
+              <ModalDangerZone
+                title="Удаление назначения"
+                description="Преподаватель потеряет связь с группой по этой дисциплине. Существующие задания сохранятся."
+              >
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="small"
+                  onClick={() => {
+                    setDetailId(null);
+                    setDeleteRow(tl);
+                  }}
+                >
+                  Удалить назначение
+                </Button>
+              </ModalDangerZone>
             </div>
-          )}
+          );
+        })()}
       </Modal>
 
       <Modal
@@ -944,9 +1191,6 @@ const AdminTeachingAssignmentsManagement = () => {
         onClose={() => !editSubmitting && setEditPair(null)}
         footer={editPair ? (
           <>
-            <Button type="button" variant="secondary" onClick={() => setEditPair(null)} disabled={editSubmitting}>
-              Отмена
-            </Button>
             <Button type="button" variant="primary" onClick={() => void submitEditGroups()} disabled={editSubmitting}>
               Сохранить
             </Button>
@@ -962,12 +1206,16 @@ const AdminTeachingAssignmentsManagement = () => {
               <input
                 type="search"
                 className="search-input"
-                placeholder="Поиск группы или специальности…"
+                placeholder="Поиск по группе или специальности…"
                 value={editGroupSearch}
                 onChange={(e) => setEditGroupSearch(e.target.value)}
               />
             <ul className="admin-ta-wizard__checks">
-              {groupsForEdit.map((g) => (
+              {editGroupsLoading ? (
+                <li className="admin-ta-wizard__empty">Загрузка групп...</li>
+              ) : groupsForEdit.length === 0 ? (
+                <li className="admin-ta-wizard__empty">Нет активных групп с этой дисциплиной на текущем курсе.</li>
+              ) : groupsForEdit.map((g) => (
                 <li key={g.id}>
                   <label>
                     <input
@@ -1007,9 +1255,6 @@ const AdminTeachingAssignmentsManagement = () => {
         onClose={() => !transferSubmitting && setTransferRow(null)}
         footer={transferRow ? (
           <>
-            <Button type="button" variant="secondary" onClick={() => setTransferRow(null)} disabled={transferSubmitting}>
-              Отмена
-            </Button>
             <Button type="button" variant="primary" onClick={() => void submitTransfer()} disabled={transferSubmitting || !transferTeacher}>
               Сменить
             </Button>
@@ -1019,18 +1264,20 @@ const AdminTeachingAssignmentsManagement = () => {
         {transferRow ? (
           <div className="admin-ta-wizard">
             <p>
-              Предмет: {transferRow.subject?.name}, группа: {transferRow.group?.name}
+              Дисциплина: {transferRow.subject?.name}, группа: {transferRow.group?.name}
             </p>
             <p>Сейчас: {teacherShort(transferRow.teacher)}</p>
             <input
               type="search"
               className="search-input"
-              placeholder="Поиск преподавателя…"
+              placeholder="Поиск по ФИО или логину преподавателя…"
               value={transferSearch}
               onChange={(e) => setTransferSearch(e.target.value)}
             />
             <ul className="admin-ta-wizard__list">
-              {eligibleTransferTeachers.map((u) => (
+              {transferTeachersLoading ? (
+                <li className="admin-ta-wizard__empty">Загрузка преподавателей...</li>
+              ) : eligibleTransferTeachers.map((u) => (
                 <li key={u.id}>
                   <label className="admin-ta-wizard__radio">
                     <input
@@ -1043,8 +1290,8 @@ const AdminTeachingAssignmentsManagement = () => {
                   </label>
                 </li>
               ))}
-              {eligibleTransferTeachers.length === 0 && (
-                <li className="admin-ta-wizard__empty">Подходящих преподавателей пока нет</li>
+              {eligibleTransferTeachers.length === 0 && !transferTeachersLoading && (
+                <li className="admin-ta-wizard__empty">Нет других преподавателей с допуском к этой дисциплине.</li>
               )}
             </ul>
             <p className="admin-ta-wizard__hint">
@@ -1063,7 +1310,6 @@ const AdminTeachingAssignmentsManagement = () => {
             : ''
         }
         confirmText="Удалить"
-        cancelText="Отмена"
         danger
         onClose={() => !deleteSubmitting && setDeleteRow(null)}
         onConfirm={() => submitDelete()}

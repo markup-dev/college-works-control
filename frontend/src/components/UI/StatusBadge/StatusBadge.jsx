@@ -14,7 +14,7 @@ const toneAlias = {
 const StatusBadge = ({
   children,
   tone = 'default',
-  withDot = true,
+  withDot = false,
   className = '',
   ...props
 }) => {

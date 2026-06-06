@@ -65,6 +65,28 @@ const normalizeSubjectOptions = (subjects = []) => {
     .filter((subject, index, array) => array.findIndex((item) => item.id === subject.id) === index);
 };
 
+const normalizeTeachingLoadPairs = (pairs = []) => {
+  if (!Array.isArray(pairs)) {
+    return [];
+  }
+
+  return pairs
+    .map((pair) => {
+      const subjectId = Number(pair?.subjectId ?? pair?.subject_id);
+      const subjectName = String(pair?.subjectName ?? pair?.subject_name ?? '').trim();
+      const groupId = Number(pair?.groupId ?? pair?.group_id);
+      const groupName = normalizeGroupSelection(pair?.groupName ?? pair?.group_name)[0] || '';
+
+      if (!Number.isFinite(subjectId) || subjectId <= 0 || !Number.isFinite(groupId) || groupId <= 0 || !subjectName || !groupName) {
+        return null;
+      }
+
+      return { subjectId, subjectName, groupId, groupName };
+    })
+    .filter(Boolean)
+    .filter((pair, index, array) => array.findIndex((item) => item.subjectId === pair.subjectId && item.groupId === pair.groupId) === index);
+};
+
 const normalizeGroupSelection = (value) => {
   const normalizeSingleGroup = (group) => (
     (group || '')
@@ -110,6 +132,7 @@ const AssignmentModal = ({
   onSubmit,
   availableGroups = [],
   availableSubjects = [],
+  teachingLoadPairs = [],
   initialFormData = null,
   modalMode = 'default',
 }) => {
@@ -118,25 +141,75 @@ const AssignmentModal = ({
   const [formData, setFormData] = useState(() => buildEmptyFormData());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGroupsDropdownOpen, setIsGroupsDropdownOpen] = useState(false);
+  const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const wasOpenRef = useRef(false);
   const groupsDropdownRef = useRef(null);
+  const groupSearchInputRef = useRef(null);
+  const isEdit = !!assignment;
+  const relationPairs = useMemo(() => normalizeTeachingLoadPairs(teachingLoadPairs), [teachingLoadPairs]);
+  const shouldFilterByTeachingLoad = modalMode !== 'bankTemplate' && relationPairs.length > 0;
+  const selectedGroups = normalizeGroupSelection(formData.studentGroups);
 
   const subjectOptions = useMemo(() => {
-    const normalized = normalizeSubjectOptions(availableSubjects);
-    if (formData.subjectId && formData.subject) {
-      const alreadyExists = normalized.some((subject) => subject.id === Number(formData.subjectId));
-      if (!alreadyExists) {
-        normalized.push({ id: Number(formData.subjectId), name: formData.subject });
+    if (shouldFilterByTeachingLoad) {
+      const selectedGroupSet = new Set(normalizeGroupSelection(formData.studentGroups));
+      const subjects = relationPairs
+        .filter((pair) => (
+          selectedGroupSet.size === 0
+          || [...selectedGroupSet].every((groupName) => (
+            relationPairs.some((candidate) => candidate.subjectId === pair.subjectId && candidate.groupName === groupName)
+          ))
+        ))
+        .map((pair) => ({ id: pair.subjectId, name: pair.subjectName }))
+        .filter((subject, index, array) => array.findIndex((item) => item.id === subject.id) === index)
+        .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+      if (isEdit && formData.subjectId && formData.subject && !subjects.some((subject) => subject.id === Number(formData.subjectId))) {
+        subjects.push({ id: Number(formData.subjectId), name: formData.subject });
       }
+
+      return subjects.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    }
+
+    const normalized = normalizeSubjectOptions(availableSubjects);
+    if (formData.subjectId && formData.subject && !normalized.some((subject) => subject.id === Number(formData.subjectId))) {
+      normalized.push({ id: Number(formData.subjectId), name: formData.subject });
     }
     return normalized.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-  }, [availableSubjects, formData.subjectId, formData.subject]);
+  }, [availableSubjects, formData.subjectId, formData.subject, formData.studentGroups, isEdit, relationPairs, shouldFilterByTeachingLoad]);
 
   const groupOptions = useMemo(() => {
-    const uniqueGroups = new Set(availableGroups.filter(Boolean));
+    if (shouldFilterByTeachingLoad) {
+      const subjectId = Number(formData.subjectId);
+      const groups = relationPairs
+        .filter((pair) => (!Number.isFinite(subjectId) || subjectId <= 0 || pair.subjectId === subjectId))
+        .map((pair) => pair.groupName)
+        .filter((group, index, array) => array.indexOf(group) === index)
+        .sort((a, b) => a.localeCompare(b, 'ru'));
+
+      if (isEdit) {
+        normalizeGroupSelection(formData.studentGroups).forEach((group) => {
+          if (!groups.includes(group)) {
+            groups.push(group);
+          }
+        });
+      }
+
+      return groups.sort((a, b) => a.localeCompare(b, 'ru'));
+    }
+
+    const uniqueGroups = new Set(normalizeGroupSelection(availableGroups));
     normalizeGroupSelection(formData.studentGroups).forEach((group) => uniqueGroups.add(group));
-    return Array.from(uniqueGroups);
-  }, [availableGroups, formData.studentGroups]);
+    return Array.from(uniqueGroups).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [availableGroups, formData.subjectId, formData.studentGroups, isEdit, relationPairs, shouldFilterByTeachingLoad]);
+
+  const filteredGroupOptions = useMemo(() => {
+    const query = groupSearchQuery.trim().toLowerCase();
+    if (!query) {
+      return groupOptions;
+    }
+    return groupOptions.filter((group) => group.toLowerCase().includes(query));
+  }, [groupOptions, groupSearchQuery]);
 
   const createInitialFormData = useCallback(() => {
     if (assignment && initialFormData) {
@@ -206,8 +279,13 @@ const AssignmentModal = ({
 
   useEffect(() => {
     if (!isGroupsDropdownOpen) {
+      setGroupSearchQuery('');
       return undefined;
     }
+
+    const focusTimer = window.setTimeout(() => {
+      groupSearchInputRef.current?.focus();
+    }, 0);
 
     const handleOutsideClick = (event) => {
       if (!groupsDropdownRef.current?.contains(event.target)) {
@@ -217,6 +295,7 @@ const AssignmentModal = ({
 
     document.addEventListener('mousedown', handleOutsideClick);
     return () => {
+      window.clearTimeout(focusTimer);
       document.removeEventListener('mousedown', handleOutsideClick);
     };
   }, [isGroupsDropdownOpen]);
@@ -227,10 +306,41 @@ const AssignmentModal = ({
     setAcceptAllFormats(hasAllFormats);
   }, [formData.allowedFormats]);
 
+  useEffect(() => {
+    if (!shouldFilterByTeachingLoad || isEdit || !formData.subjectId) {
+      return;
+    }
+
+    const subjectStillAllowed = subjectOptions.some((subject) => subject.id === Number(formData.subjectId));
+    if (!subjectStillAllowed) {
+      setFormData((prev) => ({
+        ...prev,
+        subjectId: null,
+        subject: '',
+      }));
+    }
+  }, [formData.subjectId, isEdit, shouldFilterByTeachingLoad, subjectOptions]);
+
+  useEffect(() => {
+    if (!shouldFilterByTeachingLoad || isEdit) {
+      return;
+    }
+
+    const allowedGroups = new Set(groupOptions);
+    const currentGroups = normalizeGroupSelection(formData.studentGroups);
+    const nextGroups = currentGroups.filter((group) => allowedGroups.has(group));
+
+    if (nextGroups.length !== currentGroups.length) {
+      setFormData((prev) => ({
+        ...prev,
+        studentGroups: nextGroups,
+      }));
+    }
+  }, [formData.studentGroups, groupOptions, isEdit, shouldFilterByTeachingLoad]);
+
   if (!isOpen) return null;
 
   const isBankTemplateEdit = modalMode === 'bankTemplate';
-  const isEdit = !!assignment;
   const criteriaCount = Array.isArray(formData.criteria) ? formData.criteria.length : 0;
   const criteriaPointsTotal = Array.isArray(formData.criteria)
     ? formData.criteria.reduce((sum, criterion) => sum + (Number(criterion?.maxPoints) || 0), 0)
@@ -239,7 +349,6 @@ const AssignmentModal = ({
   const materialSlotsLeft = Math.max(0, MAX_MATERIAL_FILES - totalMaterialsCount);
   const hasNoAssignableGroups = !isEdit && groupOptions.length === 0;
   const hasNoAssignableSubjects = !isEdit && subjectOptions.length === 0;
-  const selectedGroups = normalizeGroupSelection(formData.studentGroups);
   const selectedGroupsSummary = selectedGroups.length === 0
     ? 'Выберите группы'
     : selectedGroups.length <= 2
@@ -258,7 +367,7 @@ const AssignmentModal = ({
     }
 
     if (!formData.subjectId) {
-      showError('Выберите предмет из назначенных');
+      showError('Выберите дисциплину из назначенных');
       return;
     }
     
@@ -291,6 +400,18 @@ const AssignmentModal = ({
     }
 
     const studentGroups = normalizeGroupSelection(formData.studentGroups);
+
+    if (modalMode !== 'bankTemplate' && shouldFilterByTeachingLoad && formData.subjectId) {
+      const subjectId = Number(formData.subjectId);
+      const invalidGroup = studentGroups.find((groupName) => (
+        !relationPairs.some((pair) => pair.subjectId === subjectId && pair.groupName === groupName)
+      ));
+
+      if (invalidGroup) {
+        showError(`Группа ${invalidGroup} не назначена вам по выбранной дисциплине`);
+        return;
+      }
+    }
     
     const criteriaArray = formData.criteria
       .map(criterion => {
@@ -368,6 +489,10 @@ const AssignmentModal = ({
   };
 
   const handleSelectAllGroups = () => {
+    if (groupSearchQuery.trim()) {
+      handleInputChange('studentGroups', [...new Set([...selectedGroups, ...filteredGroupOptions])]);
+      return;
+    }
     handleInputChange('studentGroups', [...groupOptions]);
   };
 
@@ -510,9 +635,6 @@ const AssignmentModal = ({
               </span>
             </Button>
           )}
-          <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            Отмена
-          </Button>
           <Button
             type="submit"
             form="teacher-assignment-form"
@@ -552,8 +674,8 @@ const AssignmentModal = ({
             )}
             {hasNoAssignableSubjects && (
               <div className="assignment-modal-warning">
-                Для вашего аккаунта пока не назначены предметы. Обратитесь к администратору, чтобы он назначил
-                вам предмет в управлении предметами.
+                Для вашего аккаунта пока не назначены дисциплины. Обратитесь к администратору, чтобы он назначил
+                вам дисциплину в разделе «Дисциплины».
               </div>
             )}
 
@@ -575,12 +697,13 @@ const AssignmentModal = ({
                     />
                   </FormGroup>
                   
-                  <FormGroup label="Предмет:" required>
+                  <FormGroup label="Дисциплина:" required>
                     <select
                       value={formData.subjectId || ''}
                       onChange={(e) => {
                         const selectedId = Number(e.target.value) || null;
-                        const selectedSubject = subjectOptions.find((subject) => subject.id === selectedId);
+                        const selectedSubject = subjectOptions.find((subject) => 
+                          subject.id === selectedId);
                         setFormData((prev) => ({
                           ...prev,
                           subjectId: selectedId,
@@ -590,7 +713,7 @@ const AssignmentModal = ({
                       className="teacher-assignment-modal__select"
                       required
                     >
-                      <option value="">Выберите предмет</option>
+                      <option value="">Выберите дисциплину</option>
                       {subjectOptions.map((subject) => (
                         <option key={subject.id} value={subject.id}>
                           {subject.name}
@@ -619,8 +742,24 @@ const AssignmentModal = ({
                               <button type="button" onClick={handleSelectAllGroups}>Выбрать все</button>
                               <button type="button" onClick={handleClearGroups}>Очистить</button>
                             </div>
+                            <div className="group-dropdown__search">
+                              <input
+                                ref={groupSearchInputRef}
+                                type="search"
+                                className="group-dropdown__search-input"
+                                placeholder="Поиск группы"
+                                value={groupSearchQuery}
+                                onChange={(event) => setGroupSearchQuery(event.target.value)}
+                                onClick={(event) => event.stopPropagation()}
+                                onKeyDown={(event) => event.stopPropagation()}
+                                aria-label="Поиск группы"
+                              />
+                            </div>
                             <div className="group-dropdown__list">
-                              {groupOptions.map((group) => {
+                              {filteredGroupOptions.length === 0 ? (
+                                <p className="group-dropdown__empty">Группы не найдены</p>
+                              ) : (
+                                filteredGroupOptions.map((group) => {
                                 const checked = selectedGroups.includes(group);
                                 return (
                                   <label key={group} className={`group-checkbox-item ${checked ? 'group-checkbox-item--checked' : ''}`}>
@@ -632,7 +771,8 @@ const AssignmentModal = ({
                                     <span>{group}</span>
                                   </label>
                                 );
-                              })}
+                              })
+                              )}
                             </div>
                           </div>
                         )}
@@ -673,19 +813,16 @@ const AssignmentModal = ({
 
               <div className="form-section">
                 <h4>Материалы к заданию</h4>
-                <FormGroup label="Дополнительные материалы (методички, шаблоны, примеры):">
-                  <div className="assignment-materials">
-                    <p className="assignment-materials__hint">
-                      Прикрепите файлы, чтобы студентам было проще понять требования и формат выполнения.
-                      Можно добавить еще {materialSlotsLeft}.
-                    </p>
-                    <FileDropzone
-                      multiple
-                      buttonText="Добавить файлы"
-                      hint="Можно выбрать несколько файлов или перетащить их в область загрузки."
-                      selectedFiles={formData.materialFiles}
-                      onFilesSelected={handleMaterialFileSelect}
-                    />
+                <div className="assignment-materials">
+                  <p className="assignment-materials__hint">
+                    Методички, шаблоны, примеры. Ещё {materialSlotsLeft}.
+                  </p>
+                  <FileDropzone
+                    multiple
+                    buttonText="Добавить файлы"
+                    selectedFiles={formData.materialFiles}
+                    onFilesSelected={handleMaterialFileSelect}
+                  />
 
                     {formData.existingMaterials.length > 0 && (
                       <div className="assignment-materials__list">
@@ -733,26 +870,36 @@ const AssignmentModal = ({
                       </div>
                     )}
                   </div>
-                </FormGroup>
               </div>
 
               <div className="form-section">
-                <h4>Параметры оценки</h4>
-                <p className="form-section__hint">
-                  Максимальный балл за каждое задание фиксированный: 100. Перевод в пятибалльную оценку настраивается в профиле преподавателя.
-                </p>
+                <h4>Формат сдачи</h4>
 
-                <div className="form-row">
-                  <FormGroup label="Формат сдачи:" required>
-                    <select
-                      value={formData.submissionType}
-                      onChange={(e) => handleInputChange('submissionType', e.target.value)}
-                      className="teacher-assignment-modal__select"
-                    >
-                      <option value="file">Файл</option>
-                      <option value="demo">Демонстрация</option>
-                    </select>
-                  </FormGroup>
+                <div className="submission-type-options" role="radiogroup" aria-label="Формат сдачи">
+                  <button
+                    type="button"
+                    className={`submission-type-option ${formData.submissionType === 'file' ? 'is-active' : ''}`}
+                    onClick={() => handleInputChange('submissionType', 'file')}
+                    role="radio"
+                    aria-checked={formData.submissionType === 'file'}
+                  >
+                    <span className="submission-type-option__title">Файл</span>
+                    <span className="submission-type-option__text">
+                      Студент прикрепляет файл с выполненной работой.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`submission-type-option ${formData.submissionType === 'demo' ? 'is-active' : ''}`}
+                    onClick={() => handleInputChange('submissionType', 'demo')}
+                    role="radio"
+                    aria-checked={formData.submissionType === 'demo'}
+                  >
+                    <span className="submission-type-option__title">Демонстрация</span>
+                    <span className="submission-type-option__text">
+                      Студент только сообщает о готовности показать работу.
+                    </span>
+                  </button>
                 </div>
 
                 {formData.submissionType === 'file' && (

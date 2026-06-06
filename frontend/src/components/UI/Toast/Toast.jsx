@@ -13,7 +13,6 @@ const Toast = ({ id, message, type = 'info', duration = 5000, onClose }) => {
 
   return (
     <div className={`toast toast--${type}`} onClick={() => onClose(id)}>
-      <span className="toast__indicator" aria-hidden="true" />
       <div className="toast__message">{message}</div>
       <button className="toast__close" onClick={(e) => {
         e.stopPropagation();

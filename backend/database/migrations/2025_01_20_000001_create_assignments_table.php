@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-/** Задания преподавателя: предмет, срок, тип сдачи, привязка к преподавателю и статус жизненного цикла. */
+/** Задания преподавателя: дисциплина, срок, тип сдачи, привязка к преподавателю и статус жизненного цикла. */
 return new class extends Migration
 {
     public function up(): void
@@ -15,7 +15,7 @@ return new class extends Migration
             $table->unsignedBigInteger('subject_id')->nullable()->index();
             $table->text('description')->nullable();
             $table->date('deadline');
-            $table->enum('status', ['active', 'inactive', 'archived'])->default('active');
+            $table->enum('status', ['active', 'archived'])->default('active');
             $table->integer('max_score')->default(100);
             $table->string('submission_type')->default('file');
             $table->integer('max_file_size')->nullable();

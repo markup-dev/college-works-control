@@ -1,12 +1,12 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import api from '../../../services/api';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import {
   caretAfterNthDigit,
   countDigitsBeforeCaret,
   formatRuPhoneDisplay,
   isPhoneCompleteOrEmpty,
-} from '../../../utils/ruPhoneMask';
+} from '../../../utils/phoneMask';
 import Button from '../../UI/Button/Button';
 import Modal from '../../UI/Modal/Modal';
 import ModalSection from '../../UI/Modal/ModalSection';
@@ -26,6 +26,7 @@ const emptyForm = () => ({
   phone: '',
   role: 'student',
   groupId: '',
+  department: '',
   sendCredentials: true,
 });
 
@@ -56,13 +57,15 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
   }, [form.phone]);
 
   const groupRequired = form.role === 'student';
+  const departmentRequired = form.role === 'teacher';
 
   const canSubmit = useMemo(() => {
     if (!form.lastName.trim() || !form.firstName.trim()) return false;
     if (!form.email.trim()) return false;
     if (groupRequired && !form.groupId) return false;
+    if (departmentRequired && !form.department.trim()) return false;
     return true;
-  }, [form.lastName, form.firstName, form.email, form.groupId, groupRequired]);
+  }, [form.lastName, form.firstName, form.email, form.groupId, form.department, groupRequired, departmentRequired]);
 
   const setField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -111,6 +114,9 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
       if (groupRequired && form.groupId) {
         body.groupId = Number(form.groupId);
       }
+      if (form.role === 'teacher') {
+        body.department = form.department.trim();
+      }
       const { data } = await api.post('/admin/users', body);
       if (onCreated) {
         onCreated({
@@ -121,7 +127,7 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
       }
       onClose();
     } catch (err) {
-      const msg = firstApiErrorMessage(err.response?.data) || 'Не удалось создать пользователя';
+      const msg = getApiErrorMessage(err, 'Не удалось создать пользователя');
       setErrorMessage(msg);
     } finally {
       setSubmitting(false);
@@ -141,9 +147,6 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
       contentClassName="admin-create-user-modal__body"
       footer={(
         <div className="admin-create-user-modal__actions">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
-            Отмена
-          </Button>
           <Button
             type="submit"
             form="admin-create-user-form"
@@ -164,11 +167,13 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
                 </div>
               )}
 
-              <ModalSection title="Данные пользователя">
+              <ModalSection title="ФИО">
               <div className="admin-create-user-modal__grid">
                 <div className="admin-create-user-modal__field">
-                  <label className="admin-create-user-modal__label" htmlFor="admin-create-last-name">
-                    Фамилия <span className="admin-create-user-modal__required">*</span>
+                  <label className="admin-create-user-modal__label" 
+                  htmlFor="admin-create-last-name">
+                    Фамилия 
+                    <span className="admin-create-user-modal__required">*</span>
                   </label>
                   <input
                     id="admin-create-last-name"
@@ -196,7 +201,7 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
                   />
                 </div>
 
-                <div className="admin-create-user-modal__field">
+                <div className="admin-create-user-modal__field admin-create-user-modal__field--full">
                   <label className="admin-create-user-modal__label" htmlFor="admin-create-middle-name">
                     Отчество
                   </label>
@@ -209,7 +214,11 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
                     placeholder="Введите отчество"
                   />
                 </div>
+              </div>
+              </ModalSection>
 
+              <ModalSection title="Контактные данные">
+              <div className="admin-create-user-modal__grid">
                 <div className="admin-create-user-modal__field">
                   <label className="admin-create-user-modal__label" htmlFor="admin-create-email">
                     Email <span className="admin-create-user-modal__required">*</span>
@@ -259,6 +268,7 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
                         ...prev,
                         role,
                         groupId: role === 'student' ? prev.groupId : '',
+                        department: role === 'teacher' ? prev.department : '',
                       }));
                     }}
                     required
@@ -271,7 +281,7 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
                   </select>
                 </div>
 
-                {groupRequired && (
+                {groupRequired ? (
                   <div className="admin-create-user-modal__field">
                     <label className="admin-create-user-modal__label" htmlFor="admin-create-group">
                       Группа <span className="admin-create-user-modal__required">*</span>
@@ -291,7 +301,23 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
                       ))}
                     </select>
                   </div>
-                )}
+                ) : form.role === 'teacher' ? (
+                  <div className="admin-create-user-modal__field">
+                    <label className="admin-create-user-modal__label" htmlFor="admin-create-department">
+                      Кафедра <span className="admin-create-user-modal__required">*</span>
+                    </label>
+                    <input
+                      id="admin-create-department"
+                      type="text"
+                      className="admin-create-user-modal__input"
+                      value={form.department}
+                      onChange={(e) => setField('department', e.target.value)}
+                      placeholder="Введите кафедру"
+                      maxLength={100}
+                      required
+                    />
+                  </div>
+                ) : null}
               </div>
 
               <label className="admin-create-user-modal__checkbox">

@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import Button from '../../UI/Button/Button';
 import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
 import InfoCard from '../../UI/InfoCard/InfoCard';
 import LoadingState from '../../UI/LoadingState/LoadingState';
 import Modal from '../../UI/Modal/Modal';
 import ModalSection from '../../UI/Modal/ModalSection';
+import TextArea from '../../UI/TextArea/TextArea';
 import './AdminSettingsManagement.scss';
 
 const defaultForm = () => ({
@@ -15,6 +16,7 @@ const defaultForm = () => ({
     enabled: false,
     text: '',
     color: 'yellow',
+    audience: 'all',
     startsAt: '',
     endsAt: '',
     indefinite: true,
@@ -77,6 +79,7 @@ const AdminSettingsManagement = () => {
             enabled: !!raw.globalBanner?.enabled,
             text: raw.globalBanner?.text ?? '',
             color: raw.globalBanner?.color ?? 'yellow',
+            audience: raw.globalBanner?.audience ?? 'all',
             startsAt: toDatetimeLocal(raw.globalBanner?.startsAt),
             endsAt: toDatetimeLocal(raw.globalBanner?.endsAt),
             indefinite: raw.globalBanner?.indefinite !== false,
@@ -105,7 +108,7 @@ const AdminSettingsManagement = () => {
         });
       }
     } catch (e) {
-      setError(firstApiErrorMessage(e.response?.data) || 'Не удалось загрузить настройки');
+      setError(getApiErrorMessage(e, 'Не удалось загрузить настройки'));
       setForm(defaultForm());
     } finally {
       setLoading(false);
@@ -132,51 +135,81 @@ const AdminSettingsManagement = () => {
     return t;
   }, [form.emailTemplate.body]);
 
-  const handleSave = async (e) => {
-    e.preventDefault();
+  const buildPayload = useCallback((sourceForm) => ({
+    globalBanner: {
+      enabled: sourceForm.globalBanner.enabled,
+      text: sourceForm.globalBanner.text,
+      color: sourceForm.globalBanner.color,
+      audience: sourceForm.globalBanner.audience,
+      indefinite: sourceForm.globalBanner.indefinite,
+      startsAt: sourceForm.globalBanner.indefinite ? null : fromDatetimeLocal(sourceForm.globalBanner.startsAt),
+      endsAt: sourceForm.globalBanner.indefinite ? null : fromDatetimeLocal(sourceForm.globalBanner.endsAt),
+    },
+    passwordPolicy: {
+      minLength: Number(sourceForm.passwordPolicy.minLength) || 12,
+      requireLowercase: sourceForm.passwordPolicy.requireLowercase,
+      requireUppercase: sourceForm.passwordPolicy.requireUppercase,
+      requireDigits: sourceForm.passwordPolicy.requireDigits,
+      requireSpecial: sourceForm.passwordPolicy.requireSpecial,
+      excludeSimilar: sourceForm.passwordPolicy.excludeSimilar,
+      expiryDays:
+        sourceForm.passwordPolicy.expiryDays === '' || sourceForm.passwordPolicy.expiryDays == null
+          ? null
+          : Number(sourceForm.passwordPolicy.expiryDays),
+    },
+    emailTemplate: { ...sourceForm.emailTemplate },
+    security: {
+      sessionLifetimeHours: Number(sourceForm.security.sessionLifetimeHours),
+      maxLoginAttempts: Number(sourceForm.security.maxLoginAttempts),
+      lockoutMinutes: Number(sourceForm.security.lockoutMinutes),
+      notifyAdminOnLockout: sourceForm.security.notifyAdminOnLockout,
+    },
+  }), []);
+
+  const saveSettings = useCallback(async (nextForm = form, successMessage = 'Настройки сохранены') => {
     setSaving(true);
     setError(null);
     try {
-      const payload = {
-        globalBanner: {
-          enabled: form.globalBanner.enabled,
-          text: form.globalBanner.text,
-          color: form.globalBanner.color,
-          indefinite: form.globalBanner.indefinite,
-          startsAt: form.globalBanner.indefinite ? null : fromDatetimeLocal(form.globalBanner.startsAt),
-          endsAt: form.globalBanner.indefinite ? null : fromDatetimeLocal(form.globalBanner.endsAt),
-        },
-        passwordPolicy: {
-          minLength: Number(form.passwordPolicy.minLength) || 12,
-          requireLowercase: form.passwordPolicy.requireLowercase,
-          requireUppercase: form.passwordPolicy.requireUppercase,
-          requireDigits: form.passwordPolicy.requireDigits,
-          requireSpecial: form.passwordPolicy.requireSpecial,
-          excludeSimilar: form.passwordPolicy.excludeSimilar,
-          expiryDays:
-            form.passwordPolicy.expiryDays === '' || form.passwordPolicy.expiryDays == null
-              ? null
-              : Number(form.passwordPolicy.expiryDays),
-        },
-        emailTemplate: { ...form.emailTemplate },
-        security: {
-          sessionLifetimeHours: Number(form.security.sessionLifetimeHours),
-          maxLoginAttempts: Number(form.security.maxLoginAttempts),
-          lockoutMinutes: Number(form.security.lockoutMinutes),
-          notifyAdminOnLockout: form.security.notifyAdminOnLockout,
-        },
-      };
-      const { data } = await api.put('/admin/settings', payload);
+      const { data } = await api.put('/admin/settings', buildPayload(nextForm));
       if (data?.data) {
-        showSuccess('Настройки сохранены');
+        showSuccess(successMessage);
         window.dispatchEvent(new CustomEvent('app:platform-banner-refresh'));
         await load();
       }
     } catch (e) {
-      showError(firstApiErrorMessage(e.response?.data) || 'Не удалось сохранить');
+      showError(getApiErrorMessage(e, 'Не удалось сохранить'));
     } finally {
       setSaving(false);
     }
+  }, [buildPayload, form, load, showError, showSuccess]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    await saveSettings();
+  };
+
+  const applyGlobalBanner = async () => {
+    const nextForm = {
+      ...form,
+      globalBanner: {
+        ...form.globalBanner,
+        enabled: true,
+      },
+    };
+    setForm(nextForm);
+    await saveSettings(nextForm, 'Глобальное уведомление применено');
+  };
+
+  const finishGlobalBanner = async () => {
+    const nextForm = {
+      ...form,
+      globalBanner: {
+        ...form.globalBanner,
+        enabled: false,
+      },
+    };
+    setForm(nextForm);
+    await saveSettings(nextForm, 'Глобальное уведомление завершено');
   };
 
   if (loading) {
@@ -187,11 +220,6 @@ const AdminSettingsManagement = () => {
     <form className="admin-settings-management" onSubmit={(ev) => void handleSave(ev)}>
       <div>
         <h1 className="admin-settings-management__title">Настройки системы</h1>
-        <p className="admin-settings-management__hint">
-          Параметры применяются к письмам с доступом для новых пользователей, проверке смены пароля и
-          глобальному баннеру над шапкой сайта. Часть параметров безопасности хранится для учёта и
-          дальнейшего подключения (ограничения входа, длительность сессии).
-        </p>
       </div>
 
       {error && (
@@ -205,7 +233,31 @@ const AdminSettingsManagement = () => {
       )}
 
       <InfoCard className="admin-settings-management__section">
-        <h2 className="admin-settings-management__section-title">Глобальное уведомление</h2>
+        <div className="admin-settings-management__section-head">
+          <div>
+            <h2 className="admin-settings-management__section-title">Глобальное уведомление</h2>
+          </div>
+          <div className="admin-settings-management__section-actions">
+            <Button
+              type="button"
+              size="small"
+              onClick={() => void applyGlobalBanner()}
+              loading={saving}
+              disabled={saving || !form.globalBanner.text.trim()}
+            >
+              Применить
+            </Button>
+            <Button
+              type="button"
+              size="small"
+              variant="secondary"
+              onClick={() => void finishGlobalBanner()}
+              disabled={saving || !form.globalBanner.enabled}
+            >
+              Завершить
+            </Button>
+          </div>
+        </div>
         <label className="admin-settings-management__checkbox">
           <input
             type="checkbox"
@@ -217,24 +269,42 @@ const AdminSettingsManagement = () => {
               }))
             }
           />
-          Показывать баннер на всех страницах (для всех авторизованных пользователей)
+          Включить баннер
         </label>
-        <div className="admin-settings-management__field">
-          <label className="admin-settings-management__label" htmlFor="set-banner-text">
-            Текст уведомления
+        <div className="admin-form-field admin-settings-management__field">
+          <label className="admin-form-field__label" htmlFor="set-banner-audience">
+            Кому показывать
           </label>
-          <textarea
-            id="set-banner-text"
-            className="admin-settings-management__textarea"
-            value={form.globalBanner.text}
+          <select
+            id="set-banner-audience"
+            className="admin-control admin-settings-management__select"
+            value={form.globalBanner.audience}
             onChange={(e) =>
               setForm((f) => ({
                 ...f,
-                globalBanner: { ...f.globalBanner, text: e.target.value },
+                globalBanner: { ...f.globalBanner, audience: e.target.value },
               }))
             }
-          />
+          >
+            <option value="all">Всем авторизованным пользователям</option>
+            <option value="students">Только студентам</option>
+            <option value="teachers">Только преподавателям</option>
+            <option value="admins">Только администраторам</option>
+          </select>
         </div>
+        <TextArea
+          label="Текст уведомления"
+          value={form.globalBanner.text}
+          onChange={(value) =>
+            setForm((f) => ({
+              ...f,
+              globalBanner: { ...f.globalBanner, text: value },
+            }))
+          }
+          className="admin-textarea admin-settings-management__textarea"
+          rows={4}
+          placeholder="Краткий текст уведомления на сайте"
+        />
         <div className="admin-settings-management__field">
           <label className="admin-settings-management__label" htmlFor="set-banner-color">
             Цвет фона
@@ -391,6 +461,8 @@ const AdminSettingsManagement = () => {
                 emailTemplate: { ...f.emailTemplate, fromName: e.target.value },
               }))
             }
+            placeholder="Учебный центр"
+            autoComplete="off"
           />
         </div>
         <div className="admin-settings-management__field">
@@ -407,24 +479,23 @@ const AdminSettingsManagement = () => {
                 emailTemplate: { ...f.emailTemplate, subject: e.target.value },
               }))
             }
+            placeholder="Доступ к системе"
+            autoComplete="off"
           />
         </div>
-        <div className="admin-settings-management__field">
-          <label className="admin-settings-management__label" htmlFor="set-mail-body">
-            Текст письма
-          </label>
-          <textarea
-            id="set-mail-body"
-            className="admin-settings-management__textarea"
-            value={form.emailTemplate.body}
-            onChange={(e) =>
-              setForm((f) => ({
-                ...f,
-                emailTemplate: { ...f.emailTemplate, body: e.target.value },
-              }))
-            }
-          />
-        </div>
+        <TextArea
+          label="Текст письма"
+          value={form.emailTemplate.body}
+          onChange={(value) =>
+            setForm((f) => ({
+              ...f,
+              emailTemplate: { ...f.emailTemplate, body: value },
+            }))
+          }
+          className="admin-textarea admin-settings-management__textarea"
+          rows={8}
+          placeholder="Здравствуйте, {{fullName}}! Ваш логин: {{login}}…"
+        />
         <p className="admin-settings-management__muted">
           Переменные: {'{{fullName}}'} {'{{login}}'} {'{{password}}'} {'{{loginUrl}}'} {'{{role}}'}{' '}
           {'{{group}}'}

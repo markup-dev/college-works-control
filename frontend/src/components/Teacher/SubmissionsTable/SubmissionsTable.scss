@@ -106,6 +106,31 @@
   }
 }
 
+.submission-card__meta-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.submission-card__meta-label {
+  display: none;
+}
+
+.submission-card__meta-cell {
+  min-width: 0;
+
+  &--grade .submission-card__grade {
+    margin: 0;
+  }
+}
+
+@media (min-width: 1101px) {
+  .submission-card__meta-cell--grade:has(.submission-card__grade-value--empty) {
+    display: none;
+  }
+}
+
 .submission-card__line {
   margin: 0;
   line-height: 1.35;
@@ -245,6 +270,11 @@
 .submission-card__grade-value {
   color: #0f172a;
   font-weight: 700;
+
+  &--empty {
+    color: #64748b;
+    font-weight: 600;
+  }
 }
 
 .submission-card__cta-note {
@@ -313,65 +343,349 @@
 }
 
 // --- responsive ---
-@media (max-width: 1024px) and (min-width: 901px) {
+@media (min-width: 1101px) and (max-width: 1280px) {
   .submission-card {
     grid-template-columns: minmax(0, 1fr) minmax(180px, 1fr) var(--submission-cta-width);
     --submission-gap: 0.85rem;
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) and (min-width: 480px) {
   .submission-card {
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
-      'main cta'
-      'meta meta';
+      'main status'
+      'submitted grade'
+      'cta cta';
+    column-gap: 0.55rem;
+    row-gap: 0;
+    --submission-pad: 0.85rem 0.9rem;
+    padding: var(--submission-pad);
   }
 
   .submission-card__col--main {
     grid-area: main;
+    align-self: start;
+    min-width: 0;
   }
 
   .submission-card__col--meta {
-    grid-area: meta;
-    padding-left: 0;
-    border-left: none;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    column-gap: 0.75rem;
-    row-gap: 0.35rem;
-    padding-top: 0.35rem;
-    border-top: 1px solid #e5ebf3;
+    display: contents;
+  }
+
+  .submission-card__meta-grid {
+    display: contents;
   }
 
   .submission-card__col--cta {
     grid-area: cta;
-    width: auto;
-    max-width: none;
-    justify-self: end;
+    display: flex;
+    flex-direction: column;
+    justify-content: stretch;
+    width: 100%;
     padding-left: 0;
     border-left: none;
-    align-items: stretch;
+    margin-top: 0.55rem;
   }
 
-  .submission-card__btn {
-    width: auto;
-    min-width: 132px;
+  .submission-card__meta-cell--status {
+    grid-area: status;
+    align-self: start;
+    justify-self: end;
+    max-width: min(100%, 220px);
+    margin-top: 0;
+    padding: 0;
+    background: none;
+    border: none;
+
+    .submission-card__meta-label {
+      display: none;
+    }
+
+    .submission-card__badges {
+      justify-content: flex-end;
+    }
   }
 
-  .submission-card__badges {
-    flex: 1 1 auto;
-    min-width: 0;
+  .submission-card__meta-cell--submitted {
+    grid-area: submitted;
+  }
+
+  .submission-card__meta-cell--grade {
+    grid-area: grade;
+  }
+
+  .submission-card__meta-label {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+  }
+
+  .submission-card__meta-cell--submitted,
+  .submission-card__meta-cell--grade {
+    margin-top: 0.55rem;
+    padding: 0.55rem 0.65rem;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e8edf5;
+  }
+
+  .submission-card__submitted-prefix,
+  .submission-card__grade-prefix {
+    display: none;
+  }
+
+  .submission-card__submitted,
+  .submission-card__grade {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.35;
   }
 
   .submission-card__submitted {
-    flex: 0 0 auto;
+    color: #475569;
+    font-weight: 600;
   }
 
+  .submission-card__btn {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  .submission-card__cta-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.55rem 0.65rem;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e8edf5;
+    text-align: center;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1100px) {
+  .submission-card {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--submission-cta-width);
+    grid-template-areas:
+      'main main status'
+      'submitted grade cta';
+    align-items: center;
+  }
+
+  .submission-card__col--main,
+  .submission-card__meta-cell--status {
+    align-self: start;
+  }
+
+  .submission-card__col--cta {
+    display: contents;
+    margin-top: 0;
+  }
+
+  .submission-card__meta-cell--status {
+    justify-self: end;
+    max-width: min(100%, 220px);
+    margin-top: 0;
+
+    .submission-card__badges {
+      justify-content: flex-end;
+    }
+  }
+
+  .submission-card__meta-cell--submitted,
+  .submission-card__meta-cell--grade {
+    margin-top: 0.75rem;
+    width: 100%;
+    box-sizing: border-box;
+    align-self: stretch;
+  }
+
+  .submission-card__btn,
+  .submission-card__cta-note {
+    grid-area: cta;
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+    align-self: center;
+    margin-top: 0.75rem;
+    box-sizing: border-box;
+  }
+
+  .submission-card__btn {
+    min-height: 36px;
+    height: auto;
+    padding: 0.38rem 0.65rem;
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+
+  .submission-card__btn--edit {
+    white-space: normal;
+    line-height: 1.25;
+    text-align: center;
+  }
+
+  .submission-card__cta-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.55rem 0.45rem;
+    font-size: 0.78rem;
+  }
+}
+
+@media (max-width: 620px) and (min-width: 480px) {
+  .submission-card {
+    grid-template-areas:
+      'main main'
+      'status status'
+      'submitted grade'
+      'cta cta';
+    --submission-pad: 0.75rem 0.8rem;
+  }
+
+  .submission-card__meta-cell--status {
+    justify-self: start;
+    max-width: none;
+    margin-top: 0.55rem;
+
+    .submission-card__badges {
+      justify-content: flex-start;
+    }
+  }
+
+  .submission-card__meta-cell--submitted,
+  .submission-card__meta-cell--grade {
+    padding: 0.5rem 0.55rem;
+  }
+}
+
+@media (max-width: 479px) {
+  .submission-card {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'main'
+      'status'
+      'submitted'
+      'grade'
+      'cta';
+    row-gap: 0;
+    --submission-pad: 0.75rem 0.8rem;
+    padding: var(--submission-pad);
+  }
+
+  .submission-card__col--main {
+    grid-area: main;
+    min-width: 0;
+  }
+
+  .submission-card__col--meta {
+    display: contents;
+  }
+
+  .submission-card__meta-grid {
+    display: contents;
+  }
+
+  .submission-card__col--cta {
+    display: block;
+    grid-area: cta;
+    width: 100%;
+    padding-left: 0;
+    border-left: none;
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid #e8edf5;
+  }
+
+  .submission-card__meta-cell--status {
+    grid-area: status;
+    justify-self: start;
+    max-width: none;
+    margin-top: 0.55rem;
+    padding: 0;
+    background: none;
+    border: none;
+
+    .submission-card__meta-label {
+      display: none;
+    }
+
+    .submission-card__badges {
+      justify-content: flex-start;
+    }
+  }
+
+  .submission-card__meta-cell--submitted {
+    grid-area: submitted;
+  }
+
+  .submission-card__meta-cell--grade {
+    grid-area: grade;
+  }
+
+  .submission-card__meta-label {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+  }
+
+  .submission-card__meta-cell--submitted,
+  .submission-card__meta-cell--grade {
+    margin-top: 0.45rem;
+    padding: 0.5rem 0.55rem;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e8edf5;
+  }
+
+  .submission-card__submitted-prefix,
+  .submission-card__grade-prefix {
+    display: none;
+  }
+
+  .submission-card__submitted,
   .submission-card__grade {
-    flex-basis: 100%;
-    order: 1;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.35;
+  }
+
+  .submission-card__submitted {
+    color: #475569;
+    font-weight: 600;
+  }
+
+  .submission-card__btn,
+  .submission-card__cta-note {
+    margin-top: 0;
+  }
+
+  .submission-card__btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .submission-card__cta-note {
+    padding: 0.55rem 0.65rem;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e8edf5;
   }
 }
 
@@ -384,53 +698,5 @@
   .submissions-cards__sort-select {
     width: 100%;
     min-width: 0;
-  }
-}
-
-@media (max-width: 560px) {
-  .submission-card {
-    grid-template-columns: 1fr;
-    grid-template-areas: none;
-    --submission-pad: 0.75rem 0.85rem;
-    row-gap: 0.65rem;
-  }
-
-  .submission-card__col--main {
-    grid-area: unset;
-  }
-
-  .submission-card__col--meta {
-    grid-area: unset;
-    flex-direction: column;
-    align-items: flex-start;
-    padding-top: 0;
-    border-top: none;
-  }
-
-  .submission-card__col--cta {
-    grid-area: unset;
-    width: 100%;
-    max-width: none;
-    justify-self: stretch;
-    flex-direction: row;
-    justify-content: stretch;
-
-    .submission-card__btn {
-      flex: 1;
-      min-width: 0;
-      width: auto;
-    }
-  }
-
-  .submission-card__grade {
-    order: unset;
-  }
-
-  .submission-card__line--identity {
-    font-size: 0.88rem;
-  }
-
-  .submission-card__line--task {
-    font-size: 0.86rem;
   }
 }

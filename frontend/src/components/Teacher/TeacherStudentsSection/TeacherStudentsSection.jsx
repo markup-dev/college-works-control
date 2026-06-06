@@ -7,15 +7,24 @@ import EmptyState from '../../UI/EmptyState/EmptyState';
 import Modal from '../../UI/Modal/Modal';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import { formatDate } from '../../../utils';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 
 const BROADCAST_DEFAULT_TEXT =
   'Здравствуйте! Напоминаю о заданиях, которые еще ожидают сдачи. Пожалуйста, проверьте сроки и отправьте работы на проверку. Если нужна помощь — напишите мне в этом чате.';
 
 const BROADCAST_MAX_RECIPIENTS = 50;
 
-const getErrorMessage = (err, fallback) => {
-  const msg = err?.response?.data?.message;
-  return typeof msg === 'string' && msg.trim() ? msg : fallback;
+const broadcastModalSubtitle = (count) => {
+  const n = Number(count) || 0;
+  if (n > BROADCAST_MAX_RECIPIENTS) {
+    return `Отправится ${BROADCAST_MAX_RECIPIENTS} из ${n} — за раз не больше ${BROADCAST_MAX_RECIPIENTS}. Ответы придут в «Сообщения».`;
+  }
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  let word = 'получателей';
+  if (mod10 === 1 && mod100 !== 11) word = 'получатель';
+  else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) word = 'получателя';
+  return `${n} ${word} · личное сообщение в «Сообщения», студент может ответить там же`;
 };
 
 const PERIOD_OPTIONS = [
@@ -78,7 +87,7 @@ const buildNestedDebtListText = ({ groupName = '', entries }) => {
     lines.push(entry.fullName || 'Без имени');
     const bySubject = new Map();
     (entry.items || []).forEach((it) => {
-      const subject = it.subjectName || 'Без предмета';
+      const subject = it.subjectName || 'Без дисциплины';
       if (!bySubject.has(subject)) {
         bySubject.set(subject, []);
       }
@@ -154,7 +163,7 @@ const TeacherStudentsSection = () => {
       const { data } = await api.get('/teacher/groups/overview');
       setGroups(Array.isArray(data?.data) ? data.data : []);
     } catch (err) {
-      showError(getErrorMessage(err, 'Не удалось загрузить группы'));
+      showError(getApiErrorMessage(err, 'Не удалось загрузить группы'));
     } finally {
       setLoading(false);
     }
@@ -173,7 +182,7 @@ const TeacherStudentsSection = () => {
       });
       setGroupData(data);
     } catch (err) {
-      showError(getErrorMessage(err, 'Не удалось загрузить статистику группы'));
+      showError(getApiErrorMessage(err, 'Не удалось загрузить статистику группы'));
     } finally {
       setLoading(false);
     }
@@ -193,7 +202,7 @@ const TeacherStudentsSection = () => {
       });
       setStudentData(data);
     } catch (err) {
-      showError(getErrorMessage(err, 'Не удалось загрузить данные студента'));
+      showError(getApiErrorMessage(err, 'Не удалось загрузить данные студента'));
     } finally {
       setLoading(false);
     }
@@ -251,7 +260,7 @@ const TeacherStudentsSection = () => {
     const items = sortedStudentAssignments
       .filter((r) => r.submissionStatus === 'not_submitted')
       .map((r) => ({
-        subjectName: r.subjectName || 'Без предмета',
+        subjectName: r.subjectName || 'Без дисциплины',
         assignmentTitle: r.title || '',
       }));
     return buildNestedDebtListText({
@@ -376,7 +385,7 @@ const TeacherStudentsSection = () => {
       setBroadcastOpen(false);
       setSelectedIds([]);
     } catch (err) {
-      showError(getErrorMessage(err, 'Не удалось отправить сообщения'));
+      showError(getApiErrorMessage(err, 'Не удалось отправить сообщения'));
     } finally {
       setBroadcastSending(false);
     }
@@ -495,7 +504,7 @@ const TeacherStudentsSection = () => {
                 popoverAlign="end"
                 searchValue={search}
                 onSearchChange={setSearch}
-                searchPlaceholder="Поиск по ФИО или логину…"
+                searchPlaceholder="Поиск по ФИО или логину студента…"
                 searchInputType="search"
                 searchBoxClassName="search-box teacher-dashboard-filter-search"
                 onReset={resetCurrentFilters}
@@ -504,7 +513,7 @@ const TeacherStudentsSection = () => {
               >
                 <div className="filter-popover__field">
                   <label className="filter-popover__label" htmlFor="teacher-groups-subject-filter">
-                    Предмет
+                    Дисциплина
                   </label>
                   <select
                     id="teacher-groups-subject-filter"
@@ -512,7 +521,7 @@ const TeacherStudentsSection = () => {
                     value={subjectFilter}
                     onChange={(e) => setSubjectFilter(e.target.value)}
                   >
-                    <option value="all">Все предметы</option>
+                    <option value="all">Все дисциплины</option>
                     {(groupData?.filters?.subjects || []).map((subject) => (
                       <option key={subject.id} value={subject.id}>{subject.name}</option>
                     ))}
@@ -552,7 +561,7 @@ const TeacherStudentsSection = () => {
               showResetButton={false}
               searchValue={groupSearch}
               onSearchChange={setGroupSearch}
-              searchPlaceholder="Поиск по группе…"
+              searchPlaceholder="Поиск по названию группы…"
               searchInputType="search"
               searchBoxClassName="search-box teacher-dashboard-filter-search"
             />
@@ -577,7 +586,7 @@ const TeacherStudentsSection = () => {
               >
                 <div className="filter-popover__field">
                   <label className="filter-popover__label" htmlFor="teacher-student-subject-filter">
-                    Предмет
+                    Дисциплина
                   </label>
                   <select
                     id="teacher-student-subject-filter"
@@ -585,7 +594,7 @@ const TeacherStudentsSection = () => {
                     value={subjectFilter}
                     onChange={(e) => setSubjectFilter(e.target.value)}
                   >
-                    <option value="all">Все предметы</option>
+                    <option value="all">Все дисциплины</option>
                     {(studentData?.filters?.subjects || []).map((subject) => (
                       <option key={subject.id} value={subject.id}>{subject.name}</option>
                     ))}
@@ -756,7 +765,7 @@ const TeacherStudentsSection = () => {
                   <span className="teacher-students-section__badge">Студентов: {group.studentsCount}</span>
                 </div>
                 <p>Должников: <strong>{group.debtorsCount}</strong> · На проверке: <strong>{group.onReviewCount}</strong></p>
-                <p>Предметов: <strong>{(group.subjects || []).length}</strong> · Заданий: <strong>{group.assignmentsCount}</strong></p>
+                <p>Дисциплин: <strong>{(group.subjects || []).length}</strong> · Заданий: <strong>{group.assignmentsCount}</strong></p>
               </button>
             ))}
           </div>
@@ -831,6 +840,13 @@ const TeacherStudentsSection = () => {
         />
       ) : (
         <div className="teacher-students-section__assignment-list">
+          <div className="teacher-students-section__assignment-list-header" aria-hidden="true">
+            <span>Задание</span>
+            <span>Срок сдачи</span>
+            <span>Статус</span>
+            <span>Оценка</span>
+            <span>Сдача</span>
+          </div>
           {sortedStudentAssignments.map((row) => (
             <article
               key={row.assignmentId}
@@ -861,17 +877,29 @@ const TeacherStudentsSection = () => {
                 <p className="teacher-students-section__assignment-title">{row.title}</p>
                 <p className="teacher-students-section__assignment-subject">{row.subjectName}</p>
               </div>
-              <div className={`teacher-students-section__assignment-deadline is-${getDeadlineTone(row.deadline)}`}>
-                {row.deadline ? formatDate(row.deadline) : 'Без дедлайна'}
-              </div>
-              <div className="teacher-students-section__assignment-status">
-                <span className={`teacher-students-section__badge status-${row.submissionStatus}`}>{statusLabel(row.submissionStatus)}</span>
-              </div>
-              <div className="teacher-students-section__assignment-score">
-                {row.score != null ? `${row.score} / ${row.maxScore}` : '—'}
-              </div>
-              <div className="teacher-students-section__assignment-submitted-at">
-                {row.submittedAt ? `Сдано: ${formatDate(row.submittedAt)}` : 'Не сдавалось'}
+              <div className="teacher-students-section__assignment-meta">
+                <div className={`teacher-students-section__assignment-deadline is-${getDeadlineTone(row.deadline)}`}>
+                  <span className="teacher-students-section__assignment-field-label">Срок сдачи</span>
+                  <span className="teacher-students-section__assignment-field-value">
+                    {row.deadline ? formatDate(row.deadline) : 'Без дедлайна'}
+                  </span>
+                </div>
+                <div className="teacher-students-section__assignment-status">
+                  <span className="teacher-students-section__assignment-field-label">Статус</span>
+                  <span className={`teacher-students-section__badge status-${row.submissionStatus}`}>{statusLabel(row.submissionStatus)}</span>
+                </div>
+                <div className="teacher-students-section__assignment-score">
+                  <span className="teacher-students-section__assignment-field-label">Оценка</span>
+                  <span className="teacher-students-section__assignment-field-value">
+                    {row.score != null ? `${row.score} / ${row.maxScore}` : '—'}
+                  </span>
+                </div>
+                <div className="teacher-students-section__assignment-submitted-at">
+                  <span className="teacher-students-section__assignment-field-label">Сдача</span>
+                  <span className="teacher-students-section__assignment-field-value">
+                    {row.submittedAt ? formatDate(row.submittedAt) : 'Не сдавалось'}
+                  </span>
+                </div>
               </div>
             </article>
           ))}
@@ -884,29 +912,18 @@ const TeacherStudentsSection = () => {
           if (!broadcastSending) setBroadcastOpen(false);
         }}
         title="Сообщение выбранным студентам"
+        subtitle={broadcastModalSubtitle(selectedIds.length)}
         size="medium"
         className="teacher-students-broadcast"
         contentClassName="teacher-students-broadcast__body"
         footer={(
           <div className="teacher-students-broadcast__actions">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setBroadcastOpen(false)}
-              disabled={broadcastSending}
-            >
-              Отмена
-            </Button>
             <Button type="button" variant="primary" onClick={sendBroadcast} disabled={broadcastSending}>
               {broadcastSending ? 'Отправка…' : 'Отправить'}
             </Button>
           </div>
         )}
       >
-        <p className="teacher-students-broadcast__meta">
-          Получателей в списке: {selectedIds.length} (за один раз — не больше {BROADCAST_MAX_RECIPIENTS}). Каждый
-          студент увидит текст в «Сообщениях» как обычное входящее.
-        </p>
         <textarea
           className="teacher-students-broadcast__textarea"
           rows={6}

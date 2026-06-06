@@ -137,8 +137,10 @@ const AdminDashboardHome = () => {
   const quickActions = [
     { title: 'Создать пользователя', link: '/admin/users', state: { openCreateUser: true }, variant: 'primary' },
     { title: 'Новая группа', link: '/admin/groups', state: { openCreateGroup: true }, variant: 'secondary' },
-    { title: 'Новый предмет', link: '/admin/subjects', state: { openCreateSubject: true }, variant: 'secondary' },
+    { title: 'Новая дисциплина', link: '/admin/subjects', state: { openCreateSubject: true }, variant: 'secondary' },
     { title: 'Импорт пользователей', link: '/admin/users', state: { openImportUsers: true }, variant: 'secondary' },
+    { title: 'Импорт групп', link: '/admin/groups', state: { openImportGroups: true }, variant: 'secondary' },
+    { title: 'Импорт дисциплин', link: '/admin/subjects', state: { openImportSubjects: true }, variant: 'secondary' },
   ];
 
   const getLogTypeClass = (action) => {
@@ -182,8 +184,10 @@ const AdminDashboardHome = () => {
           metrics.map((metric) => (
             <Link key={metric.id} className={`admin-metric-tile admin-metric-tile--${metric.color}`} to={metric.link}>
               <div className="admin-metric-tile__content">
-                <div className="admin-metric-tile__value">{metric.value}</div>
-                <div className="admin-metric-tile__label">{metric.title}</div>
+                <div className="admin-metric-tile__main">
+                  <div className="admin-metric-tile__value">{metric.value}</div>
+                  <div className="admin-metric-tile__label">{metric.title}</div>
+                </div>
                 {metric.delta && <div className="admin-metric-tile__delta">{metric.delta}</div>}
                 {metric.hint && <div className="admin-metric-tile__hint">{metric.hint}</div>}
                 {metric.description && <div className="admin-metric-tile__description">{metric.description}</div>}

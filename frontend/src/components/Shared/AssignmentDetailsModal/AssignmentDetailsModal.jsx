@@ -2,11 +2,12 @@ import React from 'react';
 import Modal from '../../UI/Modal/Modal';
 import Button from '../../UI/Button/Button';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
-import { 
-  formatDate, 
-  getAssignmentStatusInfo, 
+import {
+  formatDate,
+  getAssignmentStatusInfo,
   getDaysUntilDeadline,
   getAllowedFormatsFromAssignment,
+  resolveAssignmentSubjectName,
 } from '../../../utils';
 import './AssignmentDetailsModal.scss';
 
@@ -49,12 +50,12 @@ const AssignmentDetailsModal = ({
   const createdAt = assignment.createdAt ? formatDate(assignment.createdAt) : '—';
   const updatedAtRaw = assignment.updatedAt || assignment.updated_at || null;
   const updatedAt = updatedAtRaw ? formatDate(updatedAtRaw) : '';
-  const maxScore = assignment.maxScore ?? '—';
   const submissionType = getSubmissionTypeLabel(assignment.submissionType);
   const allowedFormats = getAllowedFormatsFromAssignment(assignment);
   const groups = getGroupsList(assignment);
   const description = assignment.description || 'Описание отсутствует';
   const criteria = normalizeCriteria(assignment.criteria);
+  const criteriaCount = formatCriteriaCount(criteria.length);
   const maxFileSize = assignment.maxFileSize ? `${assignment.maxFileSize} МБ` : '50 МБ';
   const daysUntilDeadline = assignment.deadline ? getDaysUntilDeadline(assignment.deadline) : null;
   const materialFiles = resolveMaterialFiles(assignment);
@@ -84,7 +85,9 @@ const AssignmentDetailsModal = ({
       <div className="assignment-details-modal">
         <header className="assignment-details-modal__header">
           <div>
-            <p className="assignment-details-modal__subject">{assignment.subject}</p>
+            <p className="assignment-details-modal__subject">
+              {resolveAssignmentSubjectName(assignment) || '—'}
+            </p>
             <h3 className="assignment-details-modal__title">{assignment.title}</h3>
             {mode === 'student' && (
               <p className="assignment-details-modal__teacher">
@@ -97,9 +100,9 @@ const AssignmentDetailsModal = ({
               {statusInfo.label}
             </StatusBadge>
             {mode === 'student' && isRetakeAssignment && (
-              <span className={`retake-badge ${retakeUsed ? 'retake-badge--used' : ''}`}>
+              <StatusBadge tone={retakeUsed ? 'neutral' : 'retake'}>
                 {retakeUsed ? 'Пересдача использована' : 'Пересдача'}
-              </span>
+              </StatusBadge>
             )}
           </div>
         </header>
@@ -121,7 +124,7 @@ const AssignmentDetailsModal = ({
                 )}
               </div>
             </MetaItem>
-            <MetaItem label="Максимальный балл" icon="score">{maxScore}</MetaItem>
+            <MetaItem label="Критерии оценки" icon="score">{criteriaCount}</MetaItem>
             <MetaItem label="Формат сдачи" icon="format">{submissionType}</MetaItem>
             {mode !== 'student' && (
               <MetaItem label="Допустимые форматы" icon="format">
@@ -230,7 +233,7 @@ const AssignmentDetailsModal = ({
 
         {mode === 'teacher' && (typeof onEdit === 'function' || typeof onViewSubmissions === 'function' || typeof onAddToBank === 'function') && (
           <div className="assignment-details-modal__actions assignment-details-modal__actions--teacher-row">
-            {typeof onAddToBank === 'function' && assignment.status !== 'inactive' && (
+            {typeof onAddToBank === 'function' && (
               assignmentAlreadyInBank ? (
                 <Button
                   type="button"
@@ -508,6 +511,19 @@ const normalizeCriteria = (criteria = []) => {
       maxPoints: criterion.maxPoints || 0
     };
   });
+};
+
+const formatCriteriaCount = (count) => {
+  const lastDigit = count % 10;
+  const lastTwoDigits = count % 100;
+
+  if (lastDigit === 1 && lastTwoDigits !== 11) {
+    return `${count} критерий`;
+  }
+  if ([2, 3, 4].includes(lastDigit) && ![12, 13, 14].includes(lastTwoDigits)) {
+    return `${count} критерия`;
+  }
+  return `${count} критериев`;
 };
 
 export default AssignmentDetailsModal;

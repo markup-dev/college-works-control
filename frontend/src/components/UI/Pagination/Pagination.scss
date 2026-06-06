@@ -1,42 +1,67 @@
 .ui-pagination {
-  margin-top: 16px;
-  display: flex;
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr) minmax(5.5rem, auto);
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 0.65rem 1rem;
+  width: 100%;
+  box-sizing: border-box;
   color: #475569;
   font-size: 0.9rem;
 }
 
 .ui-pagination__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-width: 0;
   text-align: center;
   line-height: 1.35;
-  word-break: break-word;
 }
 
-@media (max-width: 768px) {
+.ui-pagination__meta-pages {
+  font-weight: 600;
+  color: #334155;
+}
+
+.ui-pagination__meta-total {
+  font-size: 0.86rem;
+  color: #64748b;
+}
+
+.ui-pagination__prev {
+  justify-self: start;
+}
+
+.ui-pagination__next {
+  justify-self: end;
+}
+
+@media (max-width: 640px) {
   .ui-pagination {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
   }
 
   .ui-pagination__meta {
-    font-size: 0.85rem;
-    order: -1;
+    grid-column: 1 / -1;
   }
 
-  .ui-pagination .ui-button {
+  .ui-pagination__prev,
+  .ui-pagination__next {
     width: 100%;
-    box-sizing: border-box;
+    justify-self: stretch;
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 400px) {
   .ui-pagination {
-    gap: 10px;
+    grid-template-columns: 1fr;
   }
 
-  .ui-pagination__meta {
-    font-size: 0.8rem;
+  .ui-pagination__next {
+    justify-self: stretch;
   }
 }

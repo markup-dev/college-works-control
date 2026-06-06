@@ -7,19 +7,21 @@ use App\Http\Controllers\Controller;
 use App\Models\Assignment;
 use App\Models\Submission;
 use App\Models\Subject;
+use App\Models\TeacherSubject;
 use App\Models\TeachingLoad;
 use App\Services\Admin\AdminCsvImportService;
+use App\Services\AdminActionNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * Админ: предметы (справочник дисциплин, активность, импорт из CSV для массового заведения).
+ * Админ: дисциплины (справочник дисциплин, активность, импорт из CSV для массового заведения).
  */
 class SubjectController extends Controller
 {
     use LogsAdminActions;
 
-    private const SUBJECTS_PER_PAGE = 20;
+    private const SUBJECTS_PER_PAGE = 18;
 
     public function __construct(
         private readonly AdminCsvImportService $csvImport,
@@ -150,6 +152,11 @@ class SubjectController extends Controller
             ->distinct()
             ->count('group_id');
 
+        $teachingLoadsCount = (int) TeachingLoad::query()
+            ->where('subject_id', $subject->id)
+            ->where('status', 'active')
+            ->count();
+
         $assignmentsCount = (int) Assignment::where('subject_id', $subject->id)->count();
         $activeAssignmentsCount = (int) Assignment::where('subject_id', $subject->id)->where('status', 'active')->count();
         $submissionsCount = (int) Submission::whereHas(
@@ -168,6 +175,7 @@ class SubjectController extends Controller
             'stats' => [
                 'teachers_count' => $teachersCount,
                 'groups_count' => $groupsCount,
+                'teaching_loads_count' => $teachingLoadsCount,
                 'assignments_count' => $assignmentsCount,
                 'active_assignments_count' => $activeAssignmentsCount,
                 'submissions_count' => $submissionsCount,
@@ -185,11 +193,11 @@ class SubjectController extends Controller
                 'status' => ['nullable', 'in:active,inactive'],
             ],
             [
-                'name.required' => 'Введите название предмета.',
-                'name.min' => 'Название предмета должно содержать минимум 2 символа.',
-                'name.unique' => 'Предмет с таким названием уже существует.',
-                'code.required' => 'Введите код предмета.',
-                'code.unique' => 'Предмет с таким кодом уже существует.',
+                'name.required' => 'Введите название дисциплины.',
+                'name.min' => 'Название дисциплины должно содержать минимум 2 символа.',
+                'name.unique' => 'Дисциплина с таким названием уже существует.',
+                'code.required' => 'Введите код дисциплины.',
+                'code.unique' => 'Дисциплина с таким кодом уже существует.',
                 'code.regex' => 'Код может содержать буквы, цифры, точку и дефис.',
             ]
         );
@@ -200,7 +208,7 @@ class SubjectController extends Controller
             'status' => $validated['status'] ?? 'active',
         ]);
 
-        $this->log($request, 'create_subject', "Создан предмет {$subject->name} ({$subject->code})");
+        $this->log($request, 'create_subject', "Создан дисциплина {$subject->name} ({$subject->code})");
 
         return response()->json(['success' => true, 'subject' => $this->appendSubjectCardCounts($subject->fresh())], 201);
     }
@@ -214,11 +222,11 @@ class SubjectController extends Controller
                 'status' => ['nullable', 'in:active,inactive'],
             ],
             [
-                'name.required' => 'Введите название предмета.',
-                'name.min' => 'Название предмета должно содержать минимум 2 символа.',
-                'name.unique' => 'Предмет с таким названием уже существует.',
-                'code.required' => 'Введите код предмета.',
-                'code.unique' => 'Предмет с таким кодом уже существует.',
+                'name.required' => 'Введите название дисциплины.',
+                'name.min' => 'Название дисциплины должно содержать минимум 2 символа.',
+                'name.unique' => 'Дисциплина с таким названием уже существует.',
+                'code.required' => 'Введите код дисциплины.',
+                'code.unique' => 'Дисциплина с таким кодом уже существует.',
                 'code.regex' => 'Код может содержать буквы, цифры, точку и дефис.',
             ]
         );
@@ -230,10 +238,69 @@ class SubjectController extends Controller
             $validated['code'] = trim((string) $validated['code']);
         }
 
+        $activeLoadsBeforeDeactivation = collect();
+        $activeTeacherSubjectsBeforeDeactivation = collect();
+        if (($validated['status'] ?? null) === 'inactive') {
+            $activeLoadsBeforeDeactivation = TeachingLoad::query()
+                ->where('subject_id', $subject->id)
+                ->where('status', 'active')
+                ->with(['teacher', 'subject', 'group'])
+                ->get();
+            $activeTeacherSubjectsBeforeDeactivation = TeacherSubject::query()
+                ->where('subject_id', $subject->id)
+                ->where('status', 'active')
+                ->with(['teacher', 'subject'])
+                ->get();
+        }
+
         $subject->update($validated);
 
+        if (($validated['status'] ?? null) === 'inactive') {
+            TeachingLoad::query()
+                ->where('subject_id', $subject->id)
+                ->where('status', 'active')
+                ->update(['status' => 'inactive']);
+
+            TeacherSubject::query()
+                ->where('subject_id', $subject->id)
+                ->where('status', 'active')
+                ->update(['status' => 'inactive']);
+
+            foreach ($activeLoadsBeforeDeactivation as $load) {
+                if ($load->teacher) {
+                    app(AdminActionNotificationService::class)->notify(
+                        $load->teacher,
+                        $request->user(),
+                        'Назначение приостановлено',
+                        'Администратор деактивировал дисциплину «'.$subject->name.'», поэтому назначение для группы '.($load->group?->name ?? '—').' приостановлено.',
+                        [
+                            'action' => 'subject_deactivated_teaching_load',
+                            'subject_id' => $subject->id,
+                            'group_id' => $load->group_id,
+                            'teaching_load_id' => $load->id,
+                        ],
+                    );
+                }
+            }
+
+            foreach ($activeTeacherSubjectsBeforeDeactivation as $teacherSubject) {
+                if ($teacherSubject->teacher) {
+                    app(AdminActionNotificationService::class)->notify(
+                        $teacherSubject->teacher,
+                        $request->user(),
+                        'Допуск к дисциплине приостановлен',
+                        'Администратор деактивировал дисциплину «'.$subject->name.'», поэтому ваш допуск к ней приостановлен.',
+                        [
+                            'action' => 'subject_deactivated_teacher_subject',
+                            'subject_id' => $subject->id,
+                        ],
+                    );
+                }
+            }
+        }
+
         $fresh = $subject->fresh();
-        $this->log($request, 'update_subject', "Изменен предмет {$fresh->name} ({$fresh->code})");
+        $this->log($request, 'update_subject', "Изменен дисциплина {$fresh->name} ({$fresh->code})");
 
         return response()->json(['success' => true, 'subject' => $this->appendSubjectCardCounts($fresh)]);
     }
@@ -243,7 +310,7 @@ class SubjectController extends Controller
         $name = $subject->name;
         $subject->delete();
 
-        $this->log($request, 'delete_subject', "Удален предмет {$name}");
+        $this->log($request, 'delete_subject', "Удален дисциплина {$name}");
 
         return response()->json(['success' => true]);
     }
@@ -304,7 +371,7 @@ class SubjectController extends Controller
             $created++;
         }
 
-        $this->log($request, 'import_subjects', "Массовый импорт предметов: создано {$created}");
+        $this->log($request, 'import_subjects', "Массовый импорт дисциплин: создано {$created}");
 
         return response()->json([
             'success' => true,

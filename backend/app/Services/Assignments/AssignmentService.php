@@ -6,6 +6,7 @@ use App\Models\Assignment;
 use App\Models\Group;
 use App\Models\Subject;
 use App\Models\TeachingLoad;
+use App\Models\TeacherSubject;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -29,7 +30,7 @@ class AssignmentService
             ];
         }
 
-        $subjects = Subject::whereHas('teachingLoads', fn ($loadQuery) => $loadQuery
+        $subjects = Subject::whereHas('teacherSubjects', fn ($permissionQuery) => $permissionQuery
                 ->where('teacher_id', $user->id)
                 ->where('status', 'active'))
             ->where('status', 'active')
@@ -38,8 +39,17 @@ class AssignmentService
 
         $groups = Group::query()
             ->whereIn('id', $user->attachedTeachingGroupIds())
+            ->where('status', 'active')
             ->orderBy('name')
             ->get(['id', 'name']);
+
+        $teachingLoads = TeachingLoad::query()
+            ->where('teacher_id', $user->id)
+            ->where('status', 'active')
+            ->whereHas('subject', fn ($subjectQuery) => $subjectQuery->where('status', 'active'))
+            ->whereHas('group', fn ($groupQuery) => $groupQuery->where('status', 'active'))
+            ->with(['subject:id,name', 'group:id,name'])
+            ->get(['id', 'subject_id', 'group_id']);
 
         $assignments = Assignment::where('teacher_id', $user->id)
             ->orderByDesc('created_at')
@@ -59,6 +69,17 @@ class AssignmentService
                 ->map(fn ($group) => [
                     'id' => (int) $group->id,
                     'name' => (string) $group->name,
+                ])
+                ->values()
+                ->all(),
+            'teaching_loads' => $teachingLoads
+                ->filter(fn ($load) => $load->subject && $load->group && ! empty($load->subject->name) && ! empty($load->group->name))
+                ->map(fn ($load) => [
+                    'id' => (int) $load->id,
+                    'subject_id' => (int) $load->subject_id,
+                    'subject_name' => (string) $load->subject->name,
+                    'group_id' => (int) $load->group_id,
+                    'group_name' => (string) $load->group->name,
                 ])
                 ->values()
                 ->all(),
@@ -129,6 +150,7 @@ class AssignmentService
                 $query->where(function ($builder) use ($term) {
                     $builder
                         ->where('title', 'like', "%{$term}%")
+                        ->orWhere('description', 'like', "%{$term}%")
                         ->orWhereHas('subject', fn ($subjectQuery) => $subjectQuery->where('name', 'like', "%{$term}%"))
                         ->orWhereHas('teacher', function ($teacherQuery) use ($term) {
                             $teacherQuery
@@ -153,6 +175,10 @@ class AssignmentService
             }
             if (! empty($validated['teacher'])) {
                 $this->applyTeacherTextFilter($query, (string) $validated['teacher']);
+            }
+
+            if (! empty($validated['submission_type'])) {
+                $query->where('submission_type', (string) $validated['submission_type']);
             }
 
             if (! empty($validated['group_id'])) {
@@ -246,8 +272,8 @@ class AssignmentService
 
         if (! empty($validated['status'])) {
             if ($validated['status'] === 'not_archived') {
-                $query->whereIn('status', ['active', 'inactive']);
-            } elseif (in_array($validated['status'], ['active', 'inactive', 'archived'], true)) {
+                $query->where('status', 'active');
+            } elseif (in_array($validated['status'], ['active', 'archived'], true)) {
                 $query->where('status', $validated['status']);
             }
         }
@@ -664,9 +690,10 @@ class AssignmentService
 
     public function teacherCanTeachSubject(int $teacherId, int $subjectId): bool
     {
-        return TeachingLoad::where('teacher_id', $teacherId)
+        return TeacherSubject::where('teacher_id', $teacherId)
             ->where('subject_id', $subjectId)
             ->where('status', 'active')
+            ->whereHas('subject', fn ($query) => $query->where('status', 'active'))
             ->exists();
     }
 

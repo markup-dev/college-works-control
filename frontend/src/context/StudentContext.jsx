@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import api from '../services/api';
+import { getApiErrorMessage } from '../utils/adminApiErrors';
 import { getAllowedFormatsFromAssignment, PAGINATION_DEFAULTS } from '../utils';
 import { resolveAssignmentSubjectId, resolveAssignmentSubjectName } from '../utils/filterHelpers';
 
@@ -52,7 +53,8 @@ const areQueriesEqual = (a = {}, b = {}) =>
   && (a.subjectId || 'all') === (b.subjectId || 'all')
   && (a.teacherId || 'all') === (b.teacherId || 'all')
   && (a.subject || 'all') === (b.subject || 'all')
-  && (a.teacher || 'all') === (b.teacher || 'all');
+  && (a.teacher || 'all') === (b.teacher || 'all')
+  && (a.submissionType || 'all') === (b.submissionType || 'all');
 
 const StudentContext = createContext();
 
@@ -118,6 +120,9 @@ export const StudentProvider = ({ children }) => {
       teacher_id: nextQuery.teacherId && nextQuery.teacherId !== 'all' ? nextQuery.teacherId : undefined,
       subject: nextQuery.subject && nextQuery.subject !== 'all' ? nextQuery.subject : undefined,
       teacher: nextQuery.teacher && nextQuery.teacher !== 'all' ? nextQuery.teacher : undefined,
+      submission_type: nextQuery.submissionType && nextQuery.submissionType !== 'all'
+        ? nextQuery.submissionType
+        : undefined,
     };
     const queryKey = JSON.stringify({ params, includeSubmissions });
 
@@ -220,26 +225,15 @@ export const StudentProvider = ({ children }) => {
       });
 
       queryCacheRef.current.clear();
-      await loadStudentData({}, { force: true });
+      await loadStudentData({ ...assignmentsQueryRef.current }, { force: true });
 
       return { success: true };
     } catch (err) {
-      const validationErrors = err.response?.data?.errors;
-      const firstValidationMessage = validationErrors
-        ? Object.values(validationErrors).flat().find((message) => typeof message === 'string' && message.trim() !== '')
-        : '';
-      const message = firstValidationMessage || err.response?.data?.message || 'Ошибка при отправке работы';
-      return { success: false, error: message };
+      return { success: false, error: getApiErrorMessage(err, 'Ошибка при отправке работы') };
     } finally {
       setLoading(false);
     }
   }, [loadStudentData]);
-
-  useEffect(() => {
-    if (user) {
-      loadStudentData();
-    }
-  }, [user, loadStudentData]);
 
   const value = {
     assignments,

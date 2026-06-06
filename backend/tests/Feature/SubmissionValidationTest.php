@@ -64,7 +64,8 @@ class SubmissionValidationTest extends TestCase
     private function createAssignment(int $teacherId, array $formats, int $maxFileSizeMb, ?Group $group = null): Assignment
     {
         $subject = Subject::create([
-            'name' => 'Тестовый предмет ' . uniqid(),
+            'name' => 'Тестовая дисциплина ' . uniqid(),
+            'code' => 'TST-' . uniqid(),
             'status' => 'active',
         ]);
 

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
 import api from '../services/api';
+import { getApiErrorMessage } from '../utils/adminApiErrors';
 import { DEFAULT_ALLOWED_FORMATS, getAllowedFormatsFromAssignment, normalizeGroupName, PAGINATION_DEFAULTS } from '../utils';
 import { resolveAssignmentSubjectId, resolveAssignmentSubjectName } from '../utils/filterHelpers';
 
@@ -71,19 +72,6 @@ const getCreatedAssignmentIdFromResponse = (response) => {
   );
 };
 
-const getApiErrorMessage = (error, fallback) => {
-  const responseData = error?.response?.data;
-  if (typeof responseData?.message === 'string' && responseData.message.trim()) {
-    return responseData.message;
-  }
-
-  const firstFieldError = responseData?.errors
-    ? Object.values(responseData.errors).flat().find(Boolean)
-    : null;
-
-  return firstFieldError || fallback;
-};
-
 const areQueriesEqual = (a = {}, b = {}) =>
   a.page === b.page
   && a.perPage === b.perPage
@@ -127,6 +115,7 @@ export const TeacherProvider = ({ children }) => {
   const submissionsQueryRef = useRef(submissionsQuery);
   const [metaSubjects, setMetaSubjects] = useState([]);
   const [metaGroups, setMetaGroups] = useState([]);
+  const [metaTeachingLoads, setMetaTeachingLoads] = useState([]);
   const [metaAssignments, setMetaAssignments] = useState([]);
   const [loading, setLoading] = useState(false);
   /** Только загрузка списка сдач (вкладка «Работы»), без заданий и метаданных */
@@ -241,8 +230,10 @@ export const TeacherProvider = ({ children }) => {
     }
     try {
       const metaRes = await api.get('/assignments/meta');
+      const rawTeachingLoads = metaRes?.data?.teachingLoads ?? metaRes?.data?.teaching_loads;
       setMetaSubjects(Array.isArray(metaRes?.data?.subjects) ? metaRes.data.subjects : []);
       setMetaGroups(Array.isArray(metaRes?.data?.groups) ? metaRes.data.groups : []);
+      setMetaTeachingLoads(Array.isArray(rawTeachingLoads) ? rawTeachingLoads : []);
       setMetaAssignments(Array.isArray(metaRes?.data?.assignments) ? metaRes.data.assignments : []);
       setError(null);
     } catch {
@@ -264,10 +255,10 @@ export const TeacherProvider = ({ children }) => {
 
       const requests = [];
       if (includeAssignments) {
-        requests.push(loadTeacherAssignments());
+        requests.push(loadTeacherAssignments({ ...assignmentsQueryRef.current }));
       }
       if (includeSubmissions) {
-        requests.push(loadTeacherSubmissions());
+        requests.push(loadTeacherSubmissions({ ...submissionsQueryRef.current }));
       }
 
       if (requests.length > 0) {
@@ -292,7 +283,7 @@ export const TeacherProvider = ({ children }) => {
       await loadTeacherData();
       return { success: true };
     } catch (err) {
-      return { success: false, error: 'Ошибка при оценке работы' };
+      return { success: false, error: getApiErrorMessage(err, 'Ошибка при оценке работы') };
     } finally {
       setLoading(false);
     }
@@ -306,7 +297,7 @@ export const TeacherProvider = ({ children }) => {
       await loadTeacherData();
       return { success: true };
     } catch (err) {
-      return { success: false, error: 'Ошибка при возврате работы' };
+      return { success: false, error: getApiErrorMessage(err, 'Ошибка при возврате работы') };
     } finally {
       setLoading(false);
     }
@@ -424,7 +415,7 @@ export const TeacherProvider = ({ children }) => {
       await loadTeacherData();
       return { success: true };
     } catch (err) {
-      return { success: false, error: 'Ошибка при удалении задания' };
+      return { success: false, error: getApiErrorMessage(err, 'Ошибка при удалении задания') };
     } finally {
       setLoading(false);
     }
@@ -448,47 +439,65 @@ export const TeacherProvider = ({ children }) => {
     });
   }, [allTeacherAssignments, allSubmissions]);
 
+  const teachingLoadPairs = useMemo(() => {
+    return metaTeachingLoads
+      .map((load) => {
+        const subjectId = Number(load?.subject_id ?? load?.subjectId);
+        const groupId = Number(load?.group_id ?? load?.groupId);
+        const subjectName = String(load?.subject_name ?? load?.subjectName ?? '').trim();
+        const groupName = normalizeGroupName(load?.group_name ?? load?.groupName ?? '');
+
+        if (!Number.isFinite(subjectId) || subjectId <= 0 || !Number.isFinite(groupId) || groupId <= 0 || !subjectName || !groupName) {
+          return null;
+        }
+
+        return { subjectId, subjectName, groupId, groupName };
+      })
+      .filter(Boolean)
+      .filter((load, index, array) => array.findIndex((item) => item.subjectId === load.subjectId && item.groupId === load.groupId) === index)
+      .sort((a, b) => a.subjectName.localeCompare(b.subjectName, 'ru') || a.groupName.localeCompare(b.groupName, 'ru'));
+  }, [metaTeachingLoads]);
+
   const availableGroups = useMemo(() => {
-    const set = new Set();
-    metaGroups.forEach((group) => {
-      const rawName = typeof group === 'string' ? group : group?.name;
-      const normalized = normalizeGroupName(rawName);
-      if (normalized) {
-        set.add(normalized);
-      }
-    });
-    return Array.from(set);
-  }, [metaGroups]);
+    return Array.from(new Set(teachingLoadPairs.map((load) => load.groupName)))
+      .sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [teachingLoadPairs]);
+
+  const availableSubjects = useMemo(() => {
+    return Array.from(
+      teachingLoadPairs
+        .reduce((map, load) => {
+          if (!map.has(load.subjectId)) {
+            map.set(load.subjectId, {
+              id: load.subjectId,
+              name: load.subjectName,
+            });
+          }
+          return map;
+        }, new Map())
+        .values()
+    )
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  }, [teachingLoadPairs]);
 
   const teachingGroups = useMemo(
     () =>
-      metaGroups
-        .map((raw) => {
-          if (raw && typeof raw === 'object' && raw.id != null && raw.name != null) {
-            const id = Number(raw.id);
-            const name = String(raw.name).trim();
-            if (Number.isFinite(id) && id > 0 && name) {
-              return { id, name };
+      Array.from(
+        teachingLoadPairs
+          .reduce((map, load) => {
+            if (!map.has(load.groupId)) {
+              map.set(load.groupId, {
+                id: load.groupId,
+                name: load.groupName,
+              });
             }
-          }
-          return null;
-        })
-        .filter(Boolean)
+            return map;
+          }, new Map())
+          .values()
+      )
         .sort((a, b) => a.name.localeCompare(b.name, 'ru')),
-    [metaGroups]
+    [teachingLoadPairs]
   );
-
-  const availableSubjects = useMemo(() => {
-    return metaSubjects
-      .filter((subject) => subject && subject.id && subject.name)
-      .map((subject) => ({
-        id: Number(subject.id),
-        name: String(subject.name).trim(),
-      }))
-      .filter((subject) => subject.name)
-      .filter((subject, index, array) => array.findIndex((item) => item.id === subject.id) === index)
-      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-  }, [metaSubjects]);
 
   const assignmentFilterOptions = useMemo(() => {
     return metaAssignments
@@ -510,8 +519,11 @@ export const TeacherProvider = ({ children }) => {
     assignmentsQuery,
     submissionsQuery,
     availableGroups,
+    metaGroups,
+    metaSubjects,
     teachingGroups,
     availableSubjects,
+    teachingLoadPairs,
     assignmentFilterOptions,
     loading,
     submissionsLoading,

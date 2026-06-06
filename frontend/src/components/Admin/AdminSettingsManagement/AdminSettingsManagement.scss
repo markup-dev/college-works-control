@@ -1,29 +1,16 @@
 @import '../../../styles/base/variables';
+@import '../../../styles/base/admin-common';
 
 .admin-settings-management {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+  @include admin-page-shell;
   max-width: 52rem;
 
-  @media (max-width: 768px) {
-    gap: 1rem;
-  }
-
   &__title {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #1e293b;
-    letter-spacing: -0.01em;
+    @include admin-page-title;
   }
 
   &__hint {
-    margin: 0;
-    font-size: 0.88rem;
-    color: $text-secondary;
-    line-height: 1.45;
+    @include admin-page-hint;
     max-width: 48rem;
   }
 
@@ -38,56 +25,57 @@
     gap: 0.75rem;
   }
 
+  &__section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+
+    @media (max-width: 640px) {
+      flex-direction: column;
+    }
+  }
+
+  &__section-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    flex-shrink: 0;
+
+    @media (max-width: 640px) {
+      width: 100%;
+      justify-content: stretch;
+
+      button,
+      .ui-button {
+        flex: 1 1 0;
+      }
+    }
+  }
+
   &__section-title {
     margin: 0 0 0.25rem;
     font-size: 1rem;
-    font-weight: 600;
-    color: $text-primary;
+    font-weight: 700;
+    color: #0f172a;
   }
 
   &__field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
+    @include admin-form-field;
   }
 
   &__label {
-    font-size: 0.88rem;
-    font-weight: 600;
-    color: $text-primary;
-  }
-
-  &__row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    align-items: flex-end;
+    @include admin-form-label;
   }
 
   &__input,
-  &__select,
-  &__textarea {
-    padding: 0.55rem 0.75rem;
-    border-radius: $border-radius;
-    border: 1px solid $border-color;
-    font-size: 0.92rem;
-    font-family: inherit;
-    max-width: 100%;
-  }
-
-  &__textarea {
-    min-height: 7rem;
-    resize: vertical;
-    width: 100%;
-    box-sizing: border-box;
+  &__select {
+    @include admin-control;
   }
 
   &__checkbox {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    font-size: 0.92rem;
-    cursor: pointer;
+    @extend .admin-checkbox;
   }
 
   &__muted {
@@ -98,11 +86,9 @@
   }
 
   &__state {
+    @include admin-state-block;
     width: min(100%, 52rem);
     min-height: 220px;
-    background: #ffffff;
-    border: 1px solid #eef2f8;
-    border-radius: 20px;
   }
 
   &__actions {

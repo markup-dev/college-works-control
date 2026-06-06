@@ -13,8 +13,8 @@ class SubmissionSeeder extends Seeder
 {
     public function run(): void
     {
-        $group029 = Group::where('name', 'ИСП-029')->first();
-        $group0029 = Group::where('name', 'ИСП-0029')->first();
+        $group029 = Group::where('name', 'ИСП-029')->where('admission_year', 2024)->first();
+        $group0029 = Group::where('name', 'ИСП-0029')->where('admission_year', 2024)->first();
         if (!$group029 || !$group0029) {
             return;
         }

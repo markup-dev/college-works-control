@@ -17,6 +17,11 @@ backend/vendor
 backend/node_modules
 backend/.env
 backend/storage/*.key
+backend/.phpunit.result.cache
+backend/storage/app/public/assignment-materials/*
+backend/storage/app/public/submissions/*
+backend/storage/app/public/teacher-request-documents/*
+backend/storage/framework/views/*
 backend/storage/logs/*
 backend/bootstrap/cache/*
 backend/database/*.sqlite

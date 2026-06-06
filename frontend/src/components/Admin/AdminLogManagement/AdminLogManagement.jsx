@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import { formatDateTimeWithSeconds } from '../../../utils/dateHelpers';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
@@ -11,9 +11,10 @@ import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
 import LoadingState from '../../UI/LoadingState/LoadingState';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
+import { ADMIN_LIST_PAGE_SIZE } from '../../../config/adminPagination';
+import usePaginationClamp from '../../../hooks/usePaginationClamp';
+import { parsePaginationMeta } from '../../../utils/pagination';
 import './AdminLogManagement.scss';
-
-const PER_PAGE = 25;
 
 const AdminLogManagement = () => {
   const { showSuccess, showError } = useNotification();
@@ -43,7 +44,7 @@ const AdminLogManagement = () => {
     setLoading(true);
     setError(null);
     try {
-      const params = { page, per_page: PER_PAGE, sort: 'newest' };
+      const params = { page, per_page: ADMIN_LIST_PAGE_SIZE, sort: 'newest' };
       const q = debouncedSearch.trim();
       if (q) params.search = q;
 
@@ -51,18 +52,16 @@ const AdminLogManagement = () => {
       const list = Array.isArray(data?.data) ? data.data : [];
       setRows(list);
       const m = data?.meta;
-      setMeta({
-        currentPage: m?.currentPage ?? page,
-        lastPage: m?.lastPage ?? 1,
-        total: m?.total ?? 0,
-      });
+      setMeta(parsePaginationMeta(m, page));
     } catch (e) {
       setRows([]);
-      setError(firstApiErrorMessage(e.response?.data) || 'Не удалось загрузить журнал');
+      setError(getApiErrorMessage(e, 'Не удалось загрузить журнал'));
     } finally {
       setLoading(false);
     }
   }, [page, debouncedSearch]);
+
+  usePaginationClamp(page, meta.lastPage, setPage);
 
   useEffect(() => {
     void fetchLogs();
@@ -91,7 +90,7 @@ const AdminLogManagement = () => {
       URL.revokeObjectURL(url);
       showSuccess('CSV сохранён (до 5000 записей)');
     } catch (e) {
-      showError(firstApiErrorMessage(e.response?.data) || 'Не удалось выгрузить файл');
+      showError(getApiErrorMessage(e, 'Не удалось выгрузить файл'));
     } finally {
       setExporting(false);
     }
@@ -102,10 +101,7 @@ const AdminLogManagement = () => {
       <header className="admin-log-management__head">
         <div>
           <h1 className="admin-log-management__title">Системный журнал</h1>
-          <p className="admin-log-management__hint">
-            События и действия пользователей. Экспорт в CSV учитывает текущие фильтры (лимит 5000 строк,
-            разделитель «;», UTF‑8).
-          </p>
+          <p className="admin-log-management__hint">Экспорт CSV — по текущим фильтрам, до 5000 строк.</p>
         </div>
         <div className="admin-log-management__actions">
           <Button type="button" size="small" variant="outline" loading={exporting} onClick={() => void exportCsv()}>
@@ -128,7 +124,7 @@ const AdminLogManagement = () => {
         className="admin-log-management__filter-toolbar"
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Поиск по действию, деталям, пользователю…"
+        searchPlaceholder="Поиск по действию, деталям, логину или ФИО…"
         popoverAlign="end"
         popoverAriaLabel="Фильтры журнала"
         onReset={resetFilters}
@@ -168,8 +164,8 @@ const AdminLogManagement = () => {
         total={meta.total}
         fallbackCount={rows.length}
         disabled={loading}
-        onPrev={() => setPage((p) => Math.max(1, p - 1))}
-        onNext={() => setPage((p) => p + 1)}
+        hideWhenSinglePage
+        onPageChange={setPage}
       />
     </div>
   );

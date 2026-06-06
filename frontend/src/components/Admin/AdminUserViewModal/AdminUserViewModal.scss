@@ -10,6 +10,61 @@
     background: #fcfdff;
   }
 
+  &__inline-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+
+    select {
+      flex: 1 1 220px;
+      min-height: 38px;
+      padding: 0.5rem 0.65rem;
+      border: 1px solid #dbe3ee;
+      border-radius: 10px;
+      font: inherit;
+    }
+  }
+
+  &__personal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  &__personal-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid #e7edf6;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  &__personal-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__personal-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.35;
+    word-break: break-word;
+
+    &--muted {
+      color: #94a3b8;
+      font-weight: 500;
+    }
+  }
+
   // Профиль header
   .profile-header {
     display: flex;
@@ -50,13 +105,6 @@
       font-weight: 700;
       color: #1e293b;
       line-height: 1.25;
-    }
-
-    p {
-      margin: 0.2rem 0 0;
-      font-size: 0.88rem;
-      color: #64748b;
-      overflow-wrap: anywhere;
     }
   }
 
@@ -164,10 +212,9 @@
     color: #64748b;
   }
 
-  // Три ключевых поля
+  // Ключевая строка: роль, группа / кафедра
   .key-fields {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
     gap: 1rem;
     padding: 0.85rem 1rem;
     background: #f8fafc;
@@ -176,6 +223,10 @@
 
     &--two {
       grid-template-columns: repeat(2, 1fr);
+    }
+
+    &--one {
+      grid-template-columns: 1fr;
     }
   }
 
@@ -286,24 +337,6 @@
     margin-top: 0.5rem;
   }
 
-  &__actions {
-    display: flex;
-    width: 100%;
-    justify-content: flex-end;
-    gap: 10px;
-    flex-wrap: wrap;
-
-    &-primary,
-    &-danger {
-      display: flex;
-      gap: 8px;
-    }
-
-    &-danger {
-      margin-left: auto;
-    }
-  }
-
   // Адаптивность
   @media (max-width: 768px) {
     .admin-user-view-modal__body {
@@ -321,23 +354,8 @@
       gap: 10px;
     }
 
-    .admin-user-view-modal__actions {
-      flex-direction: column;
-
-      &-primary,
-      &-danger {
-        width: 100%;
-        justify-content: stretch;
-      }
-
-      &-danger {
-        margin-left: 0;
-      }
-
-      .ui-button {
-        width: 100%;
-        justify-content: center;
-      }
+    .admin-user-view-modal__personal-grid {
+      grid-template-columns: 1fr;
     }
 
     .profile-header {

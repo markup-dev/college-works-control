@@ -11,7 +11,10 @@ import AdminLayout from './components/Admin/AdminLayout/AdminLayout';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import AdminUsers from './pages/AdminDashboard/AdminUsers';
 import AdminGroups from './pages/AdminDashboard/AdminGroups';
+import AdminGroupDetail from './pages/AdminDashboard/AdminGroupDetail';
 import AdminSubjects from './pages/AdminDashboard/AdminSubjects';
+import AdminSpecialties from './pages/AdminDashboard/AdminSpecialties';
+import AdminSpecialtyDetail from './pages/AdminDashboard/AdminSpecialtyDetail';
 import TeachingAssignmentsAdminPage from './pages/AdminDashboard/AdminTeachingAssignments';
 import HomeworkAdminPage from './pages/AdminDashboard/AdminHomework';
 import AdminBroadcasts from './pages/AdminDashboard/AdminBroadcasts';
@@ -35,18 +38,20 @@ function ScrollToTop() {
 }
 
 function AppContent() {
-  const { user, logout, loading } = useAuth();
+  const { user, logout, loading, loggingOut } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const mustChangePassword = !!user?.mustChangePassword;
 
 
   const handleLogout = () => {
+    if (loggingOut) {
+      return;
+    }
     setShowLogoutConfirm(true);
   };
 
   const confirmLogout = () => {
-    logout();
-    setShowLogoutConfirm(false);
+    return logout();
   };
 
   if (loading && !user) {
@@ -68,7 +73,7 @@ function AppContent() {
     <Router>
       <ScrollToTop />
       <div className="App">
-        {user && <Header user={user} onLogout={handleLogout} />}
+        {user && <Header user={user} onLogout={handleLogout} loggingOut={loggingOut} />}
         <main className="main-content">
           <Routes>
             <Route 
@@ -145,6 +150,9 @@ function AppContent() {
                 <Route path="dashboard" element={<AdminDashboard />} />
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="groups" element={<AdminGroups />} />
+                <Route path="groups/:id" element={<AdminGroupDetail />} />
+                <Route path="specialties" element={<AdminSpecialties />} />
+                <Route path="specialties/:id" element={<AdminSpecialtyDetail />} />
                 <Route path="subjects" element={<AdminSubjects />} />
                 <Route path="assignments" element={<TeachingAssignmentsAdminPage />} />
                 <Route path="homework" element={<HomeworkAdminPage />} />
@@ -170,11 +178,9 @@ function AppContent() {
               element={
                 !user ? (
                   <Navigate to="/welcome" replace />
-                ) : user.role === 'admin' ? (
-                  <Navigate to="/admin/dashboard" replace />
                 ) : mustChangePassword ? (
                   <Navigate to="/profile" replace />
-                ) : user.role === 'student' || user.role === 'teacher' ? (
+                ) : user.role === 'student' || user.role === 'teacher' || user.role === 'admin' ? (
                   <Notifications />
                 ) : (
                   <Navigate to="/welcome" replace />
@@ -227,7 +233,7 @@ function AppContent() {
         title="Выход из системы"
         message="Вы уверены, что хотите выйти?"
         confirmText="Выйти"
-        cancelText="Отмена"
+        loading={loggingOut}
       />
     </Router>
   );

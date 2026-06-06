@@ -11,7 +11,7 @@ import {
 import './AssignmentCard.scss';
 
 const getDeadlineUrgencyBadge = (deadline, assignmentStatus) => {
-  if (!deadline || !['active', 'inactive'].includes(assignmentStatus)) {
+  if (!deadline || assignmentStatus !== 'active') {
     return null;
   }
   const days = getDaysUntilDeadline(deadline);
@@ -53,7 +53,7 @@ const AssignmentCard = React.memo(({
   const stats = calculateSubmissionStats(submissions, assignment);
   const statusInfo = getAssignmentStatusInfo(status);
   const deadlineUrgency = getDeadlineUrgencyBadge(deadline, status);
-  const canViewSubmissions = status !== 'inactive';
+  const canViewSubmissions = true;
   const isDraft = status === 'draft';
 
   const handleViewSubmissions = (e) => {

@@ -6,10 +6,14 @@ use App\Http\Controllers\Admin\Concerns\LogsAdminActions;
 use App\Http\Controllers\Controller;
 use App\Models\Assignment;
 use App\Models\Group;
+use App\Models\GroupSubject;
 use App\Models\Submission;
+use App\Models\Specialty;
 use App\Models\TeachingLoad;
 use App\Models\User;
 use App\Services\Admin\AdminCsvImportService;
+use App\Services\AcademicProgramService;
+use App\Services\AdminActionNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -21,10 +25,11 @@ class GroupController extends Controller
 {
     use LogsAdminActions;
 
-    private const GROUPS_PER_PAGE = 20;
+    private const GROUPS_PER_PAGE = 18;
 
     public function __construct(
         private readonly AdminCsvImportService $csvImport,
+        private readonly AcademicProgramService $programs,
     ) {}
 
     public function groups()
@@ -33,12 +38,14 @@ class GroupController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:active,inactive'],
             'specialty' => ['nullable', 'string', 'max:150'],
+            'specialty_id' => ['nullable', 'integer', 'exists:specialties,id'],
+            'course' => ['nullable', 'integer', 'min:1', 'max:6'],
             'sort' => ['nullable', 'in:name_asc,name_desc,students_desc,students_asc,newest,oldest'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Group::withCount(['students']);
+        $query = Group::with(['specialtyRef:id,code,name,study_years,status'])->withCount(['students']);
 
         if (!empty($validated['search'])) {
             $query->where('name', 'like', '%' . trim((string) $validated['search']) . '%');
@@ -49,7 +56,13 @@ class GroupController extends Controller
         }
 
         if (array_key_exists('specialty', $validated) && $validated['specialty'] !== null && $validated['specialty'] !== '') {
-            $query->where('specialty', trim((string) $validated['specialty']));
+            $query->whereRaw('TRIM(specialty) = ?', [trim((string) $validated['specialty'])]);
+        }
+        if (! empty($validated['specialty_id'])) {
+            $query->where('specialty_id', (int) $validated['specialty_id']);
+        }
+        if (! empty($validated['course'])) {
+            $query->where('current_course', (int) $validated['course']);
         }
 
         $sort = $validated['sort'] ?? 'name_asc';
@@ -101,8 +114,19 @@ class GroupController extends Controller
         ]);
     }
 
+    public function specialties()
+    {
+        $specialties = Specialty::query()
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'study_years']);
+
+        return response()->json(['data' => $specialties]);
+    }
+
     public function showGroup(Group $group)
     {
+        $group->load(['specialtyRef:id,code,name,study_years']);
         $group->loadCount(['students']);
 
         $teachersCount = (int) TeachingLoad::query()
@@ -179,12 +203,33 @@ class GroupController extends Controller
             ->with(['teacher', 'subject'])
             ->get();
 
+        $curriculum = GroupSubject::query()
+            ->where('group_id', $group->id)
+            ->with('subject:id,name,code,status')
+            ->orderBy('course')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('course')
+            ->map(fn ($items) => $items->values())
+            ->values()
+            ->all();
+
         $subjectBlocks = $loads->map(function (TeachingLoad $tl) use ($group) {
-            $activeCount = Assignment::query()
+            $base = Assignment::query()
                 ->where('teacher_id', $tl->teacher_id)
                 ->where('subject_id', $tl->subject_id)
-                ->where('status', 'active')
-                ->whereHas('groups', fn ($q) => $q->where('groups.id', $group->id))
+                ->whereHas('groups', fn ($q) => $q->where('groups.id', $group->id));
+
+            $assignmentsTotal = (clone $base)->count();
+            $activeCount = (clone $base)->where('status', 'active')->count();
+
+            $submissionsCount = Submission::query()
+                ->whereHas('assignment', function ($q) use ($tl, $group) {
+                    $q->where('teacher_id', $tl->teacher_id)
+                        ->where('subject_id', $tl->subject_id)
+                        ->whereHas('groups', fn ($gq) => $gq->where('groups.id', $group->id));
+                })
                 ->count();
 
             return [
@@ -192,6 +237,7 @@ class GroupController extends Controller
                     ? [
                         'id' => $tl->subject->id,
                         'name' => $tl->subject->name,
+                        'code' => $tl->subject->code,
                     ]
                     : null,
                 'teacher' => $tl->teacher
@@ -203,6 +249,8 @@ class GroupController extends Controller
                     ]
                     : null,
                 'active_assignments_count' => $activeCount,
+                'assignments_total' => $assignmentsTotal,
+                'submissions_count' => $submissionsCount,
             ];
         })->values()->all();
 
@@ -211,6 +259,12 @@ class GroupController extends Controller
                 'id' => $group->id,
                 'name' => $group->name,
                 'specialty' => $group->specialty,
+                'specialty_id' => $group->specialty_id,
+                'specialty_ref' => $group->specialtyRef,
+                'admission_year' => $group->admission_year,
+                'graduation_year' => $group->graduation_year,
+                'study_years' => $group->study_years,
+                'current_course' => $group->current_course,
                 'status' => $group->status,
                 'created_at' => optional($group->created_at)->toISOString(),
                 'students_count' => (int) $group->students_count,
@@ -218,6 +272,7 @@ class GroupController extends Controller
             ],
             'students' => $studentPayload,
             'subject_blocks' => $subjectBlocks,
+            'curriculum' => $curriculum,
         ]);
     }
 
@@ -225,8 +280,13 @@ class GroupController extends Controller
     {
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:50', 'regex:/^[А-ЯЁA-Z0-9-]+$/iu'],
+            'specialty_id' => ['nullable', 'integer', 'exists:specialties,id'],
             'specialty' => ['nullable', 'string', 'max:150'],
-            'status' => ['nullable', 'in:active,inactive'],
+            'admission_year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'graduation_year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'study_years' => ['nullable', 'integer', 'min:1', 'max:6'],
+            'current_course' => ['nullable', 'integer', 'min:1', 'max:6'],
+            'status' => ['nullable', 'in:active,inactive,graduated'],
         ], [
             'name.regex' => 'Группа может содержать только буквы, цифры и дефис.',
             'status.in' => 'Некорректный статус группы.',
@@ -235,7 +295,9 @@ class GroupController extends Controller
         if (array_key_exists('name', $validated)) {
             $validated['name'] = trim((string) $validated['name']);
 
+            $admissionYear = (int) ($validated['admission_year'] ?? $group->admission_year);
             $duplicateExists = Group::whereRaw('LOWER(name) = ?', [mb_strtolower($validated['name'])])
+                ->where('admission_year', $admissionYear ?: null)
                 ->where('id', '!=', $group->id)
                 ->exists();
 
@@ -250,10 +312,27 @@ class GroupController extends Controller
         if (array_key_exists('specialty', $validated) && $validated['specialty'] !== null) {
             $validated['specialty'] = trim((string) $validated['specialty']) ?: null;
         }
+        if (! empty($validated['specialty_id'])) {
+            $specialty = Specialty::find((int) $validated['specialty_id']);
+            $validated['specialty'] = $specialty?->name ?? $validated['specialty'] ?? null;
+            $validated['study_years'] = $validated['study_years'] ?? $specialty?->study_years ?? $group->study_years;
+        }
 
+        $before = $group->only(['name', 'specialty', 'admission_year', 'graduation_year', 'study_years', 'current_course', 'status']);
         $statusClosing = array_key_exists('status', $validated) && $validated['status'] === 'inactive';
+        $statusOpening = array_key_exists('status', $validated) && $validated['status'] === 'active' && $group->status !== 'active';
+
+        if ($statusOpening && $group->students()->count() < 1) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Нельзя открыть группу без студентов. Добавьте хотя бы одного студента.',
+            ], 422);
+        }
 
         $group->update($validated);
+        if (array_key_exists('specialty_id', $validated)) {
+            $this->programs->copySpecialtyProgramToGroup($group->fresh());
+        }
 
         if ($statusClosing) {
             TeachingLoad::where('group_id', $group->id)->update(['status' => 'inactive']);
@@ -268,6 +347,14 @@ class GroupController extends Controller
 
         $this->log($request, 'update_group', "Группа {$freshGroup->name}: статус {$freshGroup->status}");
 
+        if ($before !== $freshGroup->only(array_keys($before))) {
+            app(AdminActionNotificationService::class)->notifyGroupChanged(
+                $freshGroup,
+                $request->user(),
+                'Администратор изменил данные вашей группы: '.$freshGroup->name.'.',
+            );
+        }
+
         return response()->json([
             'success' => true,
             'group' => $freshGroup,
@@ -278,20 +365,27 @@ class GroupController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:50', 'regex:/^[А-ЯЁA-Z0-9-]+$/iu'],
-            'specialty' => ['required', 'string', 'max:150'],
-            'status' => ['nullable', 'in:active,inactive'],
+            'specialty_id' => ['required', 'integer', 'exists:specialties,id'],
+            'admission_year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'graduation_year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'current_course' => ['nullable', 'integer', 'min:1', 'max:6'],
+            'status' => ['nullable', 'in:active,inactive,graduated'],
         ], [
             'name.required' => 'Введите название группы.',
             'name.regex' => 'Группа может содержать только буквы, цифры и дефис.',
-            'specialty.required' => 'Укажите специальность.',
+            'specialty_id.required' => 'Укажите специальность.',
             'status.in' => 'Некорректный статус группы.',
         ]);
 
         $name = trim((string) $validated['name']);
-        $specialty = trim((string) $validated['specialty']);
-        $status = $validated['status'] ?? 'active';
+        $specialty = Specialty::findOrFail((int) $validated['specialty_id']);
+        $admissionYear = (int) $validated['admission_year'];
+        $studyYears = (int) $specialty->study_years;
+        $graduationYear = (int) ($validated['graduation_year'] ?? ($admissionYear + $studyYears));
 
-        $existingGroup = Group::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        $existingGroup = Group::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+            ->where('admission_year', $admissionYear)
+            ->first();
         if ($existingGroup !== null) {
             return response()->json([
                 'success' => false,
@@ -301,9 +395,15 @@ class GroupController extends Controller
 
         $group = Group::create([
             'name' => $name,
-            'specialty' => $specialty,
-            'status' => $status,
+            'specialty_id' => $specialty->id,
+            'specialty' => $specialty->name,
+            'admission_year' => $admissionYear,
+            'graduation_year' => $graduationYear,
+            'study_years' => $studyYears,
+            'current_course' => (int) ($validated['current_course'] ?? 1),
+            'status' => 'inactive',
         ]);
+        $this->programs->copySpecialtyProgramToGroup($group);
 
         $this->log($request, 'create_group', "Создана группа {$group->name}");
 
@@ -313,121 +413,6 @@ class GroupController extends Controller
         return response()->json([
             'success' => true,
             'group' => $out,
-        ], 201);
-    }
-
-    public function createGroupWithStudents(Request $request)
-    {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:50', 'regex:/^[А-ЯЁA-Z0-9-]+$/iu'],
-            'specialty' => ['required', 'string', 'max:150'],
-            'status' => ['nullable', 'in:active,inactive'],
-            'send_credentials' => ['nullable', 'boolean'],
-            'students' => ['required', 'array', 'min:1'],
-            'students.*.login' => ['required', 'string', 'min:6', 'max:30', 'regex:/^[a-zA-Z0-9_]+$/'],
-            'students.*.email' => ['required', 'email', 'max:255'],
-            'students.*.last_name' => ['required', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
-            'students.*.first_name' => ['required', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
-            'students.*.middle_name' => ['nullable', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
-            'students.*.phone' => ['nullable', 'string', 'regex:/^(\+7\s?\(?\d{3}\)?\s?\d{3}[- ]?\d{2}[- ]?\d{2}|8\(\d{3}\)\d{3}-\d{2}-\d{2})$/'],
-        ]);
-
-        $name = trim((string) $validated['name']);
-        $specialty = trim((string) $validated['specialty']);
-        $status = $validated['status'] ?? 'active';
-        $sendCredentials = (bool) ($validated['send_credentials'] ?? true);
-
-        $existingGroup = Group::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
-        if ($existingGroup !== null) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Группа с таким названием уже существует.',
-            ], 422);
-        }
-
-        $students = $validated['students'];
-        $duplicateLogins = [];
-        $duplicateEmails = [];
-        $seenLogins = [];
-        $seenEmails = [];
-
-        foreach ($students as $index => $student) {
-            $login = mb_strtolower(trim((string) ($student['login'] ?? '')));
-            $email = mb_strtolower(trim((string) ($student['email'] ?? '')));
-            if (in_array($login, $seenLogins, true)) {
-                $duplicateLogins[] = $index + 1;
-            } else {
-                $seenLogins[] = $login;
-            }
-            if (in_array($email, $seenEmails, true)) {
-                $duplicateEmails[] = $index + 1;
-            } else {
-                $seenEmails[] = $email;
-            }
-        }
-
-        if (!empty($duplicateLogins) || !empty($duplicateEmails)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'В списке студентов есть дубли логинов или email.',
-            ], 422);
-        }
-
-        $existingLogins = User::whereIn('login', array_map('strtolower', $seenLogins))->pluck('login')->map(fn ($v) => mb_strtolower($v))->all();
-        $existingEmails = User::whereIn('email', array_map('strtolower', $seenEmails))->pluck('email')->map(fn ($v) => mb_strtolower($v))->all();
-        if (!empty($existingLogins) || !empty($existingEmails)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Некоторые логины или email уже существуют в системе.',
-                'conflicts' => [
-                    'logins' => $existingLogins,
-                    'emails' => $existingEmails,
-                ],
-            ], 422);
-        }
-
-        $createdStudents = [];
-        $group = DB::transaction(function () use ($name, $specialty, $status, $students, $sendCredentials, &$createdStudents) {
-            $group = Group::create([
-                'name' => $name,
-                'specialty' => $specialty,
-                'status' => $status,
-            ]);
-
-            foreach ($students as $studentData) {
-                $plainPassword = $this->generateTemporaryPassword();
-                $student = User::create([
-                    'login' => trim((string) $studentData['login']),
-                    'email' => trim((string) $studentData['email']),
-                    'password' => $plainPassword,
-                    'last_name' => trim((string) $studentData['last_name']),
-                    'first_name' => trim((string) $studentData['first_name']),
-                    'middle_name' => !empty($studentData['middle_name']) ? trim((string) $studentData['middle_name']) : null,
-                    'role' => 'student',
-                    'group_id' => $group->id,
-                    'department' => null,
-                    'phone' => !empty($studentData['phone']) ? trim((string) $studentData['phone']) : null,
-                    'is_active' => true,
-                    'must_change_password' => true,
-                    'email_notifications_enabled' => true,
-                ]);
-
-                if ($sendCredentials && !empty($student->email)) {
-                    $this->sendCredentialsEmail($student, $plainPassword, true);
-                }
-
-                $createdStudents[] = $student->load(['studentGroup:id,name']);
-            }
-
-            return $group;
-        });
-
-        $this->log($request, 'create_group_with_students', "Создана группа {$group->name} и добавлено студентов: " . count($createdStudents));
-
-        return response()->json([
-            'success' => true,
-            'group' => $group->loadCount('students'),
-            'students' => $createdStudents,
         ], 201);
     }
 
@@ -459,8 +444,13 @@ class GroupController extends Controller
         $movedCount = 0;
         $createdStudents = [];
 
-        DB::transaction(function () use ($group, $studentIds, $students, $sendCredentials, &$movedCount, &$createdStudents) {
+        $movedStudents = collect();
+
+        DB::transaction(function () use ($group, $studentIds, $students, $sendCredentials, &$movedCount, &$createdStudents, &$movedStudents) {
             if (!empty($studentIds)) {
+                $movedStudents = User::where('role', 'student')
+                    ->whereIn('id', $studentIds)
+                    ->get();
                 $movedCount = User::where('role', 'student')
                     ->whereIn('id', $studentIds)
                     ->update(['group_id' => $group->id]);
@@ -495,12 +485,44 @@ class GroupController extends Controller
             "В группу {$group->name} добавлено студентов: " . ($movedCount + count($createdStudents))
         );
 
+        app(AdminActionNotificationService::class)->notifyStudentsMovedToGroup($movedStudents, $group, $request->user());
+
         return response()->json([
             'success' => true,
             'moved_count' => $movedCount,
             'created_count' => count($createdStudents),
             'group' => $group->fresh()->loadCount('students'),
             'created_students' => $createdStudents,
+        ]);
+    }
+
+    public function detachStudentFromGroup(Request $request, Group $group, User $user)
+    {
+        if ($user->role !== 'student') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Пользователь не является студентом.',
+            ], 422);
+        }
+
+        if ((int) $user->group_id !== (int) $group->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Студент не состоит в этой группе.',
+            ], 422);
+        }
+
+        $user->update(['group_id' => null]);
+
+        $this->log(
+            $request,
+            'detach_student_from_group',
+            "Студент {$user->login} исключён из группы {$group->name}"
+        );
+
+        return response()->json([
+            'success' => true,
+            'group' => $group->fresh()->loadCount('students'),
         ]);
     }
 
@@ -553,7 +575,7 @@ class GroupController extends Controller
             Group::firstOrCreate(
                 ['name' => trim((string) $row['name'])],
                 [
-                    'status' => $row['status'] ?? 'active',
+                    'status' => $row['status'] ?? 'inactive',
                     'specialty' => $row['specialty'] ?? null,
                 ]
             );
@@ -597,5 +619,39 @@ class GroupController extends Controller
         $this->log($request, 'delete_group', "Удалена группа {$groupName}");
 
         return response()->json(['success' => true]);
+    }
+
+    public function promoteBatch(Request $request)
+    {
+        if ((int) now()->month !== 8) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Перевод групп доступен только в августе перед новым учебным годом.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'group_ids' => ['nullable', 'array'],
+            'group_ids.*' => ['integer', 'exists:groups,id'],
+        ]);
+
+        $query = Group::query()->where('status', 'active');
+        if (! empty($validated['group_ids'])) {
+            $query->whereIn('id', $validated['group_ids']);
+        }
+
+        $groups = $query->get();
+        $updated = $groups->map(fn (Group $group) => $this->programs->promoteGroup($group))->values();
+        foreach ($updated as $group) {
+            app(AdminActionNotificationService::class)->notifyGroupChanged(
+                $group,
+                $request->user(),
+                'Администратор перевёл вашу группу '.$group->name.' на '.$group->current_course.' курс.',
+            );
+        }
+
+        $this->log($request, 'promote_groups_course_batch', 'Перевод групп на новый курс: '.$updated->count());
+
+        return response()->json(['success' => true, 'groups' => $updated]);
     }
 }

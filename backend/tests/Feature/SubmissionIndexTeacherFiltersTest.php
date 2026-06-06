@@ -205,7 +205,8 @@ class SubmissionIndexTeacherFiltersTest extends TestCase
         ?string $deadline = null
     ): Assignment {
         $subject = Subject::create([
-            'name' => 'Тестовый предмет ' . uniqid(),
+            'name' => 'Тестовая дисциплина ' . uniqid(),
+            'code' => 'TST-' . uniqid(),
             'status' => 'active',
         ]);
 

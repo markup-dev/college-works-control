@@ -76,8 +76,8 @@ class User extends Authenticatable
 
     public function subjects(): BelongsToMany
     {
-        return $this->belongsToMany(Subject::class, 'teaching_loads', 'teacher_id', 'subject_id')
-            ->withPivot(['group_id', 'status'])
+        return $this->belongsToMany(Subject::class, 'teacher_subjects', 'teacher_id', 'subject_id')
+            ->withPivot(['status', 'approved_by', 'approved_at'])
             ->withTimestamps();
     }
 
@@ -91,6 +91,21 @@ class User extends Authenticatable
     public function teachingLoads(): HasMany
     {
         return $this->hasMany(TeachingLoad::class, 'teacher_id');
+    }
+
+    public function teacherSubjects(): HasMany
+    {
+        return $this->hasMany(TeacherSubject::class, 'teacher_id');
+    }
+
+    public function subjectRequests(): HasMany
+    {
+        return $this->hasMany(TeacherSubjectRequest::class, 'teacher_id');
+    }
+
+    public function teachingLoadRequests(): HasMany
+    {
+        return $this->hasMany(TeachingLoadRequest::class, 'teacher_id');
     }
 
     public function systemLogs(): HasMany
@@ -153,6 +168,49 @@ class User extends Authenticatable
             ->all();
 
         return count($items) > 0 ? $items : self::defaultGradeScale();
+    }
+
+    public static function getGradeScaleDuplicateError(?array $scale): ?string
+    {
+        if (! is_array($scale)) {
+            return null;
+        }
+
+        $labelCounts = [];
+        $scoreCounts = [];
+
+        foreach ($scale as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $label = trim((string) ($item['label'] ?? ''));
+            $minScore = (int) ($item['min_score'] ?? $item['minScore'] ?? -1);
+
+            if (! preg_match('/^[1-5][+-]?$/u', $label) || $minScore < 0 || $minScore > 100) {
+                continue;
+            }
+
+            $labelCounts[$label] = ($labelCounts[$label] ?? 0) + 1;
+            $scoreCounts[$minScore] = ($scoreCounts[$minScore] ?? 0) + 1;
+        }
+
+        $duplicateLabels = array_keys(array_filter($labelCounts, fn (int $count) => $count > 1));
+        $duplicateScores = array_keys(array_filter($scoreCounts, fn (int $count) => $count > 1));
+
+        if ($duplicateLabels !== [] && $duplicateScores !== []) {
+            return 'Оценки не должны повторяться (' . implode(', ', $duplicateLabels) . '). Пороги «От баллов» тоже должны быть разными (' . implode(', ', $duplicateScores) . ').';
+        }
+
+        if ($duplicateLabels !== []) {
+            return 'Оценки не должны повторяться: ' . implode(', ', $duplicateLabels) . '.';
+        }
+
+        if ($duplicateScores !== []) {
+            return 'Пороги «От баллов» не должны повторяться: ' . implode(', ', $duplicateScores) . '.';
+        }
+
+        return null;
     }
 
     public function getGradeScaleAttribute($value): array

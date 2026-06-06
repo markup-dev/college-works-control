@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import { formatDateLong } from '../../../utils/dateHelpers';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
@@ -12,13 +12,17 @@ import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
 import LoadingState from '../../UI/LoadingState/LoadingState';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import Modal from '../../UI/Modal/Modal';
+import ModalDangerZone from '../../UI/Modal/ModalDangerZone';
 import ModalSection from '../../UI/Modal/ModalSection';
+import TextArea from '../../UI/TextArea/TextArea';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
+import { ADMIN_CARD_GRID_PAGE_SIZE } from '../../../config/adminPagination';
+import usePaginationClamp from '../../../hooks/usePaginationClamp';
+import { parsePaginationMeta } from '../../../utils/pagination';
 import './AdminAssignmentManagement.scss';
 
-const PER_PAGE = 18;
-const LIST_LIMIT = 100;
+const FILTER_OPTIONS_LIMIT = 20;
 
 const SORT_OPTIONS = [
   { value: 'deadline_asc', label: 'Дедлайн (ближайшие)' },
@@ -34,9 +38,35 @@ const STATUS_PACK_OPTIONS = [
   { value: 'active', label: 'Активно' },
   { value: 'overdue', label: 'Просрочен дедлайн' },
   { value: 'stale_review', label: 'На проверке > 3 дн.' },
-  { value: 'inactive', label: 'Приостановлено' },
   { value: 'archived', label: 'Закрыто' },
 ];
+
+const SORT_VALUES = new Set(SORT_OPTIONS.map((option) => option.value));
+const STATUS_PACK_VALUES = new Set(STATUS_PACK_OPTIONS.map((option) => option.value));
+
+const parsePositiveId = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? String(n) : '';
+};
+
+const getAssignmentFiltersFromSearchParams = (params) => {
+  const status = params.get('status') || '';
+  const filter = params.get('filter') || '';
+  const sort = params.get('sort') || 'deadline_asc';
+
+  return {
+    search: params.get('search') || '',
+    teacherId: parsePositiveId(params.get('teacher_id')),
+    subjectId: parsePositiveId(params.get('subject_id')),
+    groupId: parsePositiveId(params.get('group_id')),
+    statusPack: filter === 'overdue_checks'
+      ? 'stale_review'
+      : STATUS_PACK_VALUES.has(status)
+        ? status
+        : 'all',
+    sort: SORT_VALUES.has(sort) ? sort : 'deadline_asc',
+  };
+};
 
 const statusBadge = (row) => {
   if (row.displayOverdue) {
@@ -45,35 +75,481 @@ const statusBadge = (row) => {
   if (row.status === 'archived') {
     return { tone: 'neutral', label: 'Закрыто' };
   }
-  if (row.status === 'inactive') {
-    return { tone: 'warning', label: 'Приостановлено' };
-  }
   return { tone: 'success', label: 'Активно' };
 };
 
 const assignmentStatusLabel = (status) => statusBadge({ status }).label;
 
+const isNaturallyClosedAssignment = (row) => {
+  if (row?.isNaturallyClosed != null) return Boolean(row.isNaturallyClosed);
+  const st = row?.stats || {};
+  const total = st.totalStudents ?? 0;
+  return row?.status === 'archived'
+    && total > 0
+    && (st.submitted ?? 0) === total
+    && (st.graded ?? 0) === total;
+};
+
+const rowFromDetail = (detailData, detailId) => {
+  const assignment = detailData?.assignment;
+  if (!assignment) return null;
+  return {
+    id: assignment.id ?? detailId,
+    title: assignment.title,
+    deadline: assignment.deadline,
+    status: assignment.status,
+    displayOverdue: false,
+    isNaturallyClosed: detailData?.isNaturallyClosed ?? assignment.isNaturallyClosed,
+    stats: detailData?.stats ?? {},
+    groups: assignment.groups,
+    subject: assignment.subject,
+    teacher: assignment.teacher,
+  };
+};
+
+const NOT_SUBMITTED_PREVIEW = 7;
+
+const pluralStudents = (count) => {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'студент';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'студента';
+  return 'студентов';
+};
+
+const buildNotSubmittedGroups = (students) => {
+  const map = new Map();
+  for (const student of students) {
+    const groupKey = student.groupId ?? student.groupName ?? 'unknown';
+    const groupName = student.groupName || 'Без группы';
+    if (!map.has(groupKey)) {
+      map.set(groupKey, { groupId: student.groupId, groupName, students: [] });
+    }
+    map.get(groupKey).students.push(student);
+  }
+  return [...map.values()].sort((a, b) => a.groupName.localeCompare(b.groupName, 'ru'));
+};
+
+const buildNotSubmittedDisplayGroups = (students, assignmentGroups) => {
+  const assignmentGroupList = Array.isArray(assignmentGroups) ? assignmentGroups : [];
+  if (assignmentGroupList.length <= 1) {
+    return buildNotSubmittedGroups(students);
+  }
+
+  const studentsByGroupId = new Map();
+  for (const student of students) {
+    const key = String(student.groupId ?? student.groupName ?? 'unknown');
+    if (!studentsByGroupId.has(key)) {
+      studentsByGroupId.set(key, []);
+    }
+    studentsByGroupId.get(key).push(student);
+  }
+
+  return assignmentGroupList
+    .map((group) => {
+      const key = String(group.id);
+      const groupStudents = studentsByGroupId.get(key) ?? [];
+      return {
+        groupId: group.id,
+        groupName: group.name,
+        students: [...groupStudents].sort((a, b) => (a.shortName || '').localeCompare(b.shortName || '', 'ru')),
+      };
+    })
+    .filter((group) => group.students.length > 0);
+};
+
+const buildNotSubmittedCopyText = (groups, multiGroup) => groups
+  .map((group) => {
+    const lines = group.students.map((s) => `- ${s.shortName}`);
+    if (multiGroup) {
+      return `${group.groupName}:\n${lines.join('\n')}`;
+    }
+    return lines.join('\n');
+  })
+  .join('\n\n');
+
+const NotSubmittedStudentsBlock = ({
+  students,
+  assignmentGroups,
+  detailId,
+  showSuccess,
+  showError,
+}) => {
+  const [listOpen, setListOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
+  const [expandedShowAll, setExpandedShowAll] = useState(() => new Set());
+
+  useEffect(() => {
+    setListOpen(false);
+    setExpandedGroups(new Set());
+    setExpandedShowAll(new Set());
+  }, [students, detailId]);
+
+  if (!Array.isArray(students) || students.length === 0) {
+    return null;
+  }
+
+  const multiGroup = (assignmentGroups?.length ?? 0) > 1;
+  const groups = buildNotSubmittedDisplayGroups(students, assignmentGroups);
+  const count = students.length;
+  const allOverdue = students.every((s) => s.overdue);
+
+  const summaryText = allOverdue
+    ? `${count} ${pluralStudents(count)} не ${count === 1 ? 'сдал' : 'сдали'} работу. Дедлайн просрочен.`
+    : `${count} ${pluralStudents(count)} не ${count === 1 ? 'сдал' : 'сдали'} работу.`;
+
+  const groupBreakdown = multiGroup
+    ? groups.map((group) => `${group.groupName} — ${group.students.length}`).join(' · ')
+    : '';
+
+  const groupKey = (group) => String(group.groupId ?? group.groupName);
+
+  const toggleGroup = (key) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const openList = () => {
+    setListOpen(true);
+  };
+
+  const closeList = () => {
+    setListOpen(false);
+    setExpandedGroups(new Set());
+    setExpandedShowAll(new Set());
+  };
+
+  const showAllInGroup = (key) => {
+    setExpandedShowAll((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  };
+
+  const renderGroupStudents = (group) => {
+    const key = groupKey(group);
+    const showAll = expandedShowAll.has(key);
+    const visible = showAll ? group.students : group.students.slice(0, NOT_SUBMITTED_PREVIEW);
+    const hasMore = !showAll && group.students.length > NOT_SUBMITTED_PREVIEW;
+
+    return (
+      <>
+        <ul className="admin-assignment-detail__not-list">
+          {visible.map((s) => (
+            <li key={s.id}>{s.shortName}</li>
+          ))}
+        </ul>
+        {hasMore && (
+          <Button
+            type="button"
+            variant="outline"
+            size="small"
+            className="admin-assignment-detail__not-show-all"
+            onClick={() => showAllInGroup(key)}
+          >
+            Показать всех ({group.students.length})
+          </Button>
+        )}
+      </>
+    );
+  };
+
+  const copyList = async () => {
+    const text = buildNotSubmittedCopyText(groups, multiGroup);
+    if (!text.trim()) {
+      showError('Список пуст');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showSuccess('Список скопирован');
+    } catch {
+      showError('Не удалось скопировать');
+    }
+  };
+
+  return (
+    <div className="admin-assignment-detail__not-submitted">
+      <p className="admin-assignment-detail__not-summary">{summaryText}</p>
+      {groupBreakdown ? (
+        <p className="admin-assignment-detail__not-breakdown">{groupBreakdown}</p>
+      ) : null}
+      <div className="admin-assignment-detail__not-toolbar">
+        <Button
+          type="button"
+          variant="outline"
+          size="small"
+          onClick={() => {
+            if (listOpen) closeList();
+            else openList();
+          }}
+        >
+          {listOpen ? 'Скрыть список' : `Показать список (${count})`}
+        </Button>
+        <Button type="button" variant="outline" size="small" onClick={() => void copyList()}>
+          Скопировать
+        </Button>
+      </div>
+      {listOpen && (
+        <div className="admin-assignment-detail__not-groups">
+          {multiGroup ? (
+            <div className="admin-assignment-detail__accordion">
+              {groups.map((group) => {
+                const key = groupKey(group);
+                const isOpen = expandedGroups.has(key);
+                return (
+                  <div
+                    key={key}
+                    className={`admin-assignment-detail__accordion-item${isOpen ? ' is-open' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className="admin-assignment-detail__accordion-trigger"
+                      aria-expanded={isOpen}
+                      onClick={() => toggleGroup(key)}
+                    >
+                      <span className="admin-assignment-detail__accordion-title">{group.groupName}</span>
+                      <span className="admin-assignment-detail__accordion-meta">
+                        {group.students.length} {pluralStudents(group.students.length)}
+                      </span>
+                    </button>
+                    {isOpen && (
+                      <div className="admin-assignment-detail__accordion-panel">
+                        {renderGroupStudents(group)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            groups.map((group) => (
+              <div key={groupKey(group)} className="admin-assignment-detail__not-group">
+                {renderGroupStudents(group)}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AssignmentFilterCombobox = ({
+  label,
+  value,
+  onChange,
+  type,
+  allLabel,
+  placeholder,
+  emptyMessage,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [options, setOptions] = useState([]);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const debouncedQuery = useDebouncedValue(query, 250);
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+  const requestRef = useRef(0);
+  const reactId = useId().replace(/:/g, '');
+  const inputId = `aam-${type}-filter-${reactId}`;
+
+  const loadOptions = useCallback(async (searchValue, selectedId) => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    setLoading(true);
+    setLoadError('');
+
+    try {
+      const params = {
+        type,
+        limit: FILTER_OPTIONS_LIMIT,
+      };
+      const trimmed = searchValue.trim();
+      if (trimmed) params.search = trimmed;
+      if (selectedId) params.selected_id = Number(selectedId);
+
+      const { data } = await api.get('/admin/assignments/filter-options', { params });
+      if (requestRef.current !== requestId) return;
+
+      const nextOptions = Array.isArray(data?.data) ? data.data : [];
+      setOptions(nextOptions);
+      if (selectedId) {
+        const selected = nextOptions.find((option) => String(option.id) === String(selectedId));
+        if (selected) setSelectedOption(selected);
+      } else {
+        setSelectedOption(null);
+      }
+    } catch {
+      if (requestRef.current !== requestId) return;
+      setOptions([]);
+      setLoadError('Не удалось загрузить варианты');
+    } finally {
+      if (requestRef.current === requestId) {
+        setLoading(false);
+      }
+    }
+  }, [type]);
+
+  useEffect(() => {
+    void loadOptions(debouncedQuery, value);
+  }, [debouncedQuery, loadOptions, value]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const onDocMouseDown = (event) => {
+      if (rootRef.current && !rootRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', onDocMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    } else {
+      setQuery('');
+    }
+  }, [open]);
+
+  const displayLabel = selectedOption?.label || allLabel;
+  const hasSelectedValue = Boolean(value);
+
+  const selectOption = (option) => {
+    setSelectedOption(option);
+    onChange(String(option.id));
+    setOpen(false);
+  };
+
+  const clearSelection = () => {
+    setSelectedOption(null);
+    onChange('');
+    setOpen(false);
+  };
+
+  return (
+    <div className="assignment-filter-combobox" ref={rootRef}>
+      <label className="filter-popover__label" htmlFor={inputId}>
+        {label}
+      </label>
+      <button
+        type="button"
+        className={`assignment-filter-combobox__trigger${open ? ' assignment-filter-combobox__trigger--open' : ''}${hasSelectedValue ? ' assignment-filter-combobox__trigger--selected' : ''}`}
+        onClick={() => setOpen((isOpen) => !isOpen)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        <span className="assignment-filter-combobox__trigger-text">{displayLabel}</span>
+        <span className="assignment-filter-combobox__chevron" aria-hidden="true">⌄</span>
+      </button>
+
+      {open && (
+        <div className="assignment-filter-combobox__panel">
+          <input
+            id={inputId}
+            ref={inputRef}
+            type="search"
+            className="assignment-filter-combobox__search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={placeholder}
+            autoComplete="off"
+          />
+          <div className="assignment-filter-combobox__list" role="listbox">
+            <button
+              type="button"
+              className={`assignment-filter-combobox__option${!hasSelectedValue ? ' assignment-filter-combobox__option--active' : ''}`}
+              onClick={clearSelection}
+            >
+              <span className="assignment-filter-combobox__option-label">{allLabel}</span>
+              <span className="assignment-filter-combobox__option-meta">Без ограничения</span>
+            </button>
+
+            {options.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`assignment-filter-combobox__option${String(option.id) === String(value) ? ' assignment-filter-combobox__option--active' : ''}`}
+                onClick={() => selectOption(option)}
+                role="option"
+                aria-selected={String(option.id) === String(value)}
+              >
+                <span className="assignment-filter-combobox__option-label">{option.label}</span>
+                {option.meta ? <span className="assignment-filter-combobox__option-meta">{option.meta}</span> : null}
+              </button>
+            ))}
+
+            {loading && <div className="assignment-filter-combobox__state">Загрузка...</div>}
+            {!loading && !loadError && options.length === 0 && (
+              <div className="assignment-filter-combobox__state">{emptyMessage}</div>
+            )}
+            {!loading && loadError && <div className="assignment-filter-combobox__state assignment-filter-combobox__state--error">{loadError}</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const buildAssignmentSearchParams = ({
+  search = '',
+  teacherId = '',
+  subjectId = '',
+  groupId = '',
+  statusPack = 'all',
+  sort = 'deadline_asc',
+} = {}) => {
+  const next = new URLSearchParams();
+  const q = search.trim();
+  if (q) next.set('search', q);
+  if (teacherId) next.set('teacher_id', teacherId);
+  if (subjectId) next.set('subject_id', subjectId);
+  if (groupId) next.set('group_id', groupId);
+  if (statusPack === 'stale_review') next.set('filter', 'overdue_checks');
+  else if (statusPack === 'overdue') next.set('status', 'overdue');
+  else if (statusPack !== 'all') next.set('status', statusPack);
+  if (sort !== 'deadline_asc') next.set('sort', sort);
+  return next;
+};
+
 const AdminAssignmentManagement = () => {
   const { showSuccess, showError } = useNotification();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlFilters = useMemo(() => getAssignmentFiltersFromSearchParams(searchParams), [searchParams]);
+  const { teacherId, subjectId, groupId, statusPack, sort } = urlFilters;
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => getAssignmentFiltersFromSearchParams(searchParams).search);
   const debouncedSearch = useDebouncedValue(search, 300);
-  const [teacherId, setTeacherId] = useState('');
-  const [subjectId, setSubjectId] = useState('');
-  const [groupId, setGroupId] = useState('');
-  const [statusPack, setStatusPack] = useState('all');
-  const [sort, setSort] = useState('deadline_asc');
   const [page, setPage] = useState(1);
 
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ currentPage: 1, lastPage: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const [teachers, setTeachers] = useState([]);
-  const [subjects, setSubjects] = useState([]);
-  const [groups, setGroups] = useState([]);
 
   const [detailId, setDetailId] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -96,70 +572,29 @@ const AdminAssignmentManagement = () => {
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   useEffect(() => {
-    if (searchParams.get('filter') === 'overdue_checks') {
-      setStatusPack('stale_review');
-    }
-    const gid = searchParams.get('group_id');
-    if (gid) {
-      const n = Number(gid);
-      if (Number.isFinite(n) && n > 0) {
-        setGroupId(String(n));
-      }
-    }
-    const tid = searchParams.get('teacher_id');
-    if (tid) {
-      const n = Number(tid);
-      if (Number.isFinite(n) && n > 0) {
-        setTeacherId(String(n));
-      }
-    }
-    const st = searchParams.get('status');
-    if (st === 'overdue') {
-      setStatusPack('overdue');
-    }
-    if (st === 'stale_review') {
-      setStatusPack('stale_review');
-    }
-  }, [searchParams]);
+    setSearch(urlFilters.search);
+    setPage(1);
+  }, [urlFilters.search, searchParams]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [t, s, g] = await Promise.all([
-          api.get('/admin/users', { params: { role: 'teacher', per_page: LIST_LIMIT, sort: 'name_asc' } }),
-          api.get('/admin/subjects', { params: { per_page: LIST_LIMIT, sort: 'name_asc' } }),
-          api.get('/admin/groups', { params: { per_page: LIST_LIMIT, sort: 'name_asc' } }),
-        ]);
-        if (cancelled) return;
-        setTeachers(Array.isArray(t.data?.data) ? t.data.data : []);
-        setSubjects(Array.isArray(s.data?.data) ? s.data.data : []);
-        setGroups(Array.isArray(g.data?.data) ? g.data.data : []);
-      } catch {
-        if (!cancelled) {
-          setTeachers([]);
-          setSubjects([]);
-          setGroups([]);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const teacherLabel = (u) => {
-    if (!u) return '—';
-    if (u.fullName) return u.fullName;
-    const p = [u.lastName, u.firstName, u.middleName].filter(Boolean);
-    return p.length ? p.join(' ') : '—';
-  };
+  const applyAssignmentFilter = useCallback((patch) => {
+    const current = getAssignmentFiltersFromSearchParams(searchParams);
+    const next = buildAssignmentSearchParams({
+      search: 'search' in patch ? patch.search : current.search,
+      teacherId: 'teacherId' in patch ? patch.teacherId : current.teacherId,
+      subjectId: 'subjectId' in patch ? patch.subjectId : current.subjectId,
+      groupId: 'groupId' in patch ? patch.groupId : current.groupId,
+      statusPack: 'statusPack' in patch ? patch.statusPack : current.statusPack,
+      sort: 'sort' in patch ? patch.sort : current.sort,
+    });
+    setSearchParams(next, { replace: true });
+    setPage(1);
+  }, [searchParams, setSearchParams]);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = { page, per_page: PER_PAGE, sort };
+      const params = { page, per_page: ADMIN_CARD_GRID_PAGE_SIZE, sort };
       const q = debouncedSearch.trim();
       if (q) params.search = q;
       if (teacherId) params.teacher_id = Number(teacherId);
@@ -187,22 +622,21 @@ const AdminAssignmentManagement = () => {
           displayOverdue: r.displayOverdue,
           deadline: r.deadline,
           createdAt: r.createdAt,
+          isNaturallyClosed: r.isNaturallyClosed,
           stats: r.stats ?? {},
         })),
       );
       const m = data?.meta;
-      setMeta({
-        currentPage: m?.currentPage ?? page,
-        lastPage: m?.lastPage ?? 1,
-        total: m?.total ?? 0,
-      });
+      setMeta(parsePaginationMeta(m, page));
     } catch (e) {
       setRows([]);
-      setError(firstApiErrorMessage(e?.response?.data) || 'Не удалось загрузить задания');
+      setError(getApiErrorMessage(e, 'Не удалось загрузить задания'));
     } finally {
       setLoading(false);
     }
   }, [page, debouncedSearch, teacherId, subjectId, groupId, statusPack, sort]);
+
+  usePaginationClamp(page, meta.lastPage, setPage);
 
   useEffect(() => {
     void fetchList();
@@ -223,10 +657,10 @@ const AdminAssignmentManagement = () => {
       try {
         const { data } = await api.get(`/admin/assignments/${detailId}`);
         if (!cancelled) setDetail(data);
-      } catch {
+      } catch (e) {
         if (!cancelled) {
           setDetail(null);
-          showError('Не удалось загрузить задание');
+          showError(getApiErrorMessage(e, 'Не удалось загрузить задание'));
         }
       } finally {
         if (!cancelled) setDetailLoading(false);
@@ -253,10 +687,10 @@ const AdminAssignmentManagement = () => {
           setEligibleTeachers(list.filter((teacher) => Number(teacher.id) !== Number(currentTeacherId)));
           setReassignTeacherId('');
         }
-      } catch {
+      } catch (e) {
         if (!cancelled) {
           setEligibleTeachers([]);
-          showError('Не удалось загрузить список преподавателей');
+          showError(getApiErrorMessage(e, 'Не удалось загрузить список преподавателей'));
         }
       }
     })();
@@ -267,13 +701,9 @@ const AdminAssignmentManagement = () => {
 
   const resetFilters = useCallback(() => {
     setSearch('');
-    setTeacherId('');
-    setSubjectId('');
-    setGroupId('');
-    setStatusPack('all');
-    setSort('deadline_asc');
     setPage(1);
-  }, []);
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
 
   const resetDisabled = useMemo(
     () =>
@@ -282,6 +712,10 @@ const AdminAssignmentManagement = () => {
   );
 
   const openEdit = (row) => {
+    if (isNaturallyClosedAssignment(row)) {
+      showError('Задание закрыто автоматически — редактирование запрещено');
+      return;
+    }
     setDetailId(null);
     setEditRow(row);
     setEditTitle(row.title || '');
@@ -323,7 +757,7 @@ const AdminAssignmentManagement = () => {
         setDetail(data);
       }
     } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось сохранить');
+      showError(getApiErrorMessage(e, 'Не удалось сохранить'));
     } finally {
       setEditSubmitting(false);
     }
@@ -348,7 +782,7 @@ const AdminAssignmentManagement = () => {
         setDetail(data);
       }
     } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось сменить преподавателя');
+      showError(getApiErrorMessage(e, 'Не удалось сменить преподавателя'));
     } finally {
       setReassignSubmitting(false);
     }
@@ -370,7 +804,7 @@ const AdminAssignmentManagement = () => {
       if (detailId === did) setDetailId(null);
       void fetchList();
     } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось удалить');
+      showError(getApiErrorMessage(e, 'Не удалось удалить'));
     } finally {
       setDeleteSubmitting(false);
     }
@@ -378,6 +812,12 @@ const AdminAssignmentManagement = () => {
 
   const a = detail?.assignment;
   const stats = detail?.stats ?? {};
+  const detailRow = useMemo(() => {
+    const fromList = rows.find((r) => r.id === detailId);
+    if (fromList) return fromList;
+    return rowFromDetail(detail, detailId);
+  }, [detail, detailId, rows]);
+  const detailLocked = isNaturallyClosedAssignment(detailRow);
   const totalStudents = stats.totalStudents ?? 0;
   const submitted = stats.submitted ?? 0;
   const pct = totalStudents > 0 ? Math.round((submitted / totalStudents) * 100) : 0;
@@ -388,10 +828,6 @@ const AdminAssignmentManagement = () => {
       <div className="admin-assignment-management__head">
         <div>
           <h1 className="admin-assignment-management__title">Задания</h1>
-          <p className="admin-assignment-management__hint">
-            Задания, которые уже выданы студентам: дедлайны, группы и ход сдач. Фильтр «На проверке &gt; 3 дн.» показывает
-            те же работы, что и блок «На контроле» на главной странице.
-          </p>
         </div>
       </div>
 
@@ -399,7 +835,7 @@ const AdminAssignmentManagement = () => {
         className="admin-assignment-management__filter-toolbar"
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Поиск по названию задания…"
+        searchPlaceholder="Поиск по заданию, дисциплине или преподавателю…"
         onReset={resetFilters}
         resetDisabled={resetDisabled}
         popoverAlign="end"
@@ -409,7 +845,7 @@ const AdminAssignmentManagement = () => {
           <label className="filter-popover__label" htmlFor="aam-sort">
             Сортировка
           </label>
-          <select id="aam-sort" className="filter-popover__select" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <select id="aam-sort" className="filter-popover__select" value={sort} onChange={(e) => applyAssignmentFilter({ sort: e.target.value })}>
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -421,7 +857,7 @@ const AdminAssignmentManagement = () => {
           <label className="filter-popover__label" htmlFor="aam-status">
             Статус / контроль
           </label>
-          <select id="aam-status" className="filter-popover__select" value={statusPack} onChange={(e) => setStatusPack(e.target.value)}>
+          <select id="aam-status" className="filter-popover__select" value={statusPack} onChange={(e) => applyAssignmentFilter({ statusPack: e.target.value })}>
             {STATUS_PACK_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -430,43 +866,37 @@ const AdminAssignmentManagement = () => {
           </select>
         </div>
         <div className="filter-popover__section">
-          <label className="filter-popover__label" htmlFor="aam-teacher">
-            Преподаватель
-          </label>
-          <select id="aam-teacher" className="filter-popover__select" value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
-            <option value="">Все преподаватели</option>
-            {teachers.map((u) => (
-              <option key={u.id} value={String(u.id)}>
-                {teacherLabel(u)}
-              </option>
-            ))}
-          </select>
+          <AssignmentFilterCombobox
+            type="teacher"
+            label="Преподаватель"
+            value={teacherId}
+            onChange={(value) => applyAssignmentFilter({ teacherId: value })}
+            allLabel="Все преподаватели"
+            placeholder="ФИО, логин или кафедра"
+            emptyMessage="Преподаватели не найдены"
+          />
         </div>
         <div className="filter-popover__section">
-          <label className="filter-popover__label" htmlFor="aam-subject">
-            Предмет
-          </label>
-          <select id="aam-subject" className="filter-popover__select" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-            <option value="">Все предметы</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={String(s.id)}>
-                {s.code ? `${s.name} (${s.code})` : s.name}
-              </option>
-            ))}
-          </select>
+          <AssignmentFilterCombobox
+            type="subject"
+            label="Дисциплина"
+            value={subjectId}
+            onChange={(value) => applyAssignmentFilter({ subjectId: value })}
+            allLabel="Все дисциплины"
+            placeholder="Название или код дисциплины"
+            emptyMessage="Дисциплины не найдены"
+          />
         </div>
         <div className="filter-popover__section">
-          <label className="filter-popover__label" htmlFor="aam-group">
-            Группа
-          </label>
-          <select id="aam-group" className="filter-popover__select" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            <option value="">Все группы</option>
-            {groups.map((g) => (
-              <option key={g.id} value={String(g.id)}>
-                {g.name}
-              </option>
-            ))}
-          </select>
+          <AssignmentFilterCombobox
+            type="group"
+            label="Группа"
+            value={groupId}
+            onChange={(value) => applyAssignmentFilter({ groupId: value })}
+            allLabel="Все группы"
+            placeholder="Название группы или специальность"
+            emptyMessage="Группы не найдены"
+          />
         </div>
       </DashboardFilterToolbar>
 
@@ -493,7 +923,6 @@ const AdminAssignmentManagement = () => {
           <div className="admin-assignment-management__grid">
             {rows.map((row) => {
               const b = statusBadge(row);
-              const gNames = row.groups?.map((g) => g.name).join(', ') || '—';
               const st = row.stats || {};
               return (
                 <EntityCard
@@ -512,43 +941,50 @@ const AdminAssignmentManagement = () => {
                 >
                   <div className="admin-assignment-card__head">
                     <h3 className="admin-assignment-card__title">{row.title}</h3>
+                    <StatusBadge tone={b.tone} className="admin-assignment-card__status">
+                      {b.label}
+                    </StatusBadge>
                   </div>
                   <div className="admin-assignment-card__meta">
-                    <span>{row.teacher?.shortName ?? '—'}</span>
-                    <span>
-                      {row.subject ? `${row.subject.name}${row.subject.code ? ` (${row.subject.code})` : ''}` : '—'}
-                    </span>
-                    <span>{gNames}</span>
+                    <p className="admin-assignment-card__meta-line">{row.teacher?.shortName ?? '—'}</p>
+                    <p className="admin-assignment-card__meta-line">
+                      {row.subject
+                        ? `${row.subject.name}${row.subject.code ? ` (${row.subject.code})` : ''}`
+                        : '—'}
+                    </p>
+                    <div className="admin-assignment-card__groups">
+                      {(row.groups?.length ?? 0) > 0 ? (
+                        row.groups.map((group) => (
+                          <span key={group.id} className="admin-assignment-card__group-tag">
+                            {group.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="admin-assignment-card__group-tag">—</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="admin-assignment-card__badges">
-                    <StatusBadge tone={b.tone}>{b.label}</StatusBadge>
-                  </div>
-                  <div className="admin-assignment-card__stats">
-                    <span>Дедлайн: {formatDateLong(row.deadline)}</span>
-                    <span>
-                      Сдано: {st.submitted ?? 0}/{st.totalStudents ?? 0} · Проверено: {st.graded ?? 0} · Ждут:{' '}
-                      {st.pendingReview ?? 0}
-                    </span>
-                    {st.avgScore != null ? <span>Средний балл: {st.avgScore}</span> : null}
-                  </div>
-                  <div className="admin-assignment-card__actions" onClick={(e) => e.stopPropagation()}>
-                    <Button type="button" variant="outline" size="small" onClick={() => openEdit(row)}>
-                      Редактировать
-                    </Button>
-                    <Button type="button" variant="outline" size="small" onClick={() => setReassignRow(row)}>
-                      Сменить преподавателя
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="danger"
-                      size="small"
-                      onClick={() => {
-                        setDeleteTarget(row);
-                        setDeleteConfirmTitle('');
-                      }}
-                    >
-                      Удалить
-                    </Button>
+                  <div className="admin-assignment-card__foot">
+                    <div className="admin-assignment-card__deadline">
+                      <span className="admin-assignment-card__deadline-label">Дедлайн</span>
+                      <span className="admin-assignment-card__deadline-value">{formatDateLong(row.deadline)}</span>
+                    </div>
+                    <div className="admin-assignment-card__metrics">
+                      <span className="admin-assignment-card__metric">
+                        Сдано {st.submitted ?? 0}/{st.totalStudents ?? 0}
+                      </span>
+                      <span className="admin-assignment-card__metric">
+                        Проверено {st.graded ?? 0}
+                      </span>
+                      <span className="admin-assignment-card__metric">
+                        Ждут проверки {st.pendingReview ?? 0}
+                      </span>
+                      {st.avgScore != null ? (
+                        <span className="admin-assignment-card__metric admin-assignment-card__metric--score">
+                          Средний балл {st.avgScore}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </EntityCard>
               );
@@ -564,8 +1000,8 @@ const AdminAssignmentManagement = () => {
         total={meta.total}
         fallbackCount={rows.length}
         disabled={loading}
-        onPrev={() => setPage((p) => Math.max(1, p - 1))}
-        onNext={() => setPage((p) => p + 1)}
+        hideWhenSinglePage
+        onPageChange={setPage}
       />
 
       <Modal
@@ -575,35 +1011,32 @@ const AdminAssignmentManagement = () => {
         size="large"
         contentClassName="admin-assignment-detail"
         footer={!detailLoading && a ? (
-          <>
-            <Button type="button" variant="secondary" onClick={() => setDetailId(null)}>
-              Закрыть
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => {
-                const fromList = rows.find((r) => r.id === detailId);
-                if (fromList) {
-                  openEdit(fromList);
-                } else {
-                  openEdit({
-                    id: detailId,
-                    title: a.title,
-                    deadline: a.deadline,
-                    status: a.status,
-                    displayOverdue: false,
-                    stats: {},
-                    groups: a.groups,
-                    subject: a.subject,
-                    teacher: a.teacher,
-                  });
-                }
-              }}
-            >
-              Редактировать
-            </Button>
-          </>
+          detailLocked ? (
+            <p className="admin-assignment-detail__lock-hint">
+              Задание закрыто автоматически: все работы сданы и проверены. Редактирование недоступно.
+            </p>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  if (detailRow) openEdit(detailRow);
+                }}
+              >
+                Редактировать
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (detailRow) setReassignRow(detailRow);
+                }}
+              >
+                Сменить преподавателя
+              </Button>
+            </>
+          )
         ) : null}
       >
         {detailLoading && <LoadingState message="Загрузка..." className="admin-assignment-management__state" />}
@@ -612,7 +1045,7 @@ const AdminAssignmentManagement = () => {
             <ModalSection title="Информация">
               <dl className="admin-assignment-detail__dl">
                 <div className="admin-assignment-detail__row">
-                  <dt className="admin-assignment-detail__dt">Предмет</dt>
+                  <dt className="admin-assignment-detail__dt">Дисциплина</dt>
                   <dd className="admin-assignment-detail__dd">
                     {a.subject ? `${a.subject.name}${a.subject.code ? ` (${a.subject.code})` : ''}` : '—'}
                   </dd>
@@ -623,11 +1056,28 @@ const AdminAssignmentManagement = () => {
                 </div>
                 <div className="admin-assignment-detail__row">
                   <dt className="admin-assignment-detail__dt">Группы</dt>
-                  <dd className="admin-assignment-detail__dd">{a.groups?.map((g) => g.name).join(', ') || '—'}</dd>
+                  <dd className="admin-assignment-detail__dd">
+                    {(a.groups?.length ?? 0) > 1 ? (
+                      <ul className="admin-assignment-detail__group-list">
+                        {a.groups.map((group) => (
+                          <li key={group.id}>{group.name}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      a.groups?.[0]?.name ?? '—'
+                    )}
+                  </dd>
                 </div>
                 <div className="admin-assignment-detail__row">
                   <dt className="admin-assignment-detail__dt">Статус</dt>
-                  <dd className="admin-assignment-detail__dd">{assignmentStatusLabel(a.status)}</dd>
+                  <dd className="admin-assignment-detail__dd">
+                    {assignmentStatusLabel(a.status)}
+                    {detailLocked ? ' · завершено полностью' : ''}
+                  </dd>
+                </div>
+                <div className="admin-assignment-detail__row">
+                  <dt className="admin-assignment-detail__dt">Дата создания</dt>
+                  <dd className="admin-assignment-detail__dd">{formatDateLong(a.createdAt)}</dd>
                 </div>
                 <div className="admin-assignment-detail__row">
                   <dt className="admin-assignment-detail__dt">Дедлайн</dt>
@@ -660,6 +1110,10 @@ const AdminAssignmentManagement = () => {
                   <dt className="admin-assignment-detail__dt">Не сдали</dt>
                   <dd className="admin-assignment-detail__dd">{stats.notSubmitted ?? 0}</dd>
                 </div>
+                <div className="admin-assignment-detail__row">
+                  <dt className="admin-assignment-detail__dt">Средний балл</dt>
+                  <dd className="admin-assignment-detail__dd">{stats.avgScore ?? '—'}</dd>
+                </div>
               </dl>
               {['5', '4', '3', '2'].some((k) => (dist[k] ?? 0) > 0) && (
                 <ul className="admin-assignment-detail__grades">
@@ -667,19 +1121,34 @@ const AdminAssignmentManagement = () => {
                 </ul>
               )}
               {Array.isArray(detail?.notSubmitted) && detail.notSubmitted.length > 0 && (
-                <>
-                  <div className="admin-assignment-detail__sub-title">Не сдали</div>
-                  <ul className="admin-assignment-detail__not-list">
-                    {detail.notSubmitted.map((s) => (
-                      <li key={s.id}>
-                        {s.shortName}
-                        {s.overdue ? ' · просрочено' : ''}
-                      </li>
-                    ))}
-                  </ul>
-                </>
+                <NotSubmittedStudentsBlock
+                  students={detail.notSubmitted}
+                  assignmentGroups={a?.groups}
+                  detailId={detailId}
+                  showSuccess={showSuccess}
+                  showError={showError}
+                />
               )}
             </ModalSection>
+
+            <ModalDangerZone
+              title="Удаление задания"
+              description="Будут удалены задание, все сдачи и оценки. Действие необратимо."
+            >
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="small"
+                  onClick={() => {
+                    if (detailRow) {
+                      setDeleteTarget(detailRow);
+                      setDeleteConfirmTitle('');
+                    }
+                  }}
+                >
+                  Удалить задание
+                </Button>
+            </ModalDangerZone>
           </>
         )}
       </Modal>
@@ -692,9 +1161,6 @@ const AdminAssignmentManagement = () => {
         contentClassName="admin-assignment-form"
         footer={(
           <>
-            <Button type="button" variant="secondary" onClick={() => setEditRow(null)} disabled={editSubmitting}>
-              Отмена
-            </Button>
             <Button type="button" variant="primary" loading={editSubmitting} onClick={() => void submitEdit()}>
               Сохранить
             </Button>
@@ -705,11 +1171,22 @@ const AdminAssignmentManagement = () => {
           <label className="admin-assignment-form__label" htmlFor="aam-edit-title">
             Название
           </label>
-          <input id="aam-edit-title" className="admin-assignment-form__input" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
-          <label className="admin-assignment-form__label" htmlFor="aam-edit-desc">
-            Описание
-          </label>
-          <textarea id="aam-edit-desc" className="admin-assignment-form__textarea" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+          <input
+            id="aam-edit-title"
+            className="admin-assignment-form__input"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            placeholder="Название задания"
+            autoComplete="off"
+          />
+          <TextArea
+            label="Описание"
+            value={editDescription}
+            onChange={setEditDescription}
+            className="admin-textarea admin-assignment-form__textarea"
+            rows={4}
+            placeholder="Описание задания (необязательно)"
+          />
           <label className="admin-assignment-form__label" htmlFor="aam-edit-deadline">
             Дедлайн
           </label>
@@ -725,7 +1202,6 @@ const AdminAssignmentManagement = () => {
           </label>
           <select id="aam-edit-status" className="admin-assignment-form__select" value={editStatus} onChange={(e) => setEditStatus(e.target.value)}>
             <option value="active">Активно</option>
-            <option value="inactive">Приостановлено</option>
             <option value="archived">Закрыто</option>
           </select>
         </ModalSection>
@@ -739,10 +1215,7 @@ const AdminAssignmentManagement = () => {
         contentClassName="admin-assignment-form"
         footer={(
           <>
-            <Button type="button" variant="secondary" onClick={() => setReassignRow(null)} disabled={reassignSubmitting}>
-              Отмена
-            </Button>
-            <Button type="button" variant="primary" loading={reassignSubmitting} onClick={() => void submitReassign()}>
+            <Button type="button" variant="primary" loading={reassignSubmitting} disabled={!reassignTeacherId} onClick={() => void submitReassign()}>
               Сменить
             </Button>
           </>
@@ -750,7 +1223,7 @@ const AdminAssignmentManagement = () => {
       >
         <ModalSection title="Новый преподаватель">
           <p className="admin-assignment-form__note">
-            Выберите преподавателя, который ведёт этот предмет у выбранных групп.
+            Сначала показаны преподаватели с подходящей нагрузкой. Если таких нет, можно выбрать активного преподавателя вручную.
           </p>
           <label className="admin-assignment-form__label" htmlFor="aam-reassign-t">
             Новый преподаватель
@@ -759,7 +1232,7 @@ const AdminAssignmentManagement = () => {
             <option value="">Выберите</option>
             {eligibleTeachers.map((t) => (
               <option key={t.id} value={String(t.id)}>
-                {t.shortName}
+                {`${t.shortName ?? t.fullName ?? t.label ?? 'Преподаватель'}${t.matchLabel ? ` — ${t.matchLabel}` : ''}`}
               </option>
             ))}
           </select>
@@ -777,9 +1250,6 @@ const AdminAssignmentManagement = () => {
         contentClassName="admin-assignment-form"
         footer={(
           <>
-            <Button type="button" variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleteSubmitting}>
-              Отмена
-            </Button>
             <Button type="button" variant="danger" loading={deleteSubmitting} onClick={() => void submitDelete()}>
               Удалить
             </Button>
@@ -798,6 +1268,7 @@ const AdminAssignmentManagement = () => {
             className="admin-assignment-form__input"
             value={deleteConfirmTitle}
             onChange={(e) => setDeleteConfirmTitle(e.target.value)}
+            placeholder={deleteTarget?.title || ''}
             autoComplete="off"
           />
         </ModalSection>

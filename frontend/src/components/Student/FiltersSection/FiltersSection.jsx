@@ -16,6 +16,8 @@ const FiltersSection = ({
   teacherFilter,
   onTeacherFilterChange,
   availableTeachers,
+  submissionFormatFilter,
+  onSubmissionFormatFilterChange,
   onResetFilters,
   filtersResetDisabled = false,
 }) => (
@@ -23,11 +25,11 @@ const FiltersSection = ({
     <DashboardFilterToolbar
       searchValue={searchTerm}
       onSearchChange={onSearchChange}
-      searchPlaceholder="Поиск по названию, предмету, преподавателю..."
+      searchPlaceholder="Поиск по названию, описанию, дисциплине или преподавателю…"
       searchInputType="text"
       onReset={onResetFilters}
       resetDisabled={filtersResetDisabled}
-      popoverAriaLabel="Фильтры по предмету и преподавателю"
+      popoverAriaLabel="Фильтры по дисциплине, преподавателю и формату сдачи"
     >
       <SubjectFilter
         subjectFilter={subjectFilter}
@@ -38,6 +40,10 @@ const FiltersSection = ({
         teacherFilter={teacherFilter}
         onTeacherFilterChange={onTeacherFilterChange}
         availableTeachers={availableTeachers}
+      />
+      <SubmissionFormatFilter
+        submissionFormatFilter={submissionFormatFilter ?? 'all'}
+        onSubmissionFormatFilterChange={onSubmissionFormatFilterChange}
       />
     </DashboardFilterToolbar>
 
@@ -61,7 +67,7 @@ const FiltersSection = ({
 const SubjectFilter = ({ subjectFilter, onSubjectFilterChange, availableSubjects }) => (
   <div className="filter-popover__field">
     <label className="filter-popover__label" htmlFor="student-filter-subject">
-      Предмет
+      Дисциплина
     </label>
     <select
       id="student-filter-subject"
@@ -69,12 +75,30 @@ const SubjectFilter = ({ subjectFilter, onSubjectFilterChange, availableSubjects
       onChange={(e) => onSubjectFilterChange(e.target.value)}
       className="filter-select"
     >
-      <option value="all">Все предметы</option>
+      <option value="all">Все дисциплины</option>
       {availableSubjects.map((subject) => (
         <option key={subject} value={subject}>
           {subject}
         </option>
       ))}
+    </select>
+  </div>
+);
+
+const SubmissionFormatFilter = ({ submissionFormatFilter, onSubmissionFormatFilterChange }) => (
+  <div className="filter-popover__field">
+    <label className="filter-popover__label" htmlFor="student-filter-submission-format">
+      Формат сдачи
+    </label>
+    <select
+      id="student-filter-submission-format"
+      value={submissionFormatFilter}
+      onChange={(e) => onSubmissionFormatFilterChange(e.target.value)}
+      className="filter-select"
+    >
+      <option value="all">Все форматы</option>
+      <option value="file">Файл</option>
+      <option value="demo">Демонстрация</option>
     </select>
   </div>
 );
@@ -100,8 +124,17 @@ const TeacherFilter = ({ teacherFilter, onTeacherFilterChange, availableTeachers
   </div>
 );
 
+const formatFilterCount = (count) => {
+  const value = Number(count);
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return value > 99 ? '99+' : String(value);
+};
+
 const FilterButton = ({ filter, count, overdueCount, isActive, onClick }) => {
   const hasOverdueAlert = filter.key === 'urgent' && overdueCount > 0;
+  const countLabel = formatFilterCount(count);
 
   return (
     <button
@@ -110,7 +143,11 @@ const FilterButton = ({ filter, count, overdueCount, isActive, onClick }) => {
       onClick={onClick}
     >
       <span className="filter-label">{filter.label}</span>
-      {count > 0 && <span className="filter-count">{count}</span>}
+      {countLabel && (
+        <span className={`filter-count ${countLabel.length > 1 ? 'filter-count--wide' : ''}`}>
+          {countLabel}
+        </span>
+      )}
     </button>
   );
 };

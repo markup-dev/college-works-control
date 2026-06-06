@@ -13,6 +13,6 @@ class PlatformBannerController extends Controller
 {
     public function show(Request $request)
     {
-        return response()->json(SystemSettingsService::activeBannerPayload());
+        return response()->json(SystemSettingsService::activeBannerPayload($request->user()));
     }
 }

@@ -32,11 +32,12 @@ class AssignmentController extends Controller
         $user = $request->user();
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
-            'status' => ['nullable', 'in:active,inactive,archived,not_archived,not_submitted,submitted,graded,returned,urgent'],
+            'status' => ['nullable', 'in:active,archived,not_archived,not_submitted,submitted,graded,returned,urgent'],
             'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
             'subject' => ['nullable', 'string', 'max:255'],
             'teacher_id' => ['nullable', 'integer', 'exists:users,id'],
             'teacher' => ['nullable', 'string', 'max:255'],
+            'submission_type' => ['nullable', 'in:file,demo'],
             'group_id' => ['nullable', 'integer', 'exists:groups,id'],
             'group' => ['nullable', 'string', 'max:100'],
             'work_filter' => ['nullable', 'in:needs_review,no_submissions,all_reviewed'],
@@ -214,13 +215,19 @@ class AssignmentController extends Controller
 
     public function update(Request $request, Assignment $assignment)
     {
+        if ($assignment->isNaturallyClosed()) {
+            throw ValidationException::withMessages([
+                'status' => 'Задание закрыто автоматически: все работы сданы и проверены. Редактирование запрещено.',
+            ]);
+        }
+
         $validated = $request->validate(
             [
                 'title' => ['sometimes', 'required', 'string', 'min:3', 'max:255'],
                 'subject_id' => ['sometimes', 'required', Rule::exists('subjects', 'id')->where(fn ($query) => $query->where('status', 'active'))],
                 'description' => ['nullable', 'string', 'min:10', 'max:5000'],
                 'deadline' => ['sometimes', 'required', 'date', 'after_or_equal:today'],
-                'status' => ['nullable', 'in:active,inactive,archived'],
+                'status' => ['nullable', 'in:active,archived'],
                 'submission_type' => ['nullable', 'in:file,demo'],
                 'criteria' => ['nullable', 'array', 'max:20'],
                 'criteria.*.text' => ['nullable', 'string', 'max:500'],
@@ -316,6 +323,12 @@ class AssignmentController extends Controller
 
     public function destroy(Assignment $assignment)
     {
+        if ($assignment->isNaturallyClosed()) {
+            throw ValidationException::withMessages([
+                'status' => 'Задание закрыто автоматически: все работы сданы и проверены. Удаление запрещено.',
+            ]);
+        }
+
         $assignment->loadMissing('materialItems');
         foreach ($assignment->materialItems as $material) {
             if (! empty($material->file_path) && Storage::disk('public')->exists($material->file_path)) {
@@ -332,6 +345,12 @@ class AssignmentController extends Controller
     {
         if ((int) $assignment->teacher_id !== (int) $request->user()->id) {
             return response()->json(['message' => 'Недостаточно прав для изменения материалов этого задания.'], 403);
+        }
+
+        if ($assignment->isNaturallyClosed()) {
+            throw ValidationException::withMessages([
+                'status' => 'Задание закрыто автоматически: все работы сданы и проверены. Редактирование запрещено.',
+            ]);
         }
 
         $validated = $request->validate(

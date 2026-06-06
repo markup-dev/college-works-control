@@ -19,6 +19,7 @@ class SystemSettingsService
                 'enabled' => false,
                 'text' => '',
                 'color' => 'yellow',
+                'audience' => 'all',
                 'starts_at' => null,
                 'ends_at' => null,
                 'indefinite' => true,
@@ -70,8 +71,8 @@ class SystemSettingsService
         $model->save();
     }
 
-    /** @return array{active: false}|array{active: true, text: string, color: string} */
-    public static function activeBannerPayload(): array
+    /** @return array{active: false}|array{active: true, text: string, color: string, ends_at?: string|null} */
+    public static function activeBannerPayload(?User $user = null): array
     {
         $b = self::merged()['global_banner'];
         if (empty($b['enabled'])) {
@@ -84,14 +85,20 @@ class SystemSettingsService
         $color = in_array(($b['color'] ?? ''), ['yellow', 'red', 'blue', 'green'], true)
             ? $b['color']
             : 'yellow';
+        $audience = in_array(($b['audience'] ?? ''), ['all', 'students', 'teachers', 'admins'], true)
+            ? $b['audience']
+            : 'all';
+        if (! self::bannerAudienceMatches($audience, $user)) {
+            return ['active' => false];
+        }
 
         if (! empty($b['indefinite'])) {
-            return ['active' => true, 'text' => $text, 'color' => $color];
+            return ['active' => true, 'text' => $text, 'color' => $color, 'ends_at' => null];
         }
 
         try {
-            $start = isset($b['starts_at']) ? Carbon::parse($b['starts_at'])->startOfDay() : null;
-            $end = isset($b['ends_at']) ? Carbon::parse($b['ends_at'])->endOfDay() : null;
+            $start = isset($b['starts_at']) ? Carbon::parse($b['starts_at']) : null;
+            $end = isset($b['ends_at']) ? Carbon::parse($b['ends_at']) : null;
         } catch (\Throwable) {
             return ['active' => false];
         }
@@ -104,7 +111,24 @@ class SystemSettingsService
             return ['active' => false];
         }
 
-        return ['active' => true, 'text' => $text, 'color' => $color];
+        return ['active' => true, 'text' => $text, 'color' => $color, 'ends_at' => $end?->toISOString()];
+    }
+
+    private static function bannerAudienceMatches(string $audience, ?User $user): bool
+    {
+        if ($audience === 'all') {
+            return true;
+        }
+        if (! $user) {
+            return false;
+        }
+
+        return match ($audience) {
+            'students' => $user->role === 'student',
+            'teachers' => $user->role === 'teacher',
+            'admins' => $user->role === 'admin',
+            default => true,
+        };
     }
 
     /** @return array{subject: string, body: string, from_name: string} */

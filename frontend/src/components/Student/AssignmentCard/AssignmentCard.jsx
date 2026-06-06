@@ -4,7 +4,6 @@ import Button from '../../UI/Button/Button';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import { getAssignmentStatusInfo, getDaysUntilDeadline, formatDate } from '../../../utils';
 import iconDeadline from '../../../assets/assignment/assignment-deadline.svg';
-import iconMaxScore from '../../../assets/assignment/assignment-max-score.svg';
 import iconSubmissionFormat from '../../../assets/assignment/assignment-submission-format.svg';
 import iconSubmitted from '../../../assets/assignment/assignment-submitted.svg';
 import iconGrade from '../../../assets/assignment/assignment-grade.svg';
@@ -131,7 +130,9 @@ const AssignmentCard = ({
       <Card
         key={assignment.id}
         hoverable
-        className={`assignment-card ${className} ${isUrgent ? 'assignment-card--urgent' : ''} ${isOverdue ? 'assignment-card--overdue' : ''}`}
+        className={`assignment-card ${className} 
+        ${isUrgent ? 'assignment-card--urgent' : ''} 
+        ${isOverdue ? 'assignment-card--overdue' : ''}`}
         onClick={() => onViewDetails(assignment)}
         style={{ cursor: 'pointer' }}
       >
@@ -158,9 +159,9 @@ const AssignmentCard = ({
             {statusInfo.label}
           </StatusBadge>
           {isRetakeAssignment && (
-            <span className={`retake-badge ${retakeUsed ? 'retake-badge--used' : ''}`}>
+            <StatusBadge tone={retakeUsed ? 'neutral' : 'retake'}>
               {retakeUsed ? 'Пересдача использована' : 'Пересдача'}
-            </span>
+            </StatusBadge>
           )}
         </div>
       </div>
@@ -181,12 +182,6 @@ const AssignmentCard = ({
               )}
             </div>
           }
-        />
-        
-        <DetailRow 
-          iconSrc={iconMaxScore}
-          label="Макс. балл:" 
-          value={<span className="max-score">{assignment.maxScore}</span>} 
         />
 
         <DetailRow 

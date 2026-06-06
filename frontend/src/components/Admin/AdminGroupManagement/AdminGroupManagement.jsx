@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
-import { formatDateLong } from '../../../utils/dateHelpers';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
 import EmptyState from '../../UI/EmptyState/EmptyState';
@@ -16,9 +15,43 @@ import ModalSection from '../../UI/Modal/ModalSection';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
+import { ADMIN_CARD_GRID_PAGE_SIZE } from '../../../config/adminPagination';
+import usePaginationClamp from '../../../hooks/usePaginationClamp';
+import { parsePaginationMeta } from '../../../utils/pagination';
+import AdminGroupsImportModal from '../AdminGroupsImportModal/AdminGroupsImportModal';
 import './AdminGroupManagement.scss';
 
-const PER_PAGE = 18;
+const groupStatusPresentation = (row) => {
+  if (row.status === 'graduated') {
+    return { label: 'Выпущена', tone: 'neutral' };
+  }
+  if (row.status === 'active') {
+    return { label: 'Активна', tone: 'success' };
+  }
+  return { label: 'Закрыта', tone: 'neutral' };
+};
+
+const formatStudyYears = (row) => {
+  const from = row.admissionYear;
+  const to = row.graduationYear;
+  if (from && to) return `${from}–${to}`;
+  if (from && row.studyYears) return `${from}–${from + row.studyYears}`;
+  if (from) return String(from);
+  return '—';
+};
+
+const formatCourseLabel = (row) => {
+  const course = row.currentCourse;
+  if (!course) return '—';
+  const total = row.studyYears || row.specialtyRef?.studyYears;
+  if (total) return `${course} из ${total}`;
+  return `${course} курс`;
+};
+
+const parsePositiveId = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? String(n) : '';
+};
 
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: 'Все' },
@@ -26,29 +59,18 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'inactive', label: 'Закрыта' },
 ];
 
-const initialsIO = (firstName, middleName) => {
-  const a = firstName?.trim()?.[0];
-  const b = middleName?.trim()?.[0];
-  const parts = [];
-  if (a) parts.push(`${a}.`);
-  if (b) parts.push(`${b}.`);
-  return parts.join('');
-};
-
-const shortName = (lastName, firstName, middleName) => {
-  const io = initialsIO(firstName, middleName);
-  return [lastName, io].filter(Boolean).join(' ').trim() || '—';
-};
+const COURSE_PROMOTION_CONFIRM_TEXT = 'ПЕРЕВЕСТИ ГРУППЫ';
 
 const AdminGroupManagement = () => {
   const { showSuccess, showError } = useNotification();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const [status, setStatus] = useState('');
-  const [specialty, setSpecialty] = useState('');
+  const specialty = useMemo(() => parsePositiveId(searchParams.get('specialty_id')), [searchParams]);
   const [page, setPage] = useState(1);
 
   const [groups, setGroups] = useState([]);
@@ -61,43 +83,68 @@ const AdminGroupManagement = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createSpecialty, setCreateSpecialty] = useState('');
+  const [createAdmissionYear, setCreateAdmissionYear] = useState(String(new Date().getFullYear()));
+  const [createCurrentCourse, setCreateCurrentCourse] = useState('1');
   const [createSubmitting, setCreateSubmitting] = useState(false);
-
-  const [editRow, setEditRow] = useState(null);
-  const [editName, setEditName] = useState('');
-  const [editSpecialty, setEditSpecialty] = useState('');
-  const [editSubmitting, setEditSubmitting] = useState(false);
-
-  const [viewId, setViewId] = useState(null);
-  const [viewData, setViewData] = useState(null);
-  const [viewLoading, setViewLoading] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const [closeTarget, setCloseTarget] = useState(null);
   const [closeConfirmName, setCloseConfirmName] = useState('');
   const [closeSubmitting, setCloseSubmitting] = useState(false);
 
   const [reopenTarget, setReopenTarget] = useState(null);
-
-  const openCreateFromRoute = Boolean(location.state?.openCreateGroup);
+  const [promotionOpen, setPromotionOpen] = useState(false);
+  const [promotionActiveCount, setPromotionActiveCount] = useState(null);
+  const [promotionConfirmText, setPromotionConfirmText] = useState('');
+  const [promotionSubmitting, setPromotionSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!openCreateFromRoute) return;
-    setCreateOpen(true);
-    navigate(location.pathname, { replace: true, state: {} });
-  }, [openCreateFromRoute, location.pathname, navigate]);
+    setPage(1);
+  }, [searchParams]);
+
+  const applySpecialtyFilter = useCallback((value) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set('specialty_id', String(value));
+      else next.delete('specialty_id');
+      return next;
+    }, { replace: true });
+    setPage(1);
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    const st = location.state;
+    if (!st || typeof st !== 'object') return;
+    let consumed = false;
+    let nextSearch = location.search || '';
+
+    if (st.openCreateGroup) {
+      setCreateOpen(true);
+      consumed = true;
+    }
+    if (st.openImportGroups) {
+      setImportOpen(true);
+      consumed = true;
+    }
+    if (st.filterSpecialtyId != null && st.filterSpecialtyId !== '') {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('specialty_id', String(st.filterSpecialtyId));
+      nextSearch = `?${nextParams.toString()}`;
+      consumed = true;
+    }
+
+    if (consumed) {
+      navigate(`${location.pathname}${nextSearch}`, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, location.search, navigate, searchParams]);
 
   const refreshSpecialtyOptions = useCallback(async () => {
     try {
-      const { data } = await api.get('/admin/groups', {
-        params: { per_page: 500, sort: 'name_asc' },
-      });
-      const set = new Set();
-      (Array.isArray(data?.data) ? data.data : []).forEach((g) => {
-        if (g.specialty) set.add(g.specialty);
-      });
-      setSpecialtyOptions(Array.from(set).sort((a, b) => a.localeCompare(b, 'ru')));
+      const { data } = await api.get('/admin/groups/specialties');
+      const options = Array.isArray(data?.data) ? data.data : [];
+      setSpecialtyOptions(options);
     } catch {
-      /* ignore */
+      setSpecialtyOptions([]);
     }
   }, []);
 
@@ -111,30 +158,28 @@ const AdminGroupManagement = () => {
     try {
       const params = {
         page,
-        per_page: PER_PAGE,
+        per_page: ADMIN_CARD_GRID_PAGE_SIZE,
         sort: 'name_asc',
       };
       const q = debouncedSearch.trim();
       if (q) params.search = q;
       if (status) params.status = status;
-      if (specialty) params.specialty = specialty;
+      if (specialty) params.specialty_id = Number(specialty);
 
       const { data } = await api.get('/admin/groups', { params });
       setGroups(Array.isArray(data?.data) ? data.data : []);
       const m = data?.meta;
-      setMeta({
-        currentPage: m?.currentPage ?? page,
-        lastPage: m?.lastPage ?? 1,
-        total: m?.total ?? 0,
-      });
+      setMeta(parsePaginationMeta(m, page));
     } catch (e) {
       setGroups([]);
       setMeta({ currentPage: 1, lastPage: 1, total: 0 });
-      setError(e.response?.data?.message || 'Не удалось загрузить группы');
+      setError(getApiErrorMessage(e, 'Не удалось загрузить группы'));
     } finally {
       setLoading(false);
     }
   }, [page, debouncedSearch, status, specialty]);
+
+  usePaginationClamp(page, meta.lastPage, setPage);
 
   useEffect(() => {
     void fetchGroups();
@@ -144,37 +189,12 @@ const AdminGroupManagement = () => {
     setPage(1);
   }, [debouncedSearch, status, specialty]);
 
-  useEffect(() => {
-    if (viewId == null) {
-      setViewData(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      setViewLoading(true);
-      try {
-        const { data } = await api.get(`/admin/groups/${viewId}`);
-        if (!cancelled) setViewData(data);
-      } catch {
-        if (!cancelled) {
-          setViewData(null);
-          showError('Не удалось загрузить данные группы');
-        }
-      } finally {
-        if (!cancelled) setViewLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [viewId, showError]);
-
   const resetFilters = useCallback(() => {
     setSearch('');
     setStatus('');
-    setSpecialty('');
     setPage(1);
-  }, []);
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
 
   const resetDisabled = useMemo(
     () => !search.trim() && !status && !specialty,
@@ -184,7 +204,7 @@ const AdminGroupManagement = () => {
   const specialtyFilterSelect = useMemo(
     () => [
       { value: '', label: 'Все специальности' },
-      ...specialtyOptions.map((s) => ({ value: s, label: s })),
+      ...specialtyOptions.map((s) => ({ value: String(s.id), label: `${s.name}${s.code ? ` (${s.code})` : ''}` })),
     ],
     [specialtyOptions],
   );
@@ -192,6 +212,8 @@ const AdminGroupManagement = () => {
   const openCreate = () => {
     setCreateName('');
     setCreateSpecialty('');
+    setCreateAdmissionYear(String(new Date().getFullYear()));
+    setCreateCurrentCourse('1');
     setCreateOpen(true);
   };
 
@@ -200,43 +222,18 @@ const AdminGroupManagement = () => {
     try {
       await api.post('/admin/groups', {
         name: createName.trim(),
-        specialty: createSpecialty.trim(),
-        status: 'active',
+        specialtyId: Number(createSpecialty),
+        admissionYear: Number(createAdmissionYear),
+        currentCourse: Number(createCurrentCourse),
       });
-      showSuccess('Группа создана');
+      showSuccess('Группа создана. Она закрыта — добавьте студентов, чтобы открыть.');
       setCreateOpen(false);
       void refreshSpecialtyOptions();
       void fetchGroups();
     } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось создать группу');
+      showError(getApiErrorMessage(e, 'Не удалось создать группу'));
     } finally {
       setCreateSubmitting(false);
-    }
-  };
-
-  const openEdit = (row) => {
-    setEditRow(row);
-    setEditName(row.name || '');
-    setEditSpecialty(row.specialty || '');
-  };
-
-  const submitEdit = async () => {
-    if (!editRow) return;
-    setEditSubmitting(true);
-    try {
-      await api.put(`/admin/groups/${editRow.id}`, {
-        name: editName.trim(),
-        specialty: editSpecialty.trim(),
-      });
-      showSuccess('Изменения сохранены');
-      setEditRow(null);
-      void refreshSpecialtyOptions();
-      void fetchGroups();
-      if (viewId === editRow.id) setViewId(null);
-    } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось сохранить');
-    } finally {
-      setEditSubmitting(false);
     }
   };
 
@@ -253,9 +250,8 @@ const AdminGroupManagement = () => {
       setCloseTarget(null);
       setCloseConfirmName('');
       void fetchGroups();
-      if (viewId === gid) setViewId(null);
     } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось закрыть группу');
+      showError(getApiErrorMessage(e, 'Не удалось закрыть группу'));
     } finally {
       setCloseSubmitting(false);
     }
@@ -269,8 +265,60 @@ const AdminGroupManagement = () => {
       setReopenTarget(null);
       void fetchGroups();
     } catch (e) {
-      showError(firstApiErrorMessage(e?.response?.data) || 'Не удалось открыть группу');
+      showError(getApiErrorMessage(e, 'Не удалось открыть группу'));
       throw e;
+    }
+  };
+
+  const handleGroupsImported = useCallback(
+    (data) => {
+      const created = data?.summary?.created ?? 0;
+      showSuccess(`Импорт завершён: создано групп — ${created}.`);
+      void refreshSpecialtyOptions();
+      void fetchGroups();
+    },
+    [fetchGroups, refreshSpecialtyOptions, showSuccess],
+  );
+
+  const isAugust = new Date().getMonth() === 7;
+
+  const openPromotionModal = async () => {
+    setPromotionConfirmText('');
+    setPromotionActiveCount(null);
+    setPromotionOpen(true);
+    try {
+      const { data } = await api.get('/admin/groups', {
+        params: { status: 'active', per_page: 1 },
+      });
+      setPromotionActiveCount(data?.meta?.total ?? 0);
+    } catch {
+      setPromotionActiveCount(null);
+    }
+  };
+
+  const closePromotionModal = () => {
+    if (promotionSubmitting) return;
+    setPromotionOpen(false);
+    setPromotionConfirmText('');
+  };
+
+  const submitPromotion = async () => {
+    if (promotionConfirmText.trim() !== COURSE_PROMOTION_CONFIRM_TEXT) {
+      showError('Введите точный текст подтверждения');
+      return;
+    }
+    setPromotionSubmitting(true);
+    try {
+      const { data } = await api.post('/admin/groups/promote');
+      const updatedCount = Array.isArray(data?.groups) ? data.groups.length : 0;
+      showSuccess(`Перевод завершён: обновлено групп — ${updatedCount}.`);
+      setPromotionOpen(false);
+      setPromotionConfirmText('');
+      void fetchGroups();
+    } catch (e) {
+      showError(getApiErrorMessage(e, 'Не удалось перевести группы'));
+    } finally {
+      setPromotionSubmitting(false);
     }
   };
 
@@ -283,7 +331,7 @@ const AdminGroupManagement = () => {
         className="admin-group-management__filter-toolbar"
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Поиск по названию группы..."
+        searchPlaceholder="Поиск по названию группы…"
         onReset={resetFilters}
         resetDisabled={resetDisabled}
         popoverAlign="end"
@@ -297,7 +345,7 @@ const AdminGroupManagement = () => {
             id="admin-group-specialty-filter"
             className="filter-select"
             value={specialty}
-            onChange={(e) => setSpecialty(e.target.value)}
+            onChange={(e) => applySpecialtyFilter(e.target.value)}
           >
             {specialtyFilterSelect.map((o) => (
               <option key={o.value || 'all'} value={o.value}>
@@ -328,6 +376,18 @@ const AdminGroupManagement = () => {
         <Button type="button" variant="primary" onClick={openCreate}>
           + Новая группа
         </Button>
+        <Button type="button" variant="secondary" onClick={() => setImportOpen(true)}>
+          Импорт CSV
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!isAugust}
+          title={isAugust ? undefined : 'Перевод групп доступен только в августе'}
+          onClick={() => void openPromotionModal()}
+        >
+          Перевести группы на новый курс
+        </Button>
       </div>
       {error && (
         <ErrorBanner
@@ -349,63 +409,95 @@ const AdminGroupManagement = () => {
           />
         ) : (
           <div className="groups-grid">
-            {groups.map((row) => {
+            {groups.map((row, index) => {
               const stud = row.studentsCount ?? 0;
               const teach = row.teachersCount ?? 0;
               const isActive = row.status === 'active';
+              const st = groupStatusPresentation(row);
+              const specialtyName = row.specialtyRef?.name || row.specialty || 'Специальность не указана';
+              const specialtyCode = row.specialtyRef?.code || '';
+
               return (
                 <EntityCard
                   key={row.id}
-                  className="group-card"
-                  padding="medium"
+                  className="group-card app-reveal-item"
+                  style={{ animationDelay: `${index * 0.03}s` }}
+                  padding="small"
                   role="button"
                   tabIndex={0}
-                  onClick={() => setViewId(row.id)}
+                  interactive
+                  onClick={() => navigate(`/admin/groups/${row.id}`)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      setViewId(row.id);
+                      navigate(`/admin/groups/${row.id}`);
                     }
                   }}
                 >
-                  <div className="group-card__header">
-                    <div className="group-card__title">{row.name}</div>
-                  </div>
-                  <div className="group-card__specialty">{row.specialty || 'Специальность не указана'}</div>
-                  <div className="group-card__stats">
-                    <div className="group-card__stat">
-                      <span className="group-card__stat-label">Студентов</span>
-                      <span className="group-card__stat-value">{stud}</span>
+                  <div className="group-card__body">
+                    <div className="group-card__top">
+                      <div className="group-card__title-block">
+                        <div className="group-card__name">{row.name}</div>
+                        <div className="group-card__specialty" title={specialtyName}>
+                          {specialtyName}
+                        </div>
+                        {specialtyCode && (
+                          <span className="group-card__code">{specialtyCode}</span>
+                        )}
+                      </div>
+                      <StatusBadge tone={st.tone} className="group-card__status">
+                        {st.label}
+                      </StatusBadge>
                     </div>
-                    <div className="group-card__stat">
-                      <span className="group-card__stat-label">Преподавателей</span>
-                      <span className="group-card__stat-value">{teach}</span>
+
+                    <div className="group-card__fields">
+                      <div className="group-card__row group-card__row--labeled">
+                        <span className="group-card__label">Курс</span>
+                        <span className="group-card__value">{formatCourseLabel(row)}</span>
+                      </div>
+                      <div className="group-card__row group-card__row--labeled">
+                        <span className="group-card__label">Годы</span>
+                        <span className="group-card__value">{formatStudyYears(row)}</span>
+                      </div>
+                      <div className="group-card__row group-card__row--labeled">
+                        <span className="group-card__label">Студентов</span>
+                        <span className="group-card__value">{stud}</span>
+                      </div>
+                      <div className="group-card__row group-card__row--labeled">
+                        <span className="group-card__label">Преподавателей</span>
+                        <span className="group-card__value">{teach}</span>
+                      </div>
                     </div>
-                  </div>
-                  <StatusBadge tone={isActive ? 'success' : 'neutral'} className="group-card__status">
-                    {isActive ? 'Активна' : 'Закрыта'}
-                  </StatusBadge>
-                  <div className="group-card__actions" onClick={(e) => e.stopPropagation()}>
-                    <Button type="button" variant="outline" size="small" onClick={() => openEdit(row)}>
-                      Редактировать
-                    </Button>
-                    {isActive ? (
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="small"
-                        onClick={() => {
-                          setCloseTarget(row);
-                          setCloseConfirmName('');
-                        }}
-                      >
-                        Закрыть
+
+                    <div className="group-card__actions" onClick={(e) => e.stopPropagation()}>
+                      <Button type="button" variant="outline" size="small" onClick={() => navigate(`/admin/groups/${row.id}?edit=1`)}>
+                        Редактировать
                       </Button>
-                    ) : (
-                      <Button type="button" variant="primary" size="small" onClick={() => setReopenTarget(row)}>
-                        Открыть
-                      </Button>
-                    )}
+                      {isActive ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="small"
+                          onClick={() => {
+                            setCloseTarget(row);
+                            setCloseConfirmName('');
+                          }}
+                        >
+                          Закрыть
+                        </Button>
+                      ) : row.status !== 'graduated' ? (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="small"
+                          disabled={stud < 1}
+                          title={stud < 1 ? 'Сначала добавьте хотя бы одного студента' : undefined}
+                          onClick={() => setReopenTarget(row)}
+                        >
+                          Открыть
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 </EntityCard>
               );
@@ -420,8 +512,8 @@ const AdminGroupManagement = () => {
         total={meta.total}
         fallbackCount={groups.length}
         disabled={loading}
-        onPrev={() => setPage((p) => Math.max(1, p - 1))}
-        onNext={() => setPage((p) => p + 1)}
+        hideWhenSinglePage
+        onPageChange={setPage}
       />
 
       <Modal
@@ -432,9 +524,6 @@ const AdminGroupManagement = () => {
         contentClassName="admin-group-modal__body"
         footer={(
           <>
-            <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)} disabled={createSubmitting}>
-              Отмена
-            </Button>
             <Button
               type="button"
               variant="primary"
@@ -464,91 +553,47 @@ const AdminGroupManagement = () => {
             <label className="admin-group-modal__label">
               Специальность <span className="admin-group-modal__required">*</span>
             </label>
-            <input
+            <select
               className="admin-group-modal__input"
-              list="admin-group-specialty-datalist"
               value={createSpecialty}
               onChange={(e) => setCreateSpecialty(e.target.value)}
-              placeholder="Выберите или введите новую"
-              autoComplete="off"
-            />
-            <datalist id="admin-group-specialty-datalist">
-              {specialtyOptions.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-          </div>
-        </ModalSection>
-          <ModalSection title="Примечание" variant="soft">
-          <div className="admin-group-modal__hint">
-            <p>По умолчанию группа создаётся со статусом «Активна».</p>
-            <p>Назначения преподавателей задаются в разделе «Назначения».</p>
-          </div>
-          </ModalSection>
-      </Modal>
-
-      <Modal
-        isOpen={!!editRow}
-        onClose={() => !editSubmitting && setEditRow(null)}
-        title={editRow?.name ? `Редактирование: ${editRow.name}` : 'Редактирование группы'}
-        size="medium"
-        contentClassName="admin-group-modal__body"
-        footer={(
-          <>
-            <Button type="button" variant="secondary" onClick={() => setEditRow(null)} disabled={editSubmitting}>
-              Отмена
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              loading={editSubmitting}
-              disabled={editSubmitting || !editName.trim() || !editSpecialty.trim()}
-              onClick={() => void submitEdit()}
             >
-              Сохранить
-            </Button>
-          </>
-        )}
-      >
-        <ModalSection title="Данные группы">
-          <div className="admin-group-modal__field">
-            <label className="admin-group-modal__label">
-              Название группы <span className="admin-group-modal__required">*</span>
-            </label>
-            <input
-              className="admin-group-modal__input"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              autoComplete="off"
-            />
-          </div>
-          <div className="admin-group-modal__field">
-            <label className="admin-group-modal__label">
-              Специальность <span className="admin-group-modal__required">*</span>
-            </label>
-            <input
-              className="admin-group-modal__input"
-              list="admin-group-specialty-datalist-edit"
-              value={editSpecialty}
-              onChange={(e) => setEditSpecialty(e.target.value)}
-              autoComplete="off"
-            />
-            <datalist id="admin-group-specialty-datalist-edit">
+              <option value="">Выберите специальность</option>
               {specialtyOptions.map((s) => (
-                <option key={s} value={s} />
+                <option key={s.id} value={String(s.id)}>
+                  {s.name}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
+          <div className="admin-group-modal__field">
+            <label className="admin-group-modal__label">Год начала обучения</label>
+            <input
+              className="admin-group-modal__input"
+              type="number"
+              min="2000"
+              max="2100"
+              value={createAdmissionYear}
+              onChange={(e) => setCreateAdmissionYear(e.target.value)}
+              placeholder="2025"
+            />
+          </div>
+          <div className="admin-group-modal__field">
+            <label className="admin-group-modal__label">Текущий курс</label>
+            <input
+              className="admin-group-modal__input"
+              type="number"
+              min="1"
+              max="6"
+              value={createCurrentCourse}
+              onChange={(e) => setCreateCurrentCourse(e.target.value)}
+              placeholder="1"
+            />
+          </div>
+          <p className="admin-group-modal__hint">
+            Новая группа создаётся закрытой. Открыть её можно после добавления хотя бы одного студента.
+          </p>
         </ModalSection>
-          {editRow && (
-            <ModalSection title="Текущий статус" variant="soft">
-            <div className="admin-group-modal__hint">
-              <p>
-                Статус: <strong>{editRow.status === 'active' ? 'Активна' : 'Закрыта'}</strong>
-              </p>
-            </div>
-            </ModalSection>
-          )}
       </Modal>
 
       <Modal
@@ -558,14 +603,9 @@ const AdminGroupManagement = () => {
         size="medium"
         contentClassName="admin-group-modal__body"
         footer={(
-          <>
-            <Button type="button" variant="secondary" onClick={() => setCloseTarget(null)} disabled={closeSubmitting}>
-              Отмена
-            </Button>
-            <Button type="button" variant="danger" loading={closeSubmitting} onClick={() => void submitClose()}>
-              Закрыть группу
-            </Button>
-          </>
+          <Button type="button" variant="danger" loading={closeSubmitting} onClick={() => void submitClose()}>
+            Закрыть группу
+          </Button>
         )}
       >
         <ModalSection title="Подтверждение закрытия" variant="warning">
@@ -590,161 +630,63 @@ const AdminGroupManagement = () => {
         </ModalSection>
       </Modal>
 
-      <Modal
-        isOpen={!!viewId}
-        onClose={() => setViewId(null)}
-        title={viewData?.group ? `Группа ${viewData.group.name}` : 'Группа'}
-        size="large"
-        contentClassName="admin-group-modal__body"
-        footer={viewData?.group ? (
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                const g = viewData?.group;
-                setViewId(null);
-                const row = groups.find((x) => x.id === g?.id);
-                openEdit(row || { id: g?.id, name: g?.name, specialty: g?.specialty, status: g?.status });
-              }}
-            >
-              Редактировать
-            </Button>
-            {viewData.group.status === 'active' ? (
-              <Button
-                type="button"
-                variant="danger"
-                onClick={() => {
-                  const g = viewData?.group;
-                  setViewId(null);
-                  setCloseTarget({ id: g?.id, name: g?.name });
-                  setCloseConfirmName('');
-                }}
-              >
-                Закрыть группу
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => {
-                  const g = viewData?.group;
-                  setViewId(null);
-                  setReopenTarget({ id: g?.id, name: g?.name });
-                }}
-              >
-                Открыть группу
-              </Button>
-            )}
-          </>
-        ) : null}
-      >
-          {viewLoading && (
-            <LoadingState message="Загрузка..." className="admin-group-modal__state" />
-          )}
-          {!viewLoading && viewData?.group && (
-            <div className="group-view">
-              {/* Информация о группе */}
-              <ModalSection title="Основная информация">
-                <div className="info-grid">
-                  <div className="info-item">
-                    <span className="info-item__label">Название</span>
-                    <span className="info-item__value">{viewData.group.name}</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-item__label">Специальность</span>
-                    <span className="info-item__value">{viewData.group.specialty || '—'}</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-item__label">Статус</span>
-                    <StatusBadge tone={viewData.group.status === 'active' ? 'success' : 'neutral'}>
-                      {viewData.group.status === 'active' ? 'Активна' : 'Закрыта'}
-                    </StatusBadge>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-item__label">Создана</span>
-                    <span className="info-item__value">{formatDateLong(viewData.group.createdAt)}</span>
-                  </div>
-                </div>
-              </ModalSection>
-
-              {/* Студенты */}
-              <ModalSection title={`Студенты (${viewData.group.studentsCount ?? 0})`}>
-                {(!viewData.students || viewData.students.length === 0) && (
-                  <div className="admin-group-modal__empty-note">Студентов пока нет</div>
-                )}
-                {viewData.students?.length > 0 && (
-                  <>
-                    <div className="students-grid">
-                      {viewData.students.slice(0, 12).map((s) => (
-                        <div key={s.id} className="student-card">
-                          <div className="student-card__name">{shortName(s.lastName, s.firstName, s.middleName)}</div>
-                          <div className="student-card__avg">
-                            {s.avgScore != null ? `Средний балл: ${s.avgScore}` : 'Нет оценок'}
-                          </div>
-                          {(s.overdueAssignments ?? 0) > 0 && (
-                            <div className="student-card__warning">Просрочено заданий: {s.overdueAssignments}</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    {(viewData.group.studentsCount ?? 0) > 12 && (
-                      <div className="view-all-link">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="small"
-                          onClick={() => {
-                            const id = viewData.group.id;
-                            setViewId(null);
-                            navigate('/admin/users', { state: { filterGroupId: id } });
-                          }}
-                        >
-                          Все студенты ({viewData.group.studentsCount})
-                        </Button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </ModalSection>
-
-              {/* Преподаватели и предметы */}
-              <ModalSection title="Преподаватели и предметы">
-                {(!viewData.subjectBlocks || viewData.subjectBlocks.length === 0) && (
-                  <div className="admin-group-modal__empty-note">Нет активных назначений</div>
-                )}
-                {viewData.subjectBlocks?.length > 0 && (
-                  <div className="subjects-list">
-                    {viewData.subjectBlocks.map((block, idx) => (
-                      <div key={`${block.subject?.id}-${block.teacher?.id}-${idx}`} className="subject-card">
-                        <div className="subject-card__name">{block.subject?.name || '—'}</div>
-                        <div className="subject-card__teacher">
-                          {block.teacher
-                            ? shortName(block.teacher.lastName, block.teacher.firstName, block.teacher.middleName)
-                            : 'Преподаватель не назначен'}
-                        </div>
-                        <div className="subject-card__count">
-                          Активных заданий: {block.activeAssignmentsCount ?? 0}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </ModalSection>
-            </div>
-          )}
-      </Modal>
-
       <ConfirmModal
         isOpen={!!reopenTarget}
         onClose={() => setReopenTarget(null)}
         title={reopenTarget ? `Открыть группу ${reopenTarget.name}` : 'Открыть группу'}
-        message="Группа снова станет активной. После открытия проверьте назначения преподавателей."
+        message={
+          (reopenTarget?.studentsCount ?? 0) < 1
+            ? 'В группе нет студентов — открыть её нельзя. Добавьте студентов и попробуйте снова.'
+            : 'Группа снова станет активной. После открытия проверьте назначения преподавателей.'
+        }
         confirmText="Открыть"
-        cancelText="Отмена"
         onConfirm={async () => {
           await submitReopen();
         }}
+      />
+      <Modal
+        isOpen={promotionOpen}
+        onClose={closePromotionModal}
+        title="Перевести группы на новый курс"
+        size="medium"
+        contentClassName="admin-group-modal__body"
+        closeDisabled={promotionSubmitting}
+        footer={(
+          <Button
+            type="button"
+            variant="danger"
+            loading={promotionSubmitting}
+            disabled={promotionSubmitting || promotionConfirmText.trim() !== COURSE_PROMOTION_CONFIRM_TEXT}
+            onClick={() => void submitPromotion()}
+          >
+            Перевести группы
+          </Button>
+        )}
+      >
+        <ModalSection title="Годовой перевод" variant="warning">
+          <p className="admin-group-modal__hint">
+            Операция переводит все активные группы на следующий курс. Группы последнего курса будут выпущены.
+          </p>
+          <p className="admin-group-modal__hint">
+            Сейчас будет обработано активных групп: {promotionActiveCount ?? 'загрузка...'}.
+          </p>
+          <div className="admin-group-modal__field">
+            <label className="admin-group-modal__label">
+              Введите «{COURSE_PROMOTION_CONFIRM_TEXT}» для подтверждения
+            </label>
+            <input
+              className="admin-group-modal__input"
+              value={promotionConfirmText}
+              onChange={(event) => setPromotionConfirmText(event.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        </ModalSection>
+      </Modal>
+      <AdminGroupsImportModal
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={handleGroupsImported}
       />
     </div>
   );

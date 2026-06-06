@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Задание преподавателя: дедлайн, тип сдачи, привязка к группам и предмету; критерии, форматы файлов и материалы — отдельные таблицы.
+ * Задание преподавателя: дедлайн, тип сдачи, привязка к группам и дисциплине; критерии, форматы файлов и материалы — отдельные таблицы.
  * Appends собирают вложенные структуры для API; syncCompletionStatus переводит в archived при полной сдаче и оценке всех студентов целевых групп.
  */
 class Assignment extends Model
@@ -177,6 +177,22 @@ class Assignment extends Model
             'returned_students' => $returnedStudents,
             'completion_rate' => $totalStudents > 0 ? (int) round(($submittedStudents / $totalStudents) * 100) : 0,
         ];
+    }
+
+    public function isNaturallyClosed(?array $metrics = null): bool
+    {
+        if ($this->status !== 'archived') {
+            return false;
+        }
+
+        $metrics ??= $this->calculateCompletionMetrics();
+        $totalStudents = (int) ($metrics['total_students'] ?? 0);
+        $submittedStudents = (int) ($metrics['submitted_students'] ?? 0);
+        $gradedStudents = (int) ($metrics['graded_students'] ?? 0);
+
+        return $totalStudents > 0
+            && $submittedStudents === $totalStudents
+            && $gradedStudents === $totalStudents;
     }
 
     public function syncCompletionStatus(): void

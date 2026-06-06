@@ -8,6 +8,7 @@ use App\Models\Group;
 use App\Models\Submission;
 use App\Models\User;
 use App\Services\Admin\AdminCsvImportService;
+use App\Services\AdminActionNotificationService;
 use App\Services\UserLoginAllocator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -436,6 +437,18 @@ class UserController extends Controller
             ]);
         }
 
+        if ($validated['role'] === 'teacher' && trim((string) ($validated['department'] ?? '')) === '') {
+            throw ValidationException::withMessages([
+                'department' => ['Укажите кафедру для преподавателя.'],
+            ]);
+        }
+
+        if ($validated['role'] !== 'teacher') {
+            $validated['department'] = null;
+        } else {
+            $validated['department'] = trim((string) $validated['department']);
+        }
+
         $login = $this->loginAllocator->allocateFromNames(
             trim($validated['last_name']),
             trim($validated['first_name']),
@@ -525,6 +538,15 @@ class UserController extends Controller
 
         $validated = $request->validate(
             [
+                'login' => [
+                    'sometimes',
+                    'required',
+                    'string',
+                    'min:6',
+                    'max:30',
+                    'regex:/^[a-zA-Z0-9_]+$/',
+                    Rule::unique('users', 'login')->ignore($user->id),
+                ],
                 'last_name' => ['sometimes', 'required', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
                 'first_name' => ['sometimes', 'required', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
                 'middle_name' => ['nullable', 'string', 'max:100', 'regex:/^[А-Яа-яЁё-]+$/u'],
@@ -538,6 +560,10 @@ class UserController extends Controller
                 'is_active' => ['sometimes', 'boolean'],
             ],
             [
+                'login.required' => 'Введите логин.',
+                'login.min' => 'Логин должен содержать минимум 6 символов.',
+                'login.regex' => 'Логин может содержать только латинские буквы, цифры и подчеркивание.',
+                'login.unique' => 'Пользователь с таким логином уже существует.',
                 'email.email' => 'Введите корректный email.',
                 'email.unique' => 'Пользователь с таким email уже существует.',
                 'password.min' => 'Пароль должен содержать минимум 8 символов.',
@@ -589,6 +615,9 @@ class UserController extends Controller
         if (array_key_exists('middle_name', $validated)) {
             $validated['middle_name'] = !empty($validated['middle_name']) ? trim($validated['middle_name']) : null;
         }
+        if (array_key_exists('login', $validated)) {
+            $validated['login'] = trim($validated['login']);
+        }
 
         $roleAfter = $validated['role'] ?? $user->role;
         $groupIdAfter = array_key_exists('group_id', $validated)
@@ -598,6 +627,22 @@ class UserController extends Controller
             throw ValidationException::withMessages([
                 'group_id' => ['Выберите группу для студента.'],
             ]);
+        }
+
+        $departmentAfter = array_key_exists('department', $validated)
+            ? trim((string) ($validated['department'] ?? ''))
+            : trim((string) ($user->department ?? ''));
+
+        if ($roleAfter === 'teacher' && $departmentAfter === '') {
+            throw ValidationException::withMessages([
+                'department' => ['Укажите кафедру для преподавателя.'],
+            ]);
+        }
+
+        if ($roleAfter !== 'teacher') {
+            $validated['department'] = null;
+        } elseif (array_key_exists('department', $validated)) {
+            $validated['department'] = trim((string) $validated['department']);
         }
 
         if (
@@ -610,11 +655,32 @@ class UserController extends Controller
             ]);
         }
 
+        $user->loadMissing('studentGroup:id,name');
+        $before = $user->only(['login', 'last_name', 'first_name', 'middle_name', 'email', 'role', 'group_id', 'department', 'phone', 'is_active']);
+        $oldGroupName = $user->studentGroup?->name;
+        $passwordChanged = array_key_exists('password', $validated);
+
         $user->update($validated);
+        $fresh = $user->fresh()->load(['studentGroup']);
+
+        $changeParts = $this->describeUserChanges($before, $fresh, $oldGroupName, $passwordChanged);
+        if ($changeParts !== []) {
+            app(AdminActionNotificationService::class)->notify(
+                $fresh,
+                $request->user(),
+                'Администратор изменил ваши данные',
+                implode(' ', $changeParts),
+                [
+                    'action' => 'user_updated',
+                    'changed_fields' => array_keys($changeParts),
+                    'user_id' => $fresh->id,
+                ],
+            );
+        }
 
         $this->log($request, 'update_user', "Изменены данные пользователя {$user->full_name}");
 
-        return response()->json(['success' => true, 'user' => $user->fresh()->load(['studentGroup'])]);
+        return response()->json(['success' => true, 'user' => $fresh]);
     }
 
     public function deleteUser(Request $request, User $user)
@@ -778,5 +844,71 @@ class UserController extends Controller
         } catch (Throwable) {
             // Ошибки почты не должны прерывать создание пользователя.
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $before
+     * @return array<string, string>
+     */
+    private function describeUserChanges(array $before, User $after, ?string $oldGroupName, bool $passwordChanged): array
+    {
+        $changes = [];
+
+        $oldFullName = trim(implode(' ', array_filter([
+            $before['last_name'] ?? null,
+            $before['first_name'] ?? null,
+            $before['middle_name'] ?? null,
+        ])));
+        if ($oldFullName !== $after->full_name) {
+            $changes['name'] = 'ФИО изменено на '.$after->full_name.'.';
+        }
+
+        if (($before['email'] ?? null) !== $after->email) {
+            $changes['email'] = 'Email изменён на '.$after->email.'.';
+        }
+
+        if (($before['login'] ?? null) !== $after->login) {
+            $changes['login'] = 'Логин изменён на '.$after->login.'.';
+        }
+
+        if (($before['role'] ?? null) !== $after->role) {
+            $roleLabel = match ($after->role) {
+                'student' => 'студент',
+                'teacher' => 'преподаватель',
+                'admin' => 'администратор',
+                default => $after->role,
+            };
+            $changes['role'] = 'Ваша роль изменена: '.$roleLabel.'.';
+        }
+
+        if ((int) ($before['group_id'] ?? 0) !== (int) ($after->group_id ?? 0)) {
+            $changes['group'] = $after->studentGroup
+                ? 'Вам изменили группу: '.$after->studentGroup->name.'.'
+                : ($oldGroupName ? 'Вас убрали из группы '.$oldGroupName.'.' : 'Группа изменена.');
+        }
+
+        if (($before['department'] ?? null) !== $after->department) {
+            $changes['department'] = $after->department
+                ? 'Кафедра изменена на '.$after->department.'.'
+                : 'Кафедра удалена из профиля.';
+        }
+
+        if (($before['phone'] ?? null) !== $after->phone) {
+            $changes['phone'] = $after->phone
+                ? 'Телефон изменён на '.$after->phone.'.'
+                : 'Телефон удалён из профиля.';
+        }
+
+        if ((bool) ($before['is_active'] ?? true) !== (bool) $after->is_active) {
+            $changes['status'] = $after->is_active
+                ? 'Ваша учётная запись активирована.'
+                : 'Ваша учётная запись заблокирована.';
+        }
+
+        if ($passwordChanged) {
+            $changes['password'] = 'Пароль вашей учётной записи был изменён администратором.';
+        }
+
+        return $changes;
     }
 }

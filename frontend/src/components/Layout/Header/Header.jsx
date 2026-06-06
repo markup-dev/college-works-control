@@ -4,9 +4,14 @@ import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import logo from '../../../assets/logo-border-gradient.svg';
 import { ADMIN_APP_NAV_WITHOUT_DASHBOARD } from '../../../config/adminNavItems';
+import {
+  TEACHER_DASHBOARD_NAV_ITEMS,
+  buildTeacherDashboardTabPath,
+  isTeacherDashboardTabActive,
+} from '../../../config/teacherDashboardNavItems';
 import './Header.scss';
 
-const Header = ({ user, onLogout }) => {
+const Header = ({ user, onLogout, loggingOut = false }) => {
   const location = useLocation();
   const { showInfo } = useNotification();
   const [messagesUnreadTotal, setMessagesUnreadTotal] = useState(0);
@@ -30,6 +35,27 @@ const Header = ({ user, onLogout }) => {
   useEffect(() => {
     void refreshPlatformBanner();
   }, [refreshPlatformBanner]);
+
+  useEffect(() => {
+    const rawEndsAt = platformBanner?.endsAt || platformBanner?.ends_at || null;
+    if (!rawEndsAt) {
+      return undefined;
+    }
+    const endsAt = new Date(rawEndsAt).getTime();
+    if (!Number.isFinite(endsAt)) {
+      return undefined;
+    }
+    const delay = endsAt - Date.now() + 1000;
+    if (delay <= 0) {
+      void refreshPlatformBanner();
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      void refreshPlatformBanner();
+    }, Math.min(delay, 2147483647));
+
+    return () => window.clearTimeout(timer);
+  }, [platformBanner?.endsAt, platformBanner?.ends_at, refreshPlatformBanner]);
 
   useEffect(() => {
     const onRefresh = () => {
@@ -57,7 +83,7 @@ const Header = ({ user, onLogout }) => {
   }, [user?.role]);
 
   const refreshNotificationsUnread = useCallback(async () => {
-    if (user?.role !== 'student' && user?.role !== 'teacher') {
+    if (!user?.role) {
       setNotificationsUnreadTotal(0);
       return;
     }
@@ -70,7 +96,7 @@ const Header = ({ user, onLogout }) => {
   }, [user?.role]);
 
   useEffect(() => {
-    if (user?.role !== 'student' && user?.role !== 'teacher') {
+    if (!user?.role) {
       return undefined;
     }
     if (sessionStorage.getItem('inboxNotifyAfterLogin') === '1') {
@@ -111,7 +137,7 @@ const Header = ({ user, onLogout }) => {
   }, [user?.role, location.pathname, refreshMessagesUnread]);
 
   useEffect(() => {
-    if (user?.role !== 'student' && user?.role !== 'teacher') {
+    if (!user?.role) {
       setNotificationsUnreadTotal(0);
       return undefined;
     }
@@ -151,6 +177,9 @@ const Header = ({ user, onLogout }) => {
   }, [navOpen, closeNav]);
 
   const handleLogout = () => {
+    if (loggingOut) {
+      return;
+    }
     onLogout();
   };
 
@@ -183,6 +212,10 @@ const Header = ({ user, onLogout }) => {
 
   const isMessagesPage = /^\/messages\/?$/.test(location.pathname || '');
 
+  const hasBurgerUnread =
+    notificationsUnreadTotal > 0
+    || ((user?.role === 'student' || user?.role === 'teacher') && messagesUnreadTotal > 0);
+
   return (
     <header
       className={['header', isMessagesPage ? 'header--messages-narrow' : ''].filter(Boolean).join(' ')}
@@ -209,7 +242,7 @@ const Header = ({ user, onLogout }) => {
           <NavLink to={dashboardPath} className={linkClassDesktop}>
             Дашборд
           </NavLink>
-          {(user?.role === 'student' || user?.role === 'teacher') && (
+          {user?.role && (
             <>
               <NavLink to="/notifications" className={linkClassDesktop}>
                 <span className="header__link-inner">
@@ -224,19 +257,21 @@ const Header = ({ user, onLogout }) => {
                   )}
                 </span>
               </NavLink>
-              <NavLink to="/messages" className={linkClassDesktop}>
-                <span className="header__link-inner">
-                  Сообщения
-                  {messagesUnreadTotal > 0 && (
-                    <span
-                      className="header__messages-badge"
-                      aria-label={`Непрочитанных сообщений: ${messagesUnreadTotal}`}
-                    >
-                      {messagesUnreadTotal > 99 ? '99+' : messagesUnreadTotal}
-                    </span>
-                  )}
-                </span>
-              </NavLink>
+              {(user?.role === 'student' || user?.role === 'teacher') && (
+                <NavLink to="/messages" className={linkClassDesktop}>
+                  <span className="header__link-inner">
+                    Сообщения
+                    {messagesUnreadTotal > 0 && (
+                      <span
+                        className="header__messages-badge"
+                        aria-label={`Непрочитанных сообщений: ${messagesUnreadTotal}`}
+                      >
+                        {messagesUnreadTotal > 99 ? '99+' : messagesUnreadTotal}
+                      </span>
+                    )}
+                  </span>
+                </NavLink>
+              )}
             </>
           )}
           <NavLink to={user?.role === 'admin' ? '/admin/profile' : '/profile'} className={linkClassDesktop}>
@@ -247,22 +282,31 @@ const Header = ({ user, onLogout }) => {
         <div className="header__trailing">
           <div className="header__right header__right--desktop">
             <span className="header__user">Привет, {getFirstName(user)}!</span>
-            <button type="button" className="header__logout" onClick={handleLogout}>
-              Выйти
+            <button type="button" className="header__logout" onClick={handleLogout} disabled={loggingOut}>
+              {loggingOut ? 'Выходим...' : 'Выйти'}
             </button>
           </div>
 
           <button
             type="button"
-            className={`header__burger${navOpen ? ' header__burger--open' : ''}`}
+            className={`header__burger${navOpen ? ' header__burger--open' : ''}${hasBurgerUnread ? ' header__burger--has-unread' : ''}`}
             onClick={() => setNavOpen((o) => !o)}
             aria-expanded={navOpen}
             aria-controls="header-mobile-panel"
-            aria-label={navOpen ? 'Закрыть меню' : 'Открыть меню'}
+            aria-label={
+              navOpen
+                ? 'Закрыть меню'
+                : hasBurgerUnread
+                  ? 'Открыть меню, есть непрочитанные уведомления или сообщения'
+                  : 'Открыть меню'
+            }
           >
             <span className="header__burger-bar" />
             <span className="header__burger-bar" />
             <span className="header__burger-bar" />
+            {hasBurgerUnread ? (
+              <span className="header__burger-indicator" aria-hidden="true" />
+            ) : null}
           </button>
         </div>
       </div>
@@ -301,9 +345,11 @@ const Header = ({ user, onLogout }) => {
             </div>
             <p className="header__panel-user">Привет, {getFirstName(user)}!</p>
             <nav className="header__nav header__nav--panel" aria-label="Разделы">
-              <NavLink to={dashboardPath} className={linkClassPanel} onClick={closeNav}>
-                Дашборд
-              </NavLink>
+              {user?.role !== 'teacher' && (
+                <NavLink to={dashboardPath} className={linkClassPanel} onClick={closeNav}>
+                  Дашборд
+                </NavLink>
+              )}
               {user?.role === 'admin' && (
                 <>
                   <p className="header__panel-section-label" id="header-panel-admin-section">
@@ -328,7 +374,34 @@ const Header = ({ user, onLogout }) => {
                   </div>
                 </>
               )}
-              {(user?.role === 'student' || user?.role === 'teacher') && (
+              {user?.role === 'teacher' && (
+                <div className="header__panel-teacher-nav">
+                  <p className="header__panel-section-label" id="header-panel-teacher-section">
+                    Панель преподавателя
+                  </p>
+                  <div
+                    className="header__panel-subnav header__panel-subnav--teacher"
+                    role="group"
+                    aria-labelledby="header-panel-teacher-section"
+                  >
+                    {TEACHER_DASHBOARD_NAV_ITEMS.map(({ id, label }) => {
+                      const tabActive = isTeacherDashboardTabActive(location, id);
+                      return (
+                        <Link
+                          key={id}
+                          to={buildTeacherDashboardTabPath(id)}
+                          className={`header__link header__link--panel${tabActive ? ' header__link--active' : ''}`}
+                          aria-current={tabActive ? 'page' : undefined}
+                          onClick={closeNav}
+                        >
+                          {label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {user?.role && (
                 <>
                   <NavLink to="/notifications" className={linkClassPanel} onClick={closeNav}>
                     <span className="header__link-inner">
@@ -343,19 +416,21 @@ const Header = ({ user, onLogout }) => {
                       )}
                     </span>
                   </NavLink>
-                  <NavLink to="/messages" className={linkClassPanel} onClick={closeNav}>
-                    <span className="header__link-inner">
-                      Сообщения
-                      {messagesUnreadTotal > 0 && (
-                        <span
-                          className="header__messages-badge header__messages-badge--panel"
-                          aria-label={`Непрочитанных сообщений: ${messagesUnreadTotal}`}
-                        >
-                          {messagesUnreadTotal > 99 ? '99+' : messagesUnreadTotal}
-                        </span>
-                      )}
-                    </span>
-                  </NavLink>
+                  {(user?.role === 'student' || user?.role === 'teacher') && (
+                    <NavLink to="/messages" className={linkClassPanel} onClick={closeNav}>
+                      <span className="header__link-inner">
+                        Сообщения
+                        {messagesUnreadTotal > 0 && (
+                          <span
+                            className="header__messages-badge header__messages-badge--panel"
+                            aria-label={`Непрочитанных сообщений: ${messagesUnreadTotal}`}
+                          >
+                            {messagesUnreadTotal > 99 ? '99+' : messagesUnreadTotal}
+                          </span>
+                        )}
+                      </span>
+                    </NavLink>
+                  )}
                 </>
               )}
               <NavLink
@@ -367,8 +442,13 @@ const Header = ({ user, onLogout }) => {
               </NavLink>
             </nav>
             <div className="header__panel-actions">
-              <button type="button" className="header__logout header__logout--panel" onClick={handleLogout}>
-                Выйти
+              <button
+                type="button"
+                className="header__logout header__logout--panel"
+                onClick={handleLogout}
+                disabled={loggingOut}
+              >
+                {loggingOut ? 'Выходим...' : 'Выйти'}
               </button>
             </div>
           </aside>

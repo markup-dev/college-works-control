@@ -25,10 +25,31 @@ const normalizeGroupSelection = (value) => {
   return singleGroup ? [singleGroup] : [];
 };
 
+const normalizeTeachingLoadPairs = (pairs = []) => {
+  if (!Array.isArray(pairs)) {
+    return [];
+  }
+
+  return pairs
+    .map((pair) => {
+      const subjectId = Number(pair?.subjectId ?? pair?.subject_id);
+      const groupName = normalizeGroupSelection(pair?.groupName ?? pair?.group_name)[0] || '';
+
+      if (!Number.isFinite(subjectId) || subjectId <= 0 || !groupName) {
+        return null;
+      }
+
+      return { subjectId, groupName };
+    })
+    .filter(Boolean)
+    .filter((pair, index, array) => array.findIndex((item) => item.subjectId === pair.subjectId && item.groupName === pair.groupName) === index);
+};
+
 const PublishFromBankModal = ({
   isOpen,
   template,
   availableGroups = [],
+  teachingLoadPairs = [],
   onClose,
   onConfirm,
   isSubmitting = false,
@@ -64,11 +85,27 @@ const PublishFromBankModal = ({
     }
   }, [isOpen, template?.id]);
 
+  const templateSubjectId = Number(template?.subject_id ?? template?.subjectId ?? template?.subject?.id);
+  const relationPairs = useMemo(() => normalizeTeachingLoadPairs(teachingLoadPairs), [teachingLoadPairs]);
+
   const groupOptions = useMemo(() => {
-    const set = new Set(availableGroups.filter(Boolean));
-    normalizeGroupSelection(studentGroups).forEach((g) => set.add(g));
+    const normalizedGroups = normalizeGroupSelection(availableGroups);
+    const filteredGroups = relationPairs.length > 0 && Number.isFinite(templateSubjectId) && templateSubjectId > 0
+      ? normalizedGroups.filter((groupName) => relationPairs.some((pair) => pair.subjectId === templateSubjectId && pair.groupName === groupName))
+      : normalizedGroups;
+    const set = new Set(filteredGroups.filter(Boolean));
     return Array.from(set);
-  }, [availableGroups, studentGroups]);
+  }, [availableGroups, relationPairs, templateSubjectId]);
+
+  useEffect(() => {
+    const allowedGroups = new Set(groupOptions);
+    const currentGroups = normalizeGroupSelection(studentGroups);
+    const nextGroups = currentGroups.filter((groupName) => allowedGroups.has(groupName));
+
+    if (nextGroups.length !== currentGroups.length) {
+      setStudentGroups(nextGroups);
+    }
+  }, [groupOptions, studentGroups]);
 
   const selectedGroups = normalizeGroupSelection(studentGroups);
   const summary =
@@ -148,9 +185,6 @@ const PublishFromBankModal = ({
       contentClassName="publish-bank-modal__body"
       footer={(
         <div className="publish-bank-modal__actions">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            Отмена
-          </Button>
           <Button type="submit" form="publish-bank-form" variant="primary" disabled={isSubmitting}>
             {isSubmitting ? 'Создание…' : 'Выдать задание'}
           </Button>

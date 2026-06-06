@@ -29,6 +29,7 @@ class SystemSettingsController extends Controller
             'global_banner.enabled' => ['boolean'],
             'global_banner.text' => ['nullable', 'string', 'max:2000'],
             'global_banner.color' => ['required', Rule::in(['yellow', 'red', 'blue', 'green'])],
+            'global_banner.audience' => ['nullable', Rule::in(['all', 'students', 'teachers', 'admins'])],
             'global_banner.starts_at' => ['nullable', 'date'],
             'global_banner.ends_at' => ['nullable', 'date'],
             'global_banner.indefinite' => ['boolean'],

@@ -1,10 +1,13 @@
 .student-results-modal {
-  max-width: 700px;
+  width: 100%;
+  max-width: min(700px, 100%);
 
   &__body {
     overflow-x: hidden;
-    padding: 24px;
+    padding: 1.25rem 1.35rem;
     background: #fcfdff;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   &__actions {
@@ -108,22 +111,26 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 12px;
-    background: #f9fafb;
+    padding: 0.65rem 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #eef2f7;
     border-radius: 8px;
+    min-width: 0;
 
     strong {
-      font-size: 13px;
-      color: #6b7280;
-      font-weight: 600;
+      font-size: 0.68rem;
+      color: #64748b;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.04em;
     }
 
     span {
-      font-size: 15px;
+      font-size: 0.88rem;
       color: #1f2937;
-      font-weight: 500;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
   }
 
@@ -228,14 +235,17 @@
   }
 
   .feedback-text {
-    padding: 16px;
-    background: #f9fafb;
-    border-left: 4px solid #3b82f6;
+    padding: 0.75rem 0.85rem;
+    background: #f8fafc;
+    border-left: 3px solid #3b82f6;
     border-radius: 8px;
-    font-size: 15px;
-    line-height: 1.6;
+    font-size: 0.88rem;
+    line-height: 1.55;
     color: #374151;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
   }
 
   .criteria-list {
@@ -310,19 +320,31 @@
   }
 
   .description-text {
-    padding: 16px;
-    background: #f9fafb;
+    padding: 0.75rem 0.85rem;
+    background: #f8fafc;
+    border: 1px solid #eef2f7;
     border-radius: 8px;
-    font-size: 15px;
-    line-height: 1.6;
+    font-size: 0.88rem;
+    line-height: 1.55;
     color: #374151;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  .student-results-modal {
+    .info-grid--two-columns {
+      grid-template-columns: 1fr;
+    }
   }
 }
 
 @media (max-width: 768px) {
   .student-results-modal__body {
-    padding: 16px;
+    padding: 0.85rem 1rem;
   }
 
   .student-results-modal__actions {
@@ -334,33 +356,34 @@
     }
   }
 
-  .result-overview {
+  .student-results-modal .result-overview {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: 0.35rem;
   }
 
-  .info-grid--two-columns {
-    grid-template-columns: 1fr;
+  .student-results-modal .result-overview__meta {
+    text-align: left;
+    width: 100%;
   }
 
-  .criterion-item {
+  .student-results-modal .criterion-item {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
   }
 
-  .criterion-points {
+  .student-results-modal .criterion-points {
     flex-wrap: wrap;
     justify-content: flex-start;
     width: 100%;
   }
 
-  .section-title {
-    font-size: 1rem;
+  .student-results-modal .section-title {
+    font-size: 0.92rem;
   }
 
-  .score-display {
+  .student-results-modal .score-display {
     padding: 14px 16px;
 
     .score-value {
@@ -379,14 +402,37 @@
 
 @media (max-width: 480px) {
   .student-results-modal__body {
-    padding: 12px 14px;
+    padding: 0.75rem 0.85rem;
   }
 
-  .results-section--panel {
-    padding: 12px;
+  .student-results-modal .results-section--panel {
+    padding: 0.65rem 0.75rem;
+    border-radius: 10px;
   }
 
-  .score-display .score-value {
+  .student-results-modal .result-overview__label {
+    font-size: 0.82rem;
+  }
+
+  .student-results-modal .result-overview__meta {
+    font-size: 0.75rem;
+  }
+
+  .student-results-modal .info-item {
+    padding: 0.55rem 0.65rem;
+
+    span {
+      font-size: 0.82rem;
+    }
+  }
+
+  .student-results-modal .feedback-text,
+  .student-results-modal .description-text {
+    font-size: 0.82rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .student-results-modal .score-display .score-value {
     font-size: 28px;
   }
 }

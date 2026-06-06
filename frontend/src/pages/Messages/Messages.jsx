@@ -7,12 +7,8 @@ import { formatDateTimeCompact } from '../../utils/dateHelpers';
 import checkReadIcon from '../../assets/messages/check-read.svg';
 import checkSentIcon from '../../assets/messages/check-sent.svg';
 import sendArrowIcon from '../../assets/messages/send-arrow.svg';
+import { getApiErrorMessage } from '../../utils/adminApiErrors';
 import './Messages.scss';
-
-const getErrorMessage = (err, fallback) => {
-  const msg = err?.response?.data?.message;
-  return typeof msg === 'string' && msg.trim() ? msg : fallback;
-};
 
 const COMPOSER_MAX_HEIGHT_PX = 160;
 
@@ -171,7 +167,7 @@ const Messages = () => {
       setPartners(data.data ?? []);
       setTeacherGroupsMeta(data.teacherGroups ?? []);
     } catch (err) {
-      showError(getErrorMessage(err, 'Не удалось загрузить контакты'));
+      showError(getApiErrorMessage(err, 'Не удалось загрузить контакты'));
     }
   }, [showError]);
 
@@ -181,7 +177,7 @@ const Messages = () => {
       const ids = (data.data ?? []).map((c) => c.otherUser?.id).filter(Boolean);
       setActivePartnerIds(new Set(ids));
     } catch (err) {
-      showError(getErrorMessage(err, 'Не удалось загрузить диалоги'));
+      showError(getApiErrorMessage(err, 'Не удалось загрузить диалоги'));
     }
   }, [showError]);
 
@@ -206,7 +202,7 @@ const Messages = () => {
         });
       } catch (err) {
         if (!silent) {
-          showError(getErrorMessage(err, 'Не удалось загрузить сообщения'));
+          showError(getApiErrorMessage(err, 'Не удалось загрузить сообщения'));
         }
       } finally {
         if (!silent) setLoadingThread(false);
@@ -250,7 +246,7 @@ const Messages = () => {
           window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
         }
       } catch (err) {
-        if (!cancelled) showError(getErrorMessage(err, 'Не удалось загрузить диалоги'));
+        if (!cancelled) showError(getApiErrorMessage(err, 'Не удалось загрузить диалоги'));
       } finally {
         if (!cancelled) setConversationsListLoading(false);
       }
@@ -309,7 +305,7 @@ const Messages = () => {
         setThreadSnapKey((k) => k + 1);
         navigate(location.pathname, { replace: true, state: {} });
       } catch (err) {
-        if (!cancelled) showError(getErrorMessage(err, 'Не удалось открыть диалог'));
+        if (!cancelled) showError(getApiErrorMessage(err, 'Не удалось открыть диалог'));
       }
     })();
 
@@ -411,7 +407,7 @@ const Messages = () => {
           return;
         }
       } catch (err) {
-        showError(getErrorMessage(err, 'Не удалось загрузить диалоги'));
+        showError(getApiErrorMessage(err, 'Не удалось загрузить диалоги'));
       }
     }
     selectPartnerDraft(partner);
@@ -450,7 +446,7 @@ const Messages = () => {
       await loadActivePartnerIds();
       window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
     } catch (err) {
-      showError(getErrorMessage(err, 'Не удалось архивировать диалог'));
+      showError(getApiErrorMessage(err, 'Не удалось архивировать диалог'));
     }
   };
 
@@ -468,7 +464,7 @@ const Messages = () => {
       await loadMessages(id);
       window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
     } catch (err) {
-      showError(getErrorMessage(err, 'Не удалось восстановить диалог'));
+      showError(getApiErrorMessage(err, 'Не удалось восстановить диалог'));
     }
   };
 
@@ -500,7 +496,7 @@ const Messages = () => {
         setThreadSnapKey((k) => k + 1);
         window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
       } catch (err) {
-        showError(getErrorMessage(err, 'Не удалось отправить'));
+        showError(getApiErrorMessage(err, 'Не удалось отправить'));
       } finally {
         setSending(false);
       }
@@ -525,7 +521,7 @@ const Messages = () => {
       setThreadSnapKey((k) => k + 1);
       window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
     } catch (err) {
-      showError(getErrorMessage(err, 'Не удалось отправить'));
+      showError(getApiErrorMessage(err, 'Не удалось отправить'));
     } finally {
       setSending(false);
     }
@@ -595,11 +591,6 @@ const Messages = () => {
               </button>
             </div>
           </div>
-          <p className="messages-page__hint">
-            {user?.role === 'student'
-              ? 'Переписка с преподавателями вашей группы и по заданиям'
-              : 'Здесь не весь колледж — только студенты из ваших групп и те, кто уже сдавал вам работы.'}
-          </p>
 
           <section className="messages-sidebar__section messages-sidebar__section--dialogs">
             <div className="messages-sidebar__section-head">
@@ -653,8 +644,8 @@ const Messages = () => {
                 className="messages-partners-search"
                 placeholder={
                   user?.role === 'teacher'
-                    ? 'Поиск по фамилии или группе…'
-                    : 'Поиск по фамилии…'
+                    ? 'Поиск по ФИО или группе…'
+                    : 'Поиск по ФИО…'
                 }
                 value={partnerSearch}
                 onChange={(e) => setPartnerSearch(e.target.value)}

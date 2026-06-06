@@ -41,7 +41,7 @@ class SubmissionController extends Controller
         ]);
 
         if (! empty($validated['group_id']) && $user->role === 'teacher') {
-            $allowedGroupIds = $user->attachedTeachingGroupIds()->map(fn ($id) => (int) $id)->all();
+            $allowedGroupIds = $user->attachedTeachingGroupIds()->map(fn($id) => (int) $id)->all();
             if (! in_array((int) $validated['group_id'], $allowedGroupIds, true)) {
                 throw ValidationException::withMessages([
                     'group_id' => 'Нет доступа к этой группе.',
@@ -78,7 +78,7 @@ class SubmissionController extends Controller
         $assignment = Assignment::with('groups:id')->findOrFail($baseValidated['assignment_id']);
         $assignment->syncCompletionStatus();
 
-        if (! in_array($assignment->status, ['active', 'inactive'], true)) {
+        if ($assignment->status !== 'active') {
             $message = $assignment->status === 'archived'
                 ? 'Приём работ по этому заданию завершён: задание снято с активных (архив).'
                 : 'Сдача работ по этому заданию недоступна.';
@@ -94,7 +94,7 @@ class SubmissionController extends Controller
             ], 422);
         }
 
-        if (! $assignment->groups->contains(fn ($g) => (int) $g->id === (int) $student->group_id)) {
+        if (! $assignment->groups->contains(fn($g) => (int) $g->id === (int) $student->group_id)) {
             return response()->json([
                 'message' => 'Это задание не назначено вашей группе.',
             ], 422);
@@ -119,7 +119,7 @@ class SubmissionController extends Controller
             [
                 'file.required' => 'Прикрепите файл с работой.',
                 'file.max' => 'Размер файла не должен превышать ' . (int) floor($maxKilobytes / 1024) . ' МБ.',
-                'file.mimes' => 'Допустимые форматы: ' . implode(', ', array_map(fn ($format) => '.' . $format, $allowedFormats)) . '.',
+                'file.mimes' => 'Допустимые форматы: ' . implode(', ', array_map(fn($format) => '.' . $format, $allowedFormats)) . '.',
             ]
         );
 
@@ -130,7 +130,7 @@ class SubmissionController extends Controller
             ->get(['id', 'status', 'is_resubmission', 'submitted_at', 'created_at']);
 
         $latestSubmission = $studentSubmissions->first();
-        $retakeUsed = $studentSubmissions->contains(fn ($item) => (bool) $item->is_resubmission);
+        $retakeUsed = $studentSubmissions->contains(fn($item) => (bool) $item->is_resubmission);
         if ($latestSubmission) {
             if ($latestSubmission->status !== 'returned') {
                 return response()->json([

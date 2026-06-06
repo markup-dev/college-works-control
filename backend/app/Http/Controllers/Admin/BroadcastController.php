@@ -4,20 +4,18 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminBroadcast;
-use App\Models\Conversation;
 use App\Models\Group;
-use App\Models\Message;
 use App\Models\SystemLog;
 use App\Models\User;
+use App\Notifications\AdminBroadcastNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Админ: массовые рассылки по ролям/группам — запись в БД, доставка писем и опционально сообщения в чатах.
+ * Админ: массовые рассылки по ролям/группам — запись в центр уведомлений и опционально письма.
  */
 class BroadcastController extends Controller
 {
@@ -67,8 +65,8 @@ class BroadcastController extends Controller
             'body' => ['required', 'string', 'min:3', 'max:8000'],
             'copy_email' => ['nullable', 'boolean'],
         ], [
-            'subject.required' => 'Укажите тему сообщения.',
-            'body.required' => 'Введите текст сообщения.',
+            'subject.required' => 'Укажите тему уведомления.',
+            'body.required' => 'Введите текст уведомления.',
         ]);
 
         $admin = $request->user();
@@ -91,10 +89,7 @@ class BroadcastController extends Controller
             ], 422);
         }
 
-        $messageText = $this->formatMessageBody($validated['subject'], $validated['body']);
         $copyEmail = (bool) ($validated['copy_email'] ?? false);
-
-        $sent = $this->deliverMessages($admin, $recipients, $messageText);
 
         $broadcast = AdminBroadcast::create([
             'admin_id' => $admin->id,
@@ -102,9 +97,12 @@ class BroadcastController extends Controller
             'group_ids' => $audience === 'groups' ? $groupIds : null,
             'subject' => $validated['subject'],
             'body' => $validated['body'],
-            'recipient_count' => $sent,
+            'recipient_count' => 0,
             'copy_email' => $copyEmail,
         ]);
+
+        $sent = $this->deliverNotifications($admin, $recipients, $broadcast);
+        $broadcast->forceFill(['recipient_count' => $sent])->save();
 
         if ($copyEmail) {
             $this->sendEmailCopies($recipients, $validated['subject'], $validated['body'], $admin);
@@ -170,8 +168,7 @@ class BroadcastController extends Controller
             return response()->json(['message' => 'Слишком много получателей для повторной отправки.'], 422);
         }
 
-        $messageText = $this->formatMessageBody($broadcast->subject, $broadcast->body);
-        $sent = $this->deliverMessages($admin, $recipients, $messageText);
+        $sent = $this->deliverNotifications($admin, $recipients, $broadcast);
 
         if ($broadcast->copy_email) {
             $this->sendEmailCopies($recipients, $broadcast->subject, $broadcast->body, $admin);
@@ -212,29 +209,12 @@ class BroadcastController extends Controller
         return $q->orderBy('id')->pluck('id')->unique()->values();
     }
 
-    private function formatMessageBody(string $subject, string $body): string
-    {
-        return "Рассылка: {$subject}\n\n".trim($body);
-    }
-
-    private function deliverMessages(User $admin, Collection $recipientIds, string $messageText): int
+    private function deliverNotifications(User $admin, Collection $recipientIds, AdminBroadcast $broadcast): int
     {
         $sent = 0;
-        foreach ($recipientIds as $otherId) {
+        foreach (User::query()->whereIn('id', $recipientIds)->cursor() as $recipient) {
             try {
-                DB::transaction(function () use ($admin, $otherId, $messageText) {
-                    [$one, $two] = Conversation::orderedUserIds((int) $admin->id, (int) $otherId);
-                    $conversation = Conversation::query()->firstOrCreate([
-                        'user_one_id' => $one,
-                        'user_two_id' => $two,
-                    ]);
-                    Message::query()->create([
-                        'conversation_id' => $conversation->id,
-                        'sender_id' => $admin->id,
-                        'body' => $messageText,
-                    ]);
-                    $conversation->touch();
-                });
+                $recipient->notify(new AdminBroadcastNotification($broadcast, $admin));
                 $sent++;
             } catch (\Throwable $e) {
                 report($e);

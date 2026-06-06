@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import { formatDateTime } from '../../../utils/dateHelpers';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
@@ -14,9 +14,12 @@ import ModalSection from '../../UI/Modal/ModalSection';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
+import { ADMIN_LIST_PAGE_SIZE } from '../../../config/adminPagination';
+import usePaginationClamp from '../../../hooks/usePaginationClamp';
+import { parsePaginationMeta } from '../../../utils/pagination';
+import TextArea from '../../UI/TextArea/TextArea';
 import './AdminBroadcastManagement.scss';
 
-const LIST_PER_PAGE = 20;
 const GROUPS_LIMIT = 100;
 
 const AdminBroadcastManagement = () => {
@@ -71,21 +74,17 @@ const AdminBroadcastManagement = () => {
     setHistoryLoading(true);
     setHistoryError(null);
     try {
-      const params = { page, per_page: LIST_PER_PAGE };
+      const params = { page, per_page: ADMIN_LIST_PAGE_SIZE };
       const q = debouncedHistorySearch.trim();
       if (q) params.search = q;
       const { data } = await api.get('/admin/broadcasts', { params });
       const list = Array.isArray(data?.data) ? data.data : [];
       setHistoryRows(list);
       const m = data?.meta;
-      setHistoryMeta({
-        currentPage: m?.currentPage ?? page,
-        lastPage: m?.lastPage ?? 1,
-        total: m?.total ?? 0,
-      });
+      setHistoryMeta(parsePaginationMeta(m, page));
     } catch (e) {
       setHistoryRows([]);
-      setHistoryError(firstApiErrorMessage(e.response?.data) || 'Не удалось загрузить историю');
+      setHistoryError(getApiErrorMessage(e, 'Не удалось загрузить историю'));
     } finally {
       setHistoryLoading(false);
     }
@@ -100,6 +99,8 @@ const AdminBroadcastManagement = () => {
     setHistoryPage(1);
   }, [debouncedHistorySearch]);
 
+  usePaginationClamp(historyPage, historyMeta.lastPage, setHistoryPage);
+
   const openDetail = async (id) => {
     setDetail(null);
     setDetailLoading(true);
@@ -107,7 +108,7 @@ const AdminBroadcastManagement = () => {
       const { data } = await api.get(`/admin/broadcasts/${id}`);
       setDetail(data?.broadcast ?? null);
     } catch (e) {
-      showError(firstApiErrorMessage(e.response?.data) || 'Не удалось открыть рассылку');
+      showError(getApiErrorMessage(e, 'Не удалось открыть рассылку'));
       setDetail(null);
     } finally {
       setDetailLoading(false);
@@ -140,7 +141,7 @@ const AdminBroadcastManagement = () => {
       }
       const { data } = await api.post('/admin/broadcasts', payload);
       const n = data?.sent ?? 0;
-      showSuccess(`Сообщения отправлены: ${n}`);
+      showSuccess(`Уведомления отправлены: ${n}`);
       setSubject('');
       setBody('');
       setCopyEmail(false);
@@ -150,7 +151,7 @@ const AdminBroadcastManagement = () => {
       setTab('history');
       void fetchHistory(1);
     } catch (e) {
-      showError(firstApiErrorMessage(e.response?.data) || 'Не удалось отправить рассылку');
+      showError(getApiErrorMessage(e, 'Не удалось отправить рассылку'));
     } finally {
       setSendLoading(false);
     }
@@ -160,10 +161,10 @@ const AdminBroadcastManagement = () => {
     if (!detail?.id) return;
     try {
       const { data } = await api.post(`/admin/broadcasts/${detail.id}/resend`);
-      showSuccess(`Повторно отправлено: ${data?.sent ?? 0}`);
+      showSuccess(`Повторно отправлено уведомлений: ${data?.sent ?? 0}`);
       void fetchHistory();
     } catch (e) {
-      showError(firstApiErrorMessage(e.response?.data) || 'Не удалось повторить рассылку');
+      showError(getApiErrorMessage(e, 'Не удалось повторить рассылку'));
       throw e;
     }
   };
@@ -173,33 +174,34 @@ const AdminBroadcastManagement = () => {
       <header className="admin-broadcast-management__head">
         <div>
           <h1 className="admin-broadcast-management__title">Рассылки</h1>
-          <p className="admin-broadcast-management__hint">
-            Сообщения доставляются в личные чаты пользователей (как от администратора). До{' '}
-            <strong>800</strong> получателей за одну отправку. При галочке «Копия на email» письма
-            отправляются тем, у кого указан email.
-          </p>
         </div>
       </header>
 
-      <div className="admin-broadcast-management__tabs" role="tablist">
+      <div className="admin-tabs" role="tablist">
         <button
           type="button"
-          className={`admin-broadcast-management__tab${tab === 'compose' ? ' admin-broadcast-management__tab--active' : ''}`}
+          role="tab"
+          aria-selected={tab === 'compose'}
+          className={`admin-tab${tab === 'compose' ? ' admin-tab--active' : ''}`}
           onClick={() => setTab('compose')}
         >
-          Новая рассылка
+          <span className="admin-tab__label">Новая рассылка</span>
+          {tab === 'compose' ? <span className="admin-tab__indicator" aria-hidden="true" /> : null}
         </button>
         <button
           type="button"
-          className={`admin-broadcast-management__tab${tab === 'history' ? ' admin-broadcast-management__tab--active' : ''}`}
+          role="tab"
+          aria-selected={tab === 'history'}
+          className={`admin-tab${tab === 'history' ? ' admin-tab--active' : ''}`}
           onClick={() => setTab('history')}
         >
-          История
+          <span className="admin-tab__label">История</span>
+          {tab === 'history' ? <span className="admin-tab__indicator" aria-hidden="true" /> : null}
         </button>
       </div>
 
       {tab === 'compose' && (
-        <div className="admin-broadcast-management__form">
+        <div className="admin-form-card admin-broadcast-management__form">
           {composeError && (
             <ErrorBanner
               className="admin-broadcast-management__error"
@@ -208,8 +210,8 @@ const AdminBroadcastManagement = () => {
             />
           )}
 
-          <div className="admin-broadcast-management__field">
-            <span className="admin-broadcast-management__label">Аудитория</span>
+          <div className="admin-form-field admin-broadcast-management__field">
+            <span className="admin-form-field__label">Аудитория</span>
             <div className="admin-broadcast-management__audience">
               {[
                 ['all', 'Все (студенты и преподаватели)'],
@@ -217,7 +219,7 @@ const AdminBroadcastManagement = () => {
                 ['students', 'Все студенты'],
                 ['groups', 'Студенты выбранных групп'],
               ].map(([value, label]) => (
-                <label key={value} className="admin-broadcast-management__radio">
+                <label key={value} className="admin-radio admin-broadcast-management__radio">
                   <input
                     type="radio"
                     name="audience"
@@ -232,14 +234,14 @@ const AdminBroadcastManagement = () => {
           </div>
 
           {audienceType === 'groups' && (
-            <div className="admin-broadcast-management__field">
-              <span className="admin-broadcast-management__label">Группы</span>
+            <div className="admin-form-field admin-broadcast-management__field">
+              <span className="admin-form-field__label">Группы</span>
               <div className="admin-broadcast-management__groups-box">
                 {groups.length === 0 ? (
-                  <span className="admin-broadcast-management__hint">Группы не загрузились.</span>
+                  <span className="admin-muted">Группы не загрузились.</span>
                 ) : (
                   groups.map((g) => (
-                    <label key={g.id} className="admin-broadcast-management__radio">
+                    <label key={g.id} className="admin-checkbox admin-broadcast-management__radio">
                       <input
                         type="checkbox"
                         checked={groupIds.includes(g.id)}
@@ -253,34 +255,31 @@ const AdminBroadcastManagement = () => {
             </div>
           )}
 
-          <div className="admin-broadcast-management__field">
-            <label className="admin-broadcast-management__label" htmlFor="broadcast-subject">
+          <div className="admin-form-field admin-broadcast-management__field">
+            <label className="admin-form-field__label" htmlFor="broadcast-subject">
               Тема
             </label>
             <input
               id="broadcast-subject"
-              className="admin-broadcast-management__text-input"
+              className="admin-control admin-broadcast-management__text-input"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               maxLength={255}
+              placeholder="Тема сообщения"
               autoComplete="off"
             />
           </div>
 
-          <div className="admin-broadcast-management__field">
-            <label className="admin-broadcast-management__label" htmlFor="broadcast-body">
-              Текст
-            </label>
-            <textarea
-              id="broadcast-body"
-              className="admin-broadcast-management__textarea"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              maxLength={8000}
-            />
-          </div>
+          <TextArea
+            label="Текст"
+            value={body}
+            onChange={setBody}
+            className="admin-textarea admin-broadcast-management__textarea"
+            rows={5}
+            placeholder="Текст рассылки"
+          />
 
-          <label className="admin-broadcast-management__radio">
+          <label className="admin-checkbox admin-broadcast-management__radio">
             <input
               type="checkbox"
               checked={copyEmail}
@@ -289,11 +288,9 @@ const AdminBroadcastManagement = () => {
             Дублировать на email (если указан)
           </label>
 
-          <div>
-            <Button type="button" onClick={() => void handleSend()} loading={sendLoading}>
-              Отправить
-            </Button>
-          </div>
+          <Button type="button" onClick={() => void handleSend()} loading={sendLoading}>
+            Отправить
+          </Button>
         </div>
       )}
 
@@ -361,8 +358,8 @@ const AdminBroadcastManagement = () => {
             total={historyMeta.total}
             fallbackCount={historyRows.length}
             disabled={historyLoading}
-            onPrev={() => setHistoryPage((p) => Math.max(1, p - 1))}
-            onNext={() => setHistoryPage((p) => p + 1)}
+            hideWhenSinglePage
+            onPageChange={setHistoryPage}
           />
         </>
       )}
@@ -394,9 +391,6 @@ const AdminBroadcastManagement = () => {
               <div className="admin-broadcast-management__modal-body">{detail.body}</div>
             </ModalSection>
             <div className="admin-broadcast-management__modal-controls">
-              <Button type="button" variant="secondary" onClick={() => setDetail(null)}>
-                Закрыть
-              </Button>
               <Button type="button" variant="outline" onClick={() => setResendOpen(true)}>
                 Отправить снова
               </Button>
@@ -409,9 +403,8 @@ const AdminBroadcastManagement = () => {
         isOpen={resendOpen}
         onClose={() => setResendOpen(false)}
         title="Повторить рассылку?"
-        message="Будут созданы новые сообщения в чатах всем текущим получателям с тем же текстом."
+        message="Будут созданы новые уведомления всем текущим получателям с тем же текстом."
         confirmText="Отправить"
-        cancelText="Отмена"
         onConfirm={doResend}
       />
     </div>

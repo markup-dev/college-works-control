@@ -1,0 +1,30 @@
+.modal-danger-zone {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.15rem;
+  padding: 1rem;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  background: #fef2f2;
+
+  &__title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #991b1b;
+  }
+
+  &__description {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: #7f1d1d;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+}

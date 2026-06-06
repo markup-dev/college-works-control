@@ -5,9 +5,11 @@ use App\Http\Controllers\Admin\AdminAssignmentController;
 use App\Http\Controllers\Admin\BroadcastController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\GroupController as AdminGroupController;
+use App\Http\Controllers\Admin\SpecialtyController;
 use App\Http\Controllers\Admin\SubjectController as AdminSubjectController;
 use App\Http\Controllers\Admin\SystemLogController;
 use App\Http\Controllers\Admin\SystemSettingsController;
+use App\Http\Controllers\Admin\TeacherDisciplineController as AdminTeacherDisciplineController;
 use App\Http\Controllers\Admin\TeachingLoadController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\AuthController;
@@ -17,6 +19,7 @@ use App\Http\Controllers\SubmissionController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\TeacherBroadcastMessageController;
+use App\Http\Controllers\TeacherDisciplineController;
 use App\Http\Controllers\TeacherStudentController;
 use Illuminate\Support\Facades\Route;
 
@@ -48,6 +51,11 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
         Route::get('/teacher/groups/{group}/students/{user}', [TeacherStudentController::class, 'studentDetails']);
         Route::post('/teacher/messages/broadcast', [TeacherBroadcastMessageController::class, 'store'])
             ->middleware('throttle:teacher_broadcast');
+        Route::get('/teacher/disciplines', [TeacherDisciplineController::class, 'index']);
+        Route::get('/teacher/disciplines/options', [TeacherDisciplineController::class, 'options']);
+        Route::get('/teacher/disciplines/specialties/{specialty}/subjects', [TeacherDisciplineController::class, 'programSubjects']);
+        Route::post('/teacher/discipline-requests', [TeacherDisciplineController::class, 'requestDiscipline']);
+        Route::post('/teacher/teaching-load-requests', [TeacherDisciplineController::class, 'requestTeachingLoad']);
 
         Route::post('/assignments', [AssignmentController::class, 'store']);
         Route::put('/assignments/{assignment}', [AssignmentController::class, 'update']);
@@ -80,13 +88,15 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
     });
 
     // Переписка студент ↔ преподаватель
-    Route::middleware('role:student,teacher')->group(function () {
+    Route::middleware('role:student,teacher,admin')->group(function () {
         Route::get('/notifications', [NotificationController::class, 'index']);
         Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
         Route::delete('/notifications', [NotificationController::class, 'destroyAll']);
         Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+    });
 
+    Route::middleware('role:student,teacher')->group(function () {
         Route::get('/message-partners', [ConversationController::class, 'partners']);
         Route::get('/conversations', [ConversationController::class, 'index']);
         Route::post('/conversations', [ConversationController::class, 'store']);
@@ -110,10 +120,20 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
         Route::put('/users/{user}', [AdminUserController::class, 'updateUser']);
         Route::delete('/users/{user}', [AdminUserController::class, 'deleteUser']);
         Route::get('/groups', [AdminGroupController::class, 'groups']);
+        Route::get('/groups/specialties', [AdminGroupController::class, 'specialties']);
+        Route::post('/groups/promote', [AdminGroupController::class, 'promoteBatch']);
         Route::get('/groups/{group}', [AdminGroupController::class, 'showGroup']);
         Route::post('/groups', [AdminGroupController::class, 'createGroup']);
         Route::put('/groups/{group}', [AdminGroupController::class, 'updateGroup']);
         Route::delete('/groups/{group}', [AdminGroupController::class, 'deleteGroup']);
+        Route::delete('/groups/{group}/students/{user}', [AdminGroupController::class, 'detachStudentFromGroup']);
+
+        Route::get('/specialties', [SpecialtyController::class, 'index']);
+        Route::post('/specialties', [SpecialtyController::class, 'store']);
+        Route::get('/specialties/{specialty}', [SpecialtyController::class, 'show']);
+        Route::put('/specialties/{specialty}', [SpecialtyController::class, 'update']);
+        Route::delete('/specialties/{specialty}', [SpecialtyController::class, 'destroy']);
+        Route::put('/specialties/{specialty}/program', [SpecialtyController::class, 'syncProgram']);
 
         Route::get('/subjects', [AdminSubjectController::class, 'subjects']);
         Route::get('/subjects/{subject}', [AdminSubjectController::class, 'showSubject']);
@@ -121,7 +141,15 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
         Route::put('/subjects/{subject}', [AdminSubjectController::class, 'updateSubject']);
         Route::delete('/subjects/{subject}', [AdminSubjectController::class, 'deleteSubject']);
 
-        Route::get('/teaching-loads/matrix', [TeachingLoadController::class, 'teachingLoadsMatrix']);
+        Route::get('/teachers/{teacher}/disciplines', [AdminTeacherDisciplineController::class, 'teacherSubjects']);
+        Route::post('/teachers/{teacher}/disciplines', [AdminTeacherDisciplineController::class, 'storeTeacherSubject']);
+        Route::delete('/teacher-disciplines/{teacherSubject}', [AdminTeacherDisciplineController::class, 'deleteTeacherSubject']);
+        Route::get('/discipline-requests', [AdminTeacherDisciplineController::class, 'disciplineRequests']);
+        Route::put('/discipline-requests/{teacherSubjectRequest}', [AdminTeacherDisciplineController::class, 'resolveDisciplineRequest']);
+        Route::get('/teaching-load-requests', [AdminTeacherDisciplineController::class, 'teachingLoadRequests']);
+        Route::put('/teaching-load-requests/{teachingLoadRequest}', [AdminTeacherDisciplineController::class, 'resolveTeachingLoadRequest']);
+
+        Route::get('/teaching-loads/form-options', [TeachingLoadController::class, 'formOptions']);
         Route::post('/teaching-loads/batch', [TeachingLoadController::class, 'createTeachingLoadsBatch']);
         Route::put('/teaching-loads/sync-pair', [TeachingLoadController::class, 'syncTeachingLoadsForPair']);
         Route::get('/teaching-loads', [TeachingLoadController::class, 'teachingLoads']);
@@ -133,6 +161,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
 
         Route::get('/homework', [AdminAssignmentController::class, 'adminAssignments']);
         Route::get('/assignments', [AdminAssignmentController::class, 'adminAssignments']);
+        Route::get('/assignments/filter-options', [AdminAssignmentController::class, 'filterOptions']);
         Route::get('/assignments/{assignment}/eligible-teachers', [AdminAssignmentController::class, 'eligibleTeachersForAdminAssignment']);
         Route::get('/assignments/{assignment}', [AdminAssignmentController::class, 'showAdminAssignment']);
         Route::put('/assignments/{assignment}', [AdminAssignmentController::class, 'updateAdminAssignment']);
@@ -150,7 +179,6 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
         Route::middleware('throttle:admin_bulk')->group(function () {
             Route::post('/users/import/preview', [AdminUserController::class, 'previewUsersImport']);
             Route::post('/users/import', [AdminUserController::class, 'importUsers']);
-            Route::post('/groups/create-with-students', [AdminGroupController::class, 'createGroupWithStudents']);
             Route::post('/groups/import/preview', [AdminGroupController::class, 'previewGroupsImport']);
             Route::post('/groups/import', [AdminGroupController::class, 'importGroups']);
             Route::post('/groups/{group}/students/bulk', [AdminGroupController::class, 'bulkAttachStudentsToGroup']);

@@ -7,40 +7,66 @@ const Pagination = ({
   lastPage = 1,
   total = 0,
   fallbackCount = 0,
+  onPageChange,
   onPrev,
   onNext,
   className = '',
   disabled = false,
+  hideWhenSinglePage = false,
+  prevLabel = 'Назад',
+  nextLabel = 'Далее',
 }) => {
   const safeCurrentPage = Math.max(1, Number(currentPage) || 1);
   const safeLastPage = Math.max(1, Number(lastPage) || 1);
   const safeTotal = Number(total) || Number(fallbackCount) || 0;
   const navDisabled = disabled || safeTotal <= 0;
 
+  if (hideWhenSinglePage && safeLastPage <= 1) {
+    return null;
+  }
+
+  const goToPage = (page) => {
+    const next = Math.min(safeLastPage, Math.max(1, page));
+    if (onPageChange) {
+      onPageChange(next);
+      return;
+    }
+    if (next < safeCurrentPage) {
+      onPrev?.();
+    } else if (next > safeCurrentPage) {
+      onNext?.();
+    }
+  };
+
   return (
-    <div className={`ui-pagination ${className}`}>
+    <nav className={`ui-pagination ${className}`.trim()} aria-label="Навигация по страницам">
       <Button
+        className="ui-pagination__prev"
         size="small"
         variant="outline"
         disabled={navDisabled || safeCurrentPage <= 1}
-        onClick={onPrev}
+        onClick={() => goToPage(safeCurrentPage - 1)}
       >
-        Назад
+        {prevLabel}
       </Button>
 
-      <span className="ui-pagination__meta">
-        Страница {safeCurrentPage} из {safeLastPage} · всего {safeTotal}
-      </span>
+      <div className="ui-pagination__meta">
+        <span className="ui-pagination__meta-pages">
+          Страница {safeCurrentPage} из {safeLastPage}
+        </span>
+        <span className="ui-pagination__meta-total">Всего {safeTotal}</span>
+      </div>
 
       <Button
+        className="ui-pagination__next"
         size="small"
         variant="outline"
         disabled={navDisabled || safeCurrentPage >= safeLastPage}
-        onClick={onNext}
+        onClick={() => goToPage(safeCurrentPage + 1)}
       >
-        Далее
+        {nextLabel}
       </Button>
-    </div>
+    </nav>
   );
 };
 

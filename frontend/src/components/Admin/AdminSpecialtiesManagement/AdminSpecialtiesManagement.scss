@@ -1,0 +1,464 @@
+@import '../../../styles/base/variables';
+@import '../../../styles/base/admin-common';
+
+.admin-specialties-management {
+  @include admin-page-shell;
+
+  &__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  &__title {
+    @include admin-page-title;
+  }
+
+  &__hint {
+    @include admin-page-hint;
+    margin-top: 0.35rem;
+    max-width: 56rem;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
+    align-items: stretch;
+
+    > * {
+      min-width: 0;
+      height: 100%;
+    }
+
+    @media (max-width: 1100px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (max-width: 640px) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1rem;
+    }
+  }
+
+  &__modal {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  &__form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem;
+
+    label {
+      display: grid;
+      gap: 0.35rem;
+      @include admin-form-label;
+    }
+
+    input {
+      @include admin-control;
+    }
+  }
+
+  &__course {
+    padding: 0.85rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #ffffff;
+    overflow: visible;
+
+    & + & {
+      margin-top: 0.75rem;
+    }
+  }
+
+  &__course-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin-bottom: 0.65rem;
+
+    .ui-button {
+      flex: 0 0 auto;
+    }
+  }
+
+  &__empty {
+    margin: 0;
+    color: #94a3b8;
+    font-size: 0.9rem;
+  }
+
+  &__program-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto;
+    gap: 0.55rem;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+
+    & + & {
+      margin-top: 0.5rem;
+    }
+
+    &:focus-within {
+      z-index: 2;
+    }
+
+    .searchable-select {
+      min-width: 0;
+    }
+
+    input {
+      @include admin-control;
+      min-width: 0;
+    }
+  }
+
+  &__requests {
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    background: #ffffff;
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
+  }
+
+  &__requests-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 0.85rem;
+
+    h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: #0f172a;
+    }
+
+    p {
+      margin: 0.25rem 0 0;
+      color: #64748b;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+  }
+
+  &__requests-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 0.65rem;
+    border-radius: 999px;
+    background: #e8f0fb;
+    color: #1e4a8c;
+    font-weight: 800;
+    font-size: 0.9rem;
+  }
+
+  &__request {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem;
+    border: 1px solid #edf2f7;
+    border-radius: 12px;
+    background: #f8fafc;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+
+    & + & {
+      margin-top: 0.6rem;
+    }
+
+    &:hover,
+    &:focus-visible {
+      border-color: #b8c7dd;
+      background: #ffffff;
+      transform: translateY(-1px);
+      outline: none;
+    }
+  }
+
+  &__request-copy {
+    min-width: 0;
+    flex: 1;
+
+    strong,
+    span {
+      display: block;
+    }
+
+    span,
+    p {
+      margin: 0.25rem 0 0;
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+  }
+
+  &__request-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+  }
+
+  &__request-modal,
+  &__request-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  &__detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  &__detail-item,
+  &__detail-block {
+    padding: 0.85rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #ffffff;
+
+    > span {
+      display: block;
+      margin: 0 0 0.35rem;
+      color: #64748b;
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    strong {
+      color: #0f172a;
+      word-break: break-word;
+    }
+
+    p {
+      margin: 0;
+      color: #475569;
+      line-height: 1.45;
+    }
+
+    a {
+      color: #2563eb;
+      font-weight: 700;
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+}
+
+@keyframes revealItem {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-reveal-item {
+  animation: revealItem 0.3s ease forwards;
+  opacity: 0;
+}
+
+.specialty-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+
+  &__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.85rem;
+    min-height: 0;
+  }
+
+  &__top {
+    @include admin-card-header-row;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid #eef2f8;
+  }
+
+  &__title-block {
+    @include admin-card-header-title-block;
+  }
+
+  &__name {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #0f172a;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  &__code {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 0.35rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #475569;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+  }
+
+  &__status {
+    @include admin-card-header-status;
+  }
+
+  &__fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  &__row {
+    font-size: 0.85rem;
+    color: #1e293b;
+    line-height: 1.4;
+
+    &--labeled {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.85rem;
+    }
+  }
+
+  &__label {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    line-height: 1.35;
+  }
+
+  &__value {
+    min-width: 0;
+    text-align: right;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.35;
+  }
+
+  &__actions {
+    margin-top: auto;
+    padding-top: 0.75rem;
+    border-top: 1px solid #eef2f8;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-specialties-management {
+    &__program-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+
+      .searchable-select {
+        grid-column: 1 / -1;
+        grid-row: 1;
+      }
+
+      input {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+
+      .ui-button {
+        grid-column: 2;
+        grid-row: 1;
+        align-self: start;
+      }
+    }
+  }
+}
+
+@media (min-width: 768px) and (max-width: 940px) {
+  .admin-specialties-management {
+    &__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-specialties-management {
+    &__head,
+    &__course-head {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    &__course-head .ui-button {
+      width: 100%;
+    }
+
+    &__form-grid {
+      grid-template-columns: 1fr;
+    }
+
+    &__program-row {
+      grid-template-columns: 1fr;
+
+      .searchable-select,
+      input,
+      .ui-button {
+        grid-column: 1;
+        grid-row: auto;
+        width: 100%;
+      }
+    }
+
+    &__request {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    &__request-actions {
+      justify-content: flex-start;
+    }
+
+    &__detail-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+}

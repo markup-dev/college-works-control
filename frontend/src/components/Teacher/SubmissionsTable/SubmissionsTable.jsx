@@ -12,7 +12,6 @@ const SubmissionsTable = ({
   className = "",
   loading = false,
   showLatestOnly = true,
-  /** Серверная сортировка (порядок с API сохраняется) */
   useServerSort = false,
   serverSortKey = 'review_queue',
   onServerSortChange,
@@ -204,25 +203,44 @@ const SubmissionCard = ({
       </div>
 
       <div className="submission-card__col submission-card__col--meta">
-        <div className="submission-card__badges" aria-label="Статус">
-          <span className={`submission-card__pill submission-card__pill--${statusInfo.variant}`}>
-            {statusInfo.label}
-          </span>
-          {submission.isResubmission ? (
-            <span className="submission-card__pill submission-card__pill--resend">Пересдача</span>
-          ) : null}
-          {deadlineHint ? (
-            <span className={`submission-card__pill submission-card__pill--deadline-${deadlineHint.tone}`}>
-              {deadlineHint.label}
+        <div className="submission-card__meta-cell submission-card__meta-cell--status">
+          <span className="submission-card__meta-label">Статус</span>
+          <div className="submission-card__badges" aria-label="Статус">
+            <span className={`submission-card__pill submission-card__pill--${statusInfo.variant}`}>
+              {statusInfo.label}
             </span>
-          ) : null}
+            {submission.isResubmission ? (
+              <span className="submission-card__pill submission-card__pill--resend">Пересдача</span>
+            ) : null}
+            {deadlineHint ? (
+              <span className={`submission-card__pill submission-card__pill--deadline-${deadlineHint.tone}`}>
+                {deadlineHint.label}
+              </span>
+            ) : null}
+          </div>
         </div>
-        <p className="submission-card__submitted">Сдано: {formatSubmissionDate(submission.submissionDate)}</p>
-        {submission.status === 'graded' && submission.gradeLabel ? (
-          <p className="submission-card__grade">
-            Оценка: <span className="submission-card__grade-value">{submission.gradeLabel}</span>
-          </p>
-        ) : null}
+        <div className="submission-card__meta-grid">
+          <div className="submission-card__meta-cell submission-card__meta-cell--submitted">
+            <span className="submission-card__meta-label">Сдача</span>
+            <p className="submission-card__submitted">
+              <span className="submission-card__submitted-prefix">Сдано: </span>
+              {formatSubmissionDate(submission.submissionDate)}
+            </p>
+          </div>
+          <div className="submission-card__meta-cell submission-card__meta-cell--grade">
+            <span className="submission-card__meta-label">Оценка</span>
+            <p className="submission-card__grade">
+              {submission.status === 'graded' && submission.gradeLabel ? (
+                <>
+                  <span className="submission-card__grade-prefix">Оценка: </span>
+                  <span className="submission-card__grade-value">{submission.gradeLabel}</span>
+                </>
+              ) : (
+                <span className="submission-card__grade-value submission-card__grade-value--empty">—</span>
+              )}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="submission-card__col submission-card__col--cta">

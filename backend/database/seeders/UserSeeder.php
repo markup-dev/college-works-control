@@ -3,7 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\Group;
+use App\Models\Specialty;
 use App\Models\User;
+use App\Services\AcademicProgramService;
 use App\Services\UserLoginAllocator;
 use Illuminate\Database\Seeder;
 
@@ -41,14 +43,35 @@ class UserSeeder extends Seeder
             'phone' => '+7 (999) 555-77-88',
         ]);
 
+        $software = Specialty::where('code', '09.02.07')->first();
+        $programs = app(AcademicProgramService::class);
+
         $group029 = Group::updateOrCreate(
-            ['name' => 'ИСП-029'],
-            ['status' => 'active', 'specialty' => 'Программная инженерия']
+            ['name' => 'ИСП-029', 'admission_year' => 2024],
+            [
+                'specialty_id' => $software?->id,
+                'specialty' => $software?->name ?? 'Информационные системы и программирование',
+                'graduation_year' => 2028,
+                'study_years' => 4,
+                'current_course' => 2,
+                'status' => 'active',
+            ]
         );
         $group0029 = Group::updateOrCreate(
-            ['name' => 'ИСП-0029'],
-            ['status' => 'active', 'specialty' => 'Программная инженерия']
+            ['name' => 'ИСП-0029', 'admission_year' => 2024],
+            [
+                'specialty_id' => $software?->id,
+                'specialty' => $software?->name ?? 'Информационные системы и программирование',
+                'graduation_year' => 2028,
+                'study_years' => 4,
+                'current_course' => 2,
+                'status' => 'active',
+            ]
         );
+
+        foreach ([$group029, $group0029] as $group) {
+            $programs->copySpecialtyProgramToGroup($group);
+        }
 
         $studentsGroup029 = [
             ['Беляков', 'Сергей', 'Александрович'],

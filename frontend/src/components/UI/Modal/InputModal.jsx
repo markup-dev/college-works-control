@@ -56,14 +56,9 @@ const InputModal = ({
       title={title}
       size="medium"
       footer={(
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={submitting}>
-            Отмена
-          </Button>
-          <Button variant="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
-            Подтвердить
-          </Button>
-        </>
+        <Button variant="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
+          Подтвердить
+        </Button>
       )}
     >
       <div className="input-modal">

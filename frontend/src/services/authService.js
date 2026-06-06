@@ -1,4 +1,5 @@
 import api from './api';
+import { getApiErrorMessage } from '../utils/adminApiErrors';
 
 const normalizeUser = (user) => {
   if (!user) return user;
@@ -33,8 +34,7 @@ class AuthService {
 
       return { success: true, user };
     } catch (error) {
-      const message = error.response?.data?.message || 'Ошибка при входе в систему';
-      return { success: false, error: message };
+      return { success: false, error: getApiErrorMessage(error, 'Ошибка при входе в систему') };
     }
   }
 
@@ -66,8 +66,7 @@ class AuthService {
       localStorage.setItem('auth_user', JSON.stringify(user));
       return { success: true, user };
     } catch (error) {
-      const message = error.response?.data?.message || 'Ошибка обновления профиля';
-      return { success: false, error: message };
+      return { success: false, error: getApiErrorMessage(error, 'Ошибка обновления профиля') };
     }
   }
 
@@ -94,8 +93,7 @@ class AuthService {
 
       return { success: true };
     } catch (error) {
-      const message = error.response?.data?.message || 'Ошибка смены пароля';
-      return { success: false, error: message };
+      return { success: false, error: getApiErrorMessage(error, 'Ошибка смены пароля') };
     }
   }
 

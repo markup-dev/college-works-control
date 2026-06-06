@@ -89,9 +89,6 @@ const SubmissionModal = ({
       contentClassName="student-submission-modal__body"
       footer={(
         <div className="student-submission-modal__actions">
-          <Button variant="secondary" onClick={onClose}>
-            Отмена
-          </Button>
           <Button
             variant="primary"
             onClick={handleSubmit}
@@ -111,7 +108,8 @@ const SubmissionModal = ({
             <div className="submission-status-note">
               <span className="submission-status-note__badge">Демонстрация</span>
               <p className="submission-status-note__text">
-                После отправки будет создана заявка о готовности к демонстрации. Файл прикладывать не нужно.
+                После отправки будет создана заявка о готовности к демонстрации. 
+                Файл прикладывать не нужно.
               </p>
             </div>
           )}
@@ -137,7 +135,7 @@ const SubmissionInfo = ({ assignment }) => {
   return (
     <div className="submission-info">
       <div className="submission-info__row">
-        <span className="submission-info__label">Предмет</span>
+        <span className="submission-info__label">Дисциплина</span>
         <span className="submission-info__value">{assignment.subject}</span>
       </div>
       <div className="submission-info__row">

@@ -173,6 +173,12 @@ class AuthController extends Controller
             if ($user->role !== 'teacher') {
                 unset($validated['grade_scale']);
             } else {
+                $duplicateError = User::getGradeScaleDuplicateError($validated['grade_scale']);
+                if ($duplicateError !== null) {
+                    throw ValidationException::withMessages([
+                        'grade_scale' => [$duplicateError],
+                    ]);
+                }
                 $validated['grade_scale'] = User::normalizeGradeScale($validated['grade_scale']);
             }
         }

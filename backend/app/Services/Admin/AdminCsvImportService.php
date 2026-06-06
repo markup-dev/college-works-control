@@ -11,7 +11,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * Импорт админки из CSV: разбор файла (разделитель, UTF-8 BOM, заголовки в snake_case),
- * валидация строк групп, предметов и пользователей с отчётом по ошибкам построчно.
+ * валидация строк групп, дисциплин и пользователей с отчётом по ошибкам построчно.
  */
 class AdminCsvImportService
 {
@@ -156,26 +156,26 @@ class AdminCsvImportService
             $rowErrors = [];
 
             if ($name === '') {
-                $rowErrors[] = 'Введите название предмета.';
+                $rowErrors[] = 'Введите название дисциплины.';
             } elseif (mb_strlen($name) < 2) {
-                $rowErrors[] = 'Название предмета должно содержать минимум 2 символа.';
+                $rowErrors[] = 'Название дисциплины должно содержать минимум 2 символа.';
             }
 
             if ($code === '') {
-                $rowErrors[] = 'Укажите код предмета.';
+                $rowErrors[] = 'Укажите код дисциплины.';
             } elseif (mb_strlen($code) > 32) {
-                $rowErrors[] = 'Код предмета не длиннее 32 символов.';
+                $rowErrors[] = 'Код дисциплины не длиннее 32 символов.';
             } elseif (! preg_match('/^[А-ЯЁA-Za-z0-9_.-]+$/u', $code)) {
                 $rowErrors[] = 'Код может содержать буквы, цифры, точку и дефис.';
             }
 
             if (! in_array($status, ['active', 'inactive'], true)) {
-                $rowErrors[] = 'Статус предмета должен быть active или inactive.';
+                $rowErrors[] = 'Статус дисциплины должен быть active или inactive.';
             }
 
             if ($name !== '') {
                 if (in_array(mb_strtolower($name), $seenNames, true)) {
-                    $rowErrors[] = 'Название предмета дублируется в импортируемом файле.';
+                    $rowErrors[] = 'Название дисциплины дублируется в импортируемом файле.';
                 } else {
                     $seenNames[] = mb_strtolower($name);
                 }
@@ -183,7 +183,7 @@ class AdminCsvImportService
 
             if ($code !== '' && preg_match('/^[А-ЯЁA-Za-z0-9_.-]+$/u', $code)) {
                 if (in_array(mb_strtolower($code), $seenCodes, true)) {
-                    $rowErrors[] = 'Код предмета дублируется в импортируемом файле.';
+                    $rowErrors[] = 'Код дисциплины дублируется в импортируемом файле.';
                 } else {
                     $seenCodes[] = mb_strtolower($code);
                 }
@@ -195,7 +195,7 @@ class AdminCsvImportService
                     $existingByName
                     && (! $existingByCode || $existingByName->id !== $existingByCode->id)
                 ) {
-                    $rowErrors[] = 'Название предмета уже занято другой записью.';
+                    $rowErrors[] = 'Название дисциплины уже занято другой записью.';
                 }
             }
 

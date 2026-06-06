@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
+import { getApiErrorMessage } from '../utils/adminApiErrors';
 
 const AdminContext = createContext(null);
 
@@ -23,7 +24,7 @@ export const AdminProvider = ({ children }) => {
       const { data } = await api.get('/admin/stats');
       setStats(data);
     } catch (e) {
-      setStatsError(e.response?.data?.message || 'Не удалось загрузить статистику');
+      setStatsError(getApiErrorMessage(e, 'Не удалось загрузить статистику'));
       setStats(null);
     } finally {
       setStatsLoading(false);

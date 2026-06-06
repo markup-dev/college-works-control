@@ -10,61 +10,113 @@ use App\Models\Submission;
 use App\Models\Subject;
 use App\Models\TeachingLoad;
 use App\Models\User;
+use App\Services\AcademicProgramService;
+use App\Services\AdminActionNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Админ: матрица и списки назначений (преподаватель + предмет + группа), CRUD и перенос заданий при смене преподавателя.
+ * Админ: списки назначений (преподаватель + дисциплина + группа), CRUD и перенос заданий при смене преподавателя.
  */
 class TeachingLoadController extends Controller
 {
     use LogsAdminActions;
 
-    private const SUBJECTS_PER_PAGE = 20;
+    private const SUBJECTS_PER_PAGE = 18;
 
     /**
-     * Матрица назначений: строки — активные предметы, столбцы — активные группы.
+     * Допустимые преподаватели, дисциплины и группы для форм назначений
+     * (с учётом допусков преподавателя и программы группы на текущем курсе).
      */
-    public function teachingLoadsMatrix()
+    public function formOptions(Request $request)
     {
-        $subjects = Subject::query()
-            ->where('status', 'active')
-            ->orderBy('name')
-            ->get(['id', 'name', 'code']);
+        $validated = $request->validate([
+            'teacher_id' => ['nullable', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
+            'subject_id' => ['nullable', Rule::exists('subjects', 'id')->where(fn ($query) => $query->where('status', 'active'))],
+            'exclude_teacher_id' => ['nullable', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
+        ]);
 
-        $groups = Group::query()
-            ->where('status', 'active')
-            ->orderBy('name')
-            ->get(['id', 'name']);
+        $teacherId = isset($validated['teacher_id']) ? (int) $validated['teacher_id'] : null;
+        $subjectId = isset($validated['subject_id']) ? (int) $validated['subject_id'] : null;
+        $excludeTeacherId = isset($validated['exclude_teacher_id']) ? (int) $validated['exclude_teacher_id'] : null;
 
-        $loads = TeachingLoad::query()
-            ->where('status', 'active')
-            ->with(['teacher:id,last_name,first_name,middle_name'])
-            ->get();
+        $teachersQuery = User::query()
+            ->where('role', 'teacher')
+            ->where('is_active', true)
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->orderBy('middle_name');
 
-        $loadsPayload = $loads->map(function (TeachingLoad $tl) {
-            return [
-                'id' => $tl->id,
-                'subject_id' => $tl->subject_id,
-                'group_id' => $tl->group_id,
-                'teacher_id' => $tl->teacher_id,
-                'teacher' => $tl->teacher
-                    ? [
-                        'id' => $tl->teacher->id,
-                        'last_name' => $tl->teacher->last_name,
-                        'first_name' => $tl->teacher->first_name,
-                        'middle_name' => $tl->teacher->middle_name,
-                    ]
-                    : null,
-            ];
-        })->values()->all();
+        if ($subjectId) {
+            $teachersQuery->whereHas('teacherSubjects', fn ($q) => $q
+                ->where('subject_id', $subjectId)
+                ->where('status', 'active'));
+        }
+        if ($excludeTeacherId) {
+            $teachersQuery->where('id', '!=', $excludeTeacherId);
+        }
+
+        $teachers = $teachersQuery->get([
+            'id',
+            'login',
+            'email',
+            'last_name',
+            'first_name',
+            'middle_name',
+            'department',
+        ]);
+
+        $subjectsQuery = Subject::query()
+            ->where('status', 'active')
+            ->orderBy('name');
+
+        if ($teacherId) {
+            $subjectsQuery->whereHas('teacherSubjects', fn ($q) => $q
+                ->where('teacher_id', $teacherId)
+                ->where('status', 'active'));
+        }
+
+        $subjects = $subjectsQuery->get(['id', 'name', 'code']);
+
+        $groupsQuery = Group::query()
+            ->where('status', 'active')
+            ->withCount('students')
+            ->orderBy('name');
+
+        if ($subjectId) {
+            $groupsQuery->whereHas('groupSubjects', fn ($q) => $q
+                ->where('subject_id', $subjectId)
+                ->whereColumn('course', 'groups.current_course')
+                ->where('status', 'active'));
+        }
+
+        if ($teacherId && $subjectId) {
+            $assignedGroupIds = TeachingLoad::query()
+                ->where('teacher_id', $teacherId)
+                ->where('subject_id', $subjectId)
+                ->where('status', 'active')
+                ->pluck('group_id');
+            if ($assignedGroupIds->isNotEmpty()) {
+                $groupsQuery->whereNotIn('id', $assignedGroupIds);
+            }
+        }
+
+        $groups = $groupsQuery->get([
+            'id',
+            'name',
+            'specialty',
+            'current_course',
+            'admission_year',
+            'graduation_year',
+            'status',
+        ]);
 
         return response()->json([
+            'teachers' => $teachers,
             'subjects' => $subjects,
             'groups' => $groups,
-            'loads' => $loadsPayload,
         ]);
     }
 
@@ -83,7 +135,7 @@ class TeachingLoadController extends Controller
         ]);
 
         $query = TeachingLoad::with([
-            'teacher:id,last_name,first_name,middle_name,login,email',
+            'teacher:id,last_name,first_name,middle_name,login,email,department',
             'subject:id,name,code,status',
             'group:id,name,specialty,status',
         ]);
@@ -155,12 +207,12 @@ class TeachingLoadController extends Controller
     }
 
     /**
-     * Карточка назначения: метрики и последние задания по тройке преподаватель + предмет + группа.
+     * Карточка назначения: метрики и последние задания по тройке преподаватель + дисциплина + группа.
      */
     public function teachingLoadDetail(Request $request, TeachingLoad $teachingLoad)
     {
         $teachingLoad->load([
-            'teacher:id,last_name,first_name,middle_name,login,email',
+            'teacher:id,last_name,first_name,middle_name,login,email,department',
             'subject:id,name,code,status',
             'group:id,name,specialty,status',
         ]);
@@ -188,17 +240,28 @@ class TeachingLoadController extends Controller
             ->values()
             ->all();
 
-        $gradedScores = Submission::query()
-            ->where('status', 'graded')
-            ->whereNotNull('score')
-            ->whereHas('assignment', function ($q) use ($tid, $sid, $gid) {
-                $q->where('teacher_id', $tid)
-                    ->where('subject_id', $sid)
-                    ->whereHas('groups', fn ($gq) => $gq->where('groups.id', $gid));
-            })
-            ->pluck('score');
+        $assignmentIds = $assignmentBase->pluck('id');
+        $gradedScores = collect();
+        if ($assignmentIds->isNotEmpty()) {
+            $rows = Submission::query()
+                ->whereIn('assignment_id', $assignmentIds)
+                ->orderByDesc('submitted_at')
+                ->orderByDesc('id')
+                ->get(['assignment_id', 'student_id', 'status', 'score']);
+            $seen = [];
+            foreach ($rows as $row) {
+                $pairKey = $row->assignment_id.':'.$row->student_id;
+                if (array_key_exists($pairKey, $seen)) {
+                    continue;
+                }
+                $seen[$pairKey] = true;
+                if ($row->status === 'graded' && $row->score !== null) {
+                    $gradedScores->push((float) $row->score);
+                }
+            }
+        }
 
-        $avgScore = $gradedScores->isEmpty() ? null : round($gradedScores->avg(), 1);
+        $avgScore = $gradedScores->isEmpty() ? null : round((float) $gradedScores->avg(), 1);
 
         return response()->json([
             'teaching_load' => $this->teachingLoadListPayload($teachingLoad, $stats),
@@ -216,11 +279,11 @@ class TeachingLoadController extends Controller
     /**
      * Несколько назначений за раз: одна тройка на каждую выбранную группу.
      */
-    public function createTeachingLoadsBatch(Request $request)
+    public function createTeachingLoadsBatch(Request $request, AcademicProgramService $programs)
     {
         $validated = $request->validate([
             'teacher_id' => ['required', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
-            'subject_id' => ['required', 'exists:subjects,id'],
+            'subject_id' => ['required', Rule::exists('subjects', 'id')->where(fn ($query) => $query->where('status', 'active'))],
             'group_ids' => ['required', 'array', 'min:1'],
             'group_ids.*' => ['integer', 'exists:groups,id'],
             'status' => ['nullable', 'in:active,inactive'],
@@ -237,6 +300,7 @@ class TeachingLoadController extends Controller
 
         foreach (array_unique($validated['group_ids']) as $groupId) {
             $groupId = (int) $groupId;
+            $programs->assertTeachingLoadAllowed($teacherId, $subjectId, $groupId);
             $exists = TeachingLoad::where('teacher_id', $teacherId)
                 ->where('subject_id', $subjectId)
                 ->where('group_id', $groupId)
@@ -253,7 +317,19 @@ class TeachingLoadController extends Controller
             ])->load(['teacher', 'subject', 'group']);
         }
 
+        foreach ($created as $tl) {
+            app(AdminActionNotificationService::class)->notifyTeachingLoadAssigned($tl, $request->user());
+        }
+
         $this->log($request, 'create_teaching_load_batch', 'Пакетное создание назначений: '.count($created).' новых, пропуск групп: '.implode(',', $skippedGroupIds));
+
+        if (count($created) === 0 && count($skippedGroupIds) > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Все выбранные группы уже имеют это назначение у преподавателя.',
+                'skipped_group_ids' => $skippedGroupIds,
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,
@@ -266,14 +342,14 @@ class TeachingLoadController extends Controller
     }
 
     /**
-     * Синхронизация списка групп для пары преподаватель + предмет: добавить/убрать карточки назначений.
+     * Синхронизация списка групп для пары преподаватель + дисциплина: добавить/убрать карточки назначений.
      * Снятие группы запрещено, если по этой тройке есть учебные задания.
      */
-    public function syncTeachingLoadsForPair(Request $request)
+    public function syncTeachingLoadsForPair(Request $request, AcademicProgramService $programs)
     {
         $validated = $request->validate([
             'teacher_id' => ['required', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
-            'subject_id' => ['required', 'exists:subjects,id'],
+            'subject_id' => ['required', Rule::exists('subjects', 'id')->where(fn ($query) => $query->where('status', 'active'))],
             'group_ids' => ['required', 'array', 'min:1'],
             'group_ids.*' => ['integer', 'exists:groups,id'],
         ], [
@@ -284,10 +360,20 @@ class TeachingLoadController extends Controller
         $subjectId = (int) $validated['subject_id'];
         $want = collect($validated['group_ids'])->map(fn ($id) => (int) $id)->unique()->values();
 
-        DB::transaction(function () use ($request, $teacherId, $subjectId, $want) {
+        $removedLoads = [];
+        $addedLoads = [];
+
+        DB::transaction(function () use ($request, $teacherId, $subjectId, $want, $programs, &$removedLoads, &$addedLoads) {
             $current = TeachingLoad::where('teacher_id', $teacherId)
                 ->where('subject_id', $subjectId)
+                ->with(['teacher', 'subject', 'group'])
                 ->get();
+
+            $currentGroupIds = $current->pluck('group_id')->map(fn ($id) => (int) $id);
+            $addingGroupIds = $want->filter(fn ($gid) => ! $currentGroupIds->contains($gid));
+            if ($addingGroupIds->isNotEmpty()) {
+                $programs->assertActiveTeacher($teacherId);
+            }
 
             foreach ($current as $tl) {
                 if ($want->contains((int) $tl->group_id)) {
@@ -303,11 +389,13 @@ class TeachingLoadController extends Controller
                         'group_ids' => 'Нельзя убрать группу «'.$tl->group?->name.'»: есть '.$n.' задан(ий) по этой связке.',
                     ]);
                 }
+                $removedLoads[] = $tl;
                 $tl->delete();
             }
 
             foreach ($want as $gid) {
-                TeachingLoad::firstOrCreate(
+                $programs->assertTeachingLoadAllowed($teacherId, $subjectId, (int) $gid);
+                $load = TeachingLoad::firstOrCreate(
                     [
                         'teacher_id' => $teacherId,
                         'subject_id' => $subjectId,
@@ -315,10 +403,20 @@ class TeachingLoadController extends Controller
                     ],
                     ['status' => 'active']
                 );
+                if ($load->wasRecentlyCreated) {
+                    $addedLoads[] = $load->load(['teacher', 'subject', 'group']);
+                }
             }
 
-            $this->log($request, 'sync_teaching_loads_pair', "Синхронизированы группы для преподавателя {$teacherId}, предмет {$subjectId}");
+            $this->log($request, 'sync_teaching_loads_pair', "Синхронизированы группы для преподавателя {$teacherId}, дисциплина {$subjectId}");
         });
+
+        foreach ($removedLoads as $load) {
+            app(AdminActionNotificationService::class)->notifyTeachingLoadRemoved($load, $request->user());
+        }
+        foreach ($addedLoads as $load) {
+            app(AdminActionNotificationService::class)->notifyTeachingLoadAssigned($load, $request->user());
+        }
 
         $fresh = TeachingLoad::where('teacher_id', $teacherId)
             ->where('subject_id', $subjectId)
@@ -338,7 +436,7 @@ class TeachingLoadController extends Controller
     /**
      * Смена преподавателя у назначения: активные задания по этой тройке переходят новому преподавателю.
      */
-    public function transferTeachingLoadTeacher(Request $request, TeachingLoad $teachingLoad)
+    public function transferTeachingLoadTeacher(Request $request, TeachingLoad $teachingLoad, AcademicProgramService $programs)
     {
         $validated = $request->validate([
             'teacher_id' => ['required', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
@@ -346,6 +444,7 @@ class TeachingLoadController extends Controller
 
         $newId = (int) $validated['teacher_id'];
         $oldId = (int) $teachingLoad->teacher_id;
+        $programs->assertTeachingLoadAllowed($newId, (int) $teachingLoad->subject_id, (int) $teachingLoad->group_id);
 
         if ($newId === $oldId) {
             $teachingLoad->load(['teacher', 'subject', 'group']);
@@ -359,6 +458,8 @@ class TeachingLoadController extends Controller
             ]);
         }
 
+        $oldLoad = $teachingLoad->fresh(['teacher', 'subject', 'group']);
+
         DB::transaction(function () use ($teachingLoad, $oldId, $newId) {
             Assignment::query()
                 ->where('teacher_id', $oldId)
@@ -370,6 +471,10 @@ class TeachingLoadController extends Controller
         });
 
         $fresh = $teachingLoad->fresh(['teacher', 'subject', 'group']);
+        if ($oldLoad) {
+            app(AdminActionNotificationService::class)->notifyTeachingLoadRemoved($oldLoad, $request->user());
+        }
+        app(AdminActionNotificationService::class)->notifyTeachingLoadAssigned($fresh, $request->user());
         $this->log($request, 'transfer_teaching_load_teacher', "Смена преподавателя в назначении #{$teachingLoad->id}");
 
         return response()->json([
@@ -381,18 +486,24 @@ class TeachingLoadController extends Controller
         ]);
     }
 
-    public function createTeachingLoad(Request $request)
+    public function createTeachingLoad(Request $request, AcademicProgramService $programs)
     {
         $validated = $request->validate([
             'teacher_id' => ['required', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
-            'subject_id' => ['required', 'exists:subjects,id'],
+            'subject_id' => ['required', Rule::exists('subjects', 'id')->where(fn ($query) => $query->where('status', 'active'))],
             'group_id' => ['required', 'exists:groups,id'],
             'status' => ['nullable', 'in:active,inactive'],
         ], [
             'teacher_id.required' => 'Выберите преподавателя.',
-            'subject_id.required' => 'Выберите предмет.',
+            'subject_id.required' => 'Выберите дисциплину.',
             'group_id.required' => 'Выберите группу.',
         ]);
+
+        $programs->assertTeachingLoadAllowed(
+            (int) $validated['teacher_id'],
+            (int) $validated['subject_id'],
+            (int) $validated['group_id']
+        );
 
         $existing = TeachingLoad::where('teacher_id', (int) $validated['teacher_id'])
             ->where('subject_id', (int) $validated['subject_id'])
@@ -402,7 +513,10 @@ class TeachingLoadController extends Controller
         if ($existing) {
             return response()->json([
                 'success' => false,
-                'message' => 'Такая нагрузка уже назначена.',
+                'message' => 'Такое назначение уже есть: '.$programs->teachingLoadTripleLabel(
+                    (int) $validated['subject_id'],
+                    (int) $validated['group_id'],
+                ).'.',
             ], 422);
         }
 
@@ -413,16 +527,18 @@ class TeachingLoadController extends Controller
             'status' => $validated['status'] ?? 'active',
         ])->load(['teacher', 'subject', 'group']);
 
+        app(AdminActionNotificationService::class)->notifyTeachingLoadAssigned($load, $request->user());
+
         $this->log($request, 'create_teaching_load', "Назначена нагрузка: {$load->teacher->full_name} · {$load->subject->name} · {$load->group->name}");
 
         return response()->json(['success' => true, 'teaching_load' => $load], 201);
     }
 
-    public function updateTeachingLoad(Request $request, TeachingLoad $teachingLoad)
+    public function updateTeachingLoad(Request $request, TeachingLoad $teachingLoad, AcademicProgramService $programs)
     {
         $validated = $request->validate([
             'teacher_id' => ['sometimes', 'required', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
-            'subject_id' => ['sometimes', 'required', 'exists:subjects,id'],
+            'subject_id' => ['sometimes', 'required', Rule::exists('subjects', 'id')->where(fn ($query) => $query->where('status', 'active'))],
             'group_id' => ['sometimes', 'required', 'exists:groups,id'],
             'status' => ['nullable', 'in:active,inactive'],
         ]);
@@ -434,6 +550,14 @@ class TeachingLoadController extends Controller
             'status' => $validated['status'] ?? $teachingLoad->status,
         ];
 
+        $pairChanged = $next['teacher_id'] !== (int) $teachingLoad->teacher_id
+            || $next['subject_id'] !== (int) $teachingLoad->subject_id
+            || $next['group_id'] !== (int) $teachingLoad->group_id;
+
+        if ($pairChanged) {
+            $programs->assertTeachingLoadAllowed($next['teacher_id'], $next['subject_id'], $next['group_id']);
+        }
+
         $duplicateExists = TeachingLoad::where('teacher_id', $next['teacher_id'])
             ->where('subject_id', $next['subject_id'])
             ->where('group_id', $next['group_id'])
@@ -443,12 +567,38 @@ class TeachingLoadController extends Controller
         if ($duplicateExists) {
             return response()->json([
                 'success' => false,
-                'message' => 'Такая нагрузка уже назначена.',
+                'message' => 'Такое назначение уже есть: '.$programs->teachingLoadTripleLabel(
+                    (int) $next['subject_id'],
+                    (int) $next['group_id'],
+                ).'.',
             ], 422);
         }
 
+        $beforeLoad = $teachingLoad->fresh(['teacher', 'subject', 'group']);
         $teachingLoad->update($next);
         $freshLoad = $teachingLoad->fresh(['teacher', 'subject', 'group']);
+
+        if ($beforeLoad && (
+            (int) $beforeLoad->teacher_id !== (int) $freshLoad->teacher_id ||
+            (int) $beforeLoad->subject_id !== (int) $freshLoad->subject_id ||
+            (int) $beforeLoad->group_id !== (int) $freshLoad->group_id
+        )) {
+            app(AdminActionNotificationService::class)->notifyTeachingLoadRemoved($beforeLoad, $request->user());
+            app(AdminActionNotificationService::class)->notifyTeachingLoadAssigned($freshLoad, $request->user());
+        } elseif ($freshLoad->teacher) {
+            app(AdminActionNotificationService::class)->notify(
+                $freshLoad->teacher,
+                $request->user(),
+                'Назначение изменено',
+                'Администратор изменил статус вашего назначения по дисциплине «'.($freshLoad->subject?->name ?? 'Дисциплина').'» для группы '.($freshLoad->group?->name ?? '—').'.',
+                [
+                    'action' => 'teaching_load_updated',
+                    'teaching_load_id' => $freshLoad->id,
+                    'subject_id' => $freshLoad->subject_id,
+                    'group_id' => $freshLoad->group_id,
+                ],
+            );
+        }
 
         $this->log($request, 'update_teaching_load', "Изменена нагрузка: {$freshLoad->teacher->full_name} · {$freshLoad->subject->name} · {$freshLoad->group->name}");
 
@@ -459,7 +609,10 @@ class TeachingLoadController extends Controller
     {
         $teachingLoad->load(['teacher', 'subject', 'group']);
         $details = "{$teachingLoad->teacher?->full_name} · {$teachingLoad->subject?->name} · {$teachingLoad->group?->name}";
+        $removedLoad = clone $teachingLoad;
         $teachingLoad->delete();
+
+        app(AdminActionNotificationService::class)->notifyTeachingLoadRemoved($removedLoad, $request->user());
 
         $this->log($request, 'delete_teaching_load', "Удалена нагрузка: {$details}");
 
@@ -519,6 +672,7 @@ class TeachingLoadController extends Controller
                 'middle_name' => $tl->teacher->middle_name,
                 'login' => $tl->teacher->login,
                 'email' => $tl->teacher->email,
+                'department' => $tl->teacher->department,
                 'full_name' => $tl->teacher->full_name,
             ] : null,
             'subject' => $tl->subject ? [

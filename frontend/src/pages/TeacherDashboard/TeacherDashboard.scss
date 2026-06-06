@@ -7,140 +7,6 @@
   padding: 0;
 }
 
-.teacher-dashboard .teacher-priority-block {
-  margin: 0 0 1rem;
-  padding: 0.75rem;
-  border: 1px solid #e7edf8;
-  border-radius: 12px;
-  background: #f8fbff;
-}
-
-.teacher-dashboard .teacher-priority-block__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.6rem;
-
-  h3 {
-    margin: 0;
-    font-size: 0.95rem;
-    color: #1f2937;
-  }
-}
-
-.teacher-dashboard .teacher-priority-block__title-wrap {
-  min-width: 0;
-}
-
-.teacher-dashboard .teacher-priority-block__subtitle {
-  margin: 0.2rem 0 0;
-  font-size: 0.72rem;
-  color: #64748b;
-  line-height: 1.35;
-  max-width: 42rem;
-}
-
-.teacher-dashboard .teacher-priority-block__count {
-  padding: 0.1rem 0.45rem;
-  border-radius: 999px;
-  border: 1px solid #cfe0f8;
-  background: #e9f2ff;
-  color: #285ea8;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.teacher-dashboard .teacher-priority-block__list {
-  margin-top: 0.5rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 0.45rem;
-}
-
-.teacher-dashboard .teacher-priority-block__item {
-  display: grid;
-  gap: 0.16rem;
-  text-align: left;
-  border: 1px solid #d9e2f1;
-  border-radius: 9px;
-  background: #fff;
-  padding: 0.52rem 0.66rem;
-  cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-
-  &:hover {
-    border-color: #b8c9e5;
-    box-shadow: 0 8px 18px rgba(30, 64, 175, 0.08);
-    transform: translateY(-1px);
-  }
-}
-
-.teacher-dashboard .teacher-priority-block__student {
-  font-size: 0.84rem;
-  font-weight: 700;
-  color: #334155;
-}
-
-.teacher-dashboard .teacher-priority-block__assignment {
-  font-size: 0.8rem;
-  color: #475569;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.teacher-dashboard .teacher-priority-block__meta {
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-.teacher-dashboard .teacher-priority-block__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.28rem;
-  margin-top: 0.12rem;
-}
-
-.teacher-dashboard .teacher-priority-block__tag {
-  display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 0.12rem 0.42rem;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  line-height: 1.2;
-}
-
-.teacher-dashboard .teacher-priority-block__tag--resubmit {
-  color: #5b21b6;
-  background: #ede9fe;
-  border-color: #c4b5fd;
-}
-
-.teacher-dashboard .teacher-priority-block__tag--deadline.teacher-priority-block__tag--overdue {
-  color: #b91c1c;
-  background: #fee2e2;
-  border-color: #fca5a5;
-}
-
-.teacher-dashboard .teacher-priority-block__tag--deadline.teacher-priority-block__tag--today {
-  color: #c2410c;
-  background: #ffedd5;
-  border-color: #fdba74;
-}
-
-.teacher-dashboard .teacher-priority-block__tag--deadline.teacher-priority-block__tag--soon {
-  color: #a16207;
-  background: #fef9c3;
-  border-color: #fde047;
-}
-
-.teacher-dashboard .teacher-priority-block__tag--deadline.teacher-priority-block__tag--normal {
-  color: #475569;
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-}
-
 .teacher-dashboard .section-header {
   display: flex;
   justify-content: space-between;
@@ -361,7 +227,6 @@
     min-height: 140px;
   }
 
-  .submissions-section__main--busy .teacher-priority-block,
   .submissions-section__main--busy .submissions-cards,
   .submissions-section__main--busy .ui-pagination {
     opacity: 0.5;
@@ -517,6 +382,44 @@
       margin-top: 0.15rem;
     }
 
+    &__assignment-list-header {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(120px, 120px)) minmax(130px, 130px);
+      align-items: end;
+      gap: 0.7rem;
+      padding: 0 0.8rem 0.15rem;
+
+      span {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        text-align: center;
+
+        &:first-child {
+          text-align: left;
+        }
+
+        &:last-child {
+          text-align: right;
+        }
+      }
+    }
+
+    &__assignment-field-label {
+      display: none;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #94a3b8;
+    }
+
+    &__assignment-field-value {
+      min-width: 0;
+    }
+
     &__assignment-row {
       display: grid;
       grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(120px, 120px)) minmax(130px, 130px);
@@ -542,6 +445,10 @@
 
     &__assignment-main {
       min-width: 0;
+    }
+
+    &__assignment-meta {
+      display: contents;
     }
 
     &__assignment-title {
@@ -570,6 +477,11 @@
       white-space: nowrap;
       text-align: center;
       color: #475569;
+
+      .teacher-students-section__assignment-field-value {
+        color: inherit;
+        font-weight: inherit;
+      }
 
       &.is-overdue {
         color: #b91c1c;
@@ -881,44 +793,91 @@
 }
 
 @media (max-width: 1100px) {
+  .teacher-dashboard .teacher-students-section__assignment-list-header {
+    display: none;
+  }
+
   .teacher-dashboard .teacher-students-section__assignment-row {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas:
-      'main status score'
-      'deadline submitted submitted';
-    gap: 0.55rem 0.75rem;
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0.85rem 0.9rem;
   }
 
   .teacher-dashboard .teacher-students-section__assignment-main {
-    grid-area: main;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #e8edf5;
+  }
+
+  .teacher-dashboard .teacher-students-section__assignment-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'status score'
+      'deadline submitted';
+    gap: 0.55rem;
+    padding-top: 0.75rem;
+  }
+
+  .teacher-dashboard .teacher-students-section__assignment-field-label {
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  .teacher-dashboard .teacher-students-section__assignment-deadline,
+  .teacher-dashboard .teacher-students-section__assignment-status,
+  .teacher-dashboard .teacher-students-section__assignment-score,
+  .teacher-dashboard .teacher-students-section__assignment-submitted-at {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    width: 100%;
+    min-width: 0;
+    padding: 0.55rem 0.65rem;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e8edf5;
+    text-align: left;
+    white-space: normal;
   }
 
   .teacher-dashboard .teacher-students-section__assignment-status {
     grid-area: status;
-    justify-self: center;
+    justify-self: stretch;
   }
 
   .teacher-dashboard .teacher-students-section__assignment-score {
     grid-area: score;
-    justify-self: center;
-    text-align: center;
+    justify-self: stretch;
   }
 
   .teacher-dashboard .teacher-students-section__assignment-deadline {
     grid-area: deadline;
-    justify-self: start;
-    text-align: left;
-    width: auto;
-    white-space: nowrap;
+    justify-self: stretch;
   }
 
   .teacher-dashboard .teacher-students-section__assignment-submitted-at {
     grid-area: submitted;
-    width: auto;
-    justify-self: end;
-    text-align: right;
-    white-space: nowrap;
+    justify-self: stretch;
+  }
+
+  .teacher-dashboard .teacher-students-section__assignment-field-value {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-dashboard .teacher-students-section__assignment-deadline .teacher-students-section__assignment-field-value {
+    color: inherit;
+  }
+
+  .teacher-dashboard .teacher-students-section__assignment-submitted-at .teacher-students-section__assignment-field-value {
+    font-weight: 600;
+    color: #475569;
   }
 
   .teacher-dashboard .teacher-students-section__single-action {
@@ -938,21 +897,47 @@
   }
 }
 
+@media (max-width: 620px) {
+  .teacher-dashboard .teacher-students-section__assignment-row {
+    padding: 0.75rem 0.8rem;
+  }
+
+  .teacher-dashboard .teacher-students-section__assignment-main {
+    padding-bottom: 0.65rem;
+  }
+
+  .teacher-dashboard .teacher-students-section__assignment-meta {
+    gap: 0.45rem;
+    padding-top: 0.65rem;
+  }
+
+  .teacher-dashboard .teacher-students-section__assignment-deadline,
+  .teacher-dashboard .teacher-students-section__assignment-status,
+  .teacher-dashboard .teacher-students-section__assignment-score,
+  .teacher-dashboard .teacher-students-section__assignment-submitted-at {
+    padding: 0.5rem 0.55rem;
+  }
+
+  .teacher-dashboard .teacher-students-section__assignment-title {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .teacher-dashboard .teacher-students-section__assignment-meta {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'status'
+      'score'
+      'deadline'
+      'submitted';
+    gap: 0.4rem;
+  }
+}
+
 @media (min-width: 769px) and (max-width: 1100px) {
   .teacher-dashboard .teacher-students-section__assignment-row {
-    grid-template-columns: minmax(0, 1fr) 120px 90px 140px;
-    grid-template-areas:
-      'main status score submitted'
-      'deadline deadline deadline submitted';
-  }
-
-  .teacher-dashboard .teacher-students-section__assignment-status,
-  .teacher-dashboard .teacher-students-section__assignment-score {
-    width: 100%;
-  }
-
-  .teacher-dashboard .teacher-students-section__assignment-submitted-at {
-    width: 100%;
+    padding: 0.9rem 1rem;
   }
 }
 
@@ -960,30 +945,6 @@
   .teacher-dashboard .teacher-students-section__hint {
     font-size: 0.86rem;
     margin-bottom: 0.85rem;
-  }
-
-  .teacher-dashboard .teacher-students-section__assignment-row {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      'main'
-      'status'
-      'deadline'
-      'score'
-      'submitted';
-    gap: 0.45rem;
-    align-items: stretch;
-  }
-
-  .teacher-dashboard .teacher-students-section__assignment-status,
-  .teacher-dashboard .teacher-students-section__assignment-score,
-  .teacher-dashboard .teacher-students-section__assignment-submitted-at {
-    justify-self: start;
-    text-align: left;
-    white-space: normal;
-  }
-
-  .teacher-dashboard .teacher-students-section__assignment-deadline {
-    white-space: normal;
   }
 
   .teacher-dashboard .teacher-students-section__student-row {

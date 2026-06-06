@@ -1,12 +1,12 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import api from '../../../services/api';
-import { firstApiErrorMessage } from '../../../utils/adminApiErrors';
+import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import {
   caretAfterNthDigit,
   countDigitsBeforeCaret,
   formatRuPhoneDisplay,
   isPhoneCompleteOrEmpty,
-} from '../../../utils/ruPhoneMask';
+} from '../../../utils/phoneMask';
 import Button from '../../UI/Button/Button';
 import Modal from '../../UI/Modal/Modal';
 import ModalSection from '../../UI/Modal/ModalSection';
@@ -81,14 +81,18 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
   }, [form.phone]);
 
   const groupRequired = form.role === 'student';
+  const departmentRequired = form.role === 'teacher';
   const isEditingSelf = userRow != null && currentUserId != null && Number(userRow.id) === Number(currentUserId);
 
   const canSubmit = useMemo(() => {
+    const login = form.login.trim();
     if (!form.lastName.trim() || !form.firstName.trim()) return false;
+    if (!login || login.length < 6) return false;
     if (!form.email.trim()) return false;
     if (groupRequired && !form.groupId) return false;
+    if (departmentRequired && !form.department.trim()) return false;
     return true;
-  }, [form.lastName, form.firstName, form.email, form.groupId, groupRequired]);
+  }, [form.lastName, form.firstName, form.login, form.email, form.groupId, form.department, groupRequired, departmentRequired]);
 
   const setField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -126,6 +130,7 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
         return;
       }
       const body = {
+        login: form.login.trim(),
         lastName: form.lastName.trim(),
         firstName: form.firstName.trim(),
         middleName: form.middleName.trim() || undefined,
@@ -140,8 +145,10 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
       };
       if (form.role === 'student') {
         body.department = null;
+      } else if (form.role === 'teacher') {
+        body.department = form.department.trim();
       } else {
-        body.department = form.department.trim() || null;
+        body.department = null;
       }
       if (groupRequired && form.groupId) {
         body.groupId = Number(form.groupId);
@@ -153,7 +160,7 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
       onSaved?.(data?.user);
       onClose();
     } catch (err) {
-      const msg = firstApiErrorMessage(err.response?.data) || 'Не удалось сохранить изменения';
+      const msg = getApiErrorMessage(err, 'Не удалось сохранить изменения');
       setErrorMessage(msg);
     } finally {
       setSubmitting(false);
@@ -173,9 +180,6 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
       contentClassName="admin-edit-user-modal__body"
       footer={(
         <div className="admin-edit-user-modal__actions">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
-            Отмена
-          </Button>
           <Button
             type="submit"
             form="admin-edit-user-form"
@@ -196,7 +200,7 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
                 </div>
               )}
 
-              <ModalSection title="Данные пользователя">
+              <ModalSection title="ФИО">
               <div className="admin-edit-user-modal__grid">
                 <div className="admin-edit-user-modal__field">
                   <label className="admin-edit-user-modal__label" htmlFor="admin-edit-last-name">
@@ -243,6 +247,28 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
                 </div>
 
                 <div className="admin-edit-user-modal__field">
+                  <label className="admin-edit-user-modal__label" htmlFor="admin-edit-login">
+                    Логин <span className="admin-edit-user-modal__required">*</span>
+                  </label>
+                  <input
+                    id="admin-edit-login"
+                    type="text"
+                    className="admin-edit-user-modal__input"
+                    value={form.login}
+                    onChange={(e) => setField('login', e.target.value)}
+                    placeholder="latin_letters_123"
+                    minLength={6}
+                    maxLength={30}
+                    autoComplete="off"
+                    required
+                  />
+                </div>
+              </div>
+              </ModalSection>
+
+              <ModalSection title="Контактные данные">
+              <div className="admin-edit-user-modal__grid">
+                <div className="admin-edit-user-modal__field">
                   <label className="admin-edit-user-modal__label" htmlFor="admin-edit-email">
                     Email <span className="admin-edit-user-modal__required">*</span>
                   </label>
@@ -278,16 +304,6 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
               <ModalSection title="Параметры доступа" variant="soft">
               <div className="admin-edit-user-modal__grid">
                 <div className="admin-edit-user-modal__field">
-                  <label className="admin-edit-user-modal__label" htmlFor="admin-edit-login-label">
-                    Логин
-                  </label>
-                  <div className="admin-edit-user-modal__readonly" id="admin-edit-login">
-                    {form.login || '—'}
-                  </div>
-                  <div className="admin-edit-user-modal__hint-text">Задаётся при создании, не меняется</div>
-                </div>
-
-                <div className="admin-edit-user-modal__field">
                   <label className="admin-edit-user-modal__label" htmlFor="admin-edit-role">
                     Роль <span className="admin-edit-user-modal__required">*</span>
                   </label>
@@ -301,7 +317,7 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
                         ...prev,
                         role,
                         groupId: role === 'student' ? prev.groupId : '',
-                        department: role === 'student' ? '' : prev.department,
+                        department: role === 'teacher' ? prev.department : '',
                       }));
                     }}
                     required
@@ -334,10 +350,10 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
                       ))}
                     </select>
                   </div>
-                ) : (
+                ) : form.role === 'teacher' ? (
                   <div className="admin-edit-user-modal__field">
                     <label className="admin-edit-user-modal__label" htmlFor="admin-edit-department">
-                      Кафедра
+                      Кафедра <span className="admin-edit-user-modal__required">*</span>
                     </label>
                     <input
                       id="admin-edit-department"
@@ -345,10 +361,12 @@ const AdminEditUserModal = ({ isOpen, onClose, userRow, groups = [], onSaved, cu
                       className="admin-edit-user-modal__input"
                       value={form.department}
                       onChange={(e) => setField('department', e.target.value)}
-                      placeholder="Необязательно"
+                      placeholder="Введите кафедру"
+                      maxLength={100}
+                      required
                     />
                   </div>
-                )}
+                ) : null}
 
                 <div className="admin-edit-user-modal__field admin-edit-user-modal__field--full">
                   <label className="admin-edit-user-modal__checkbox">

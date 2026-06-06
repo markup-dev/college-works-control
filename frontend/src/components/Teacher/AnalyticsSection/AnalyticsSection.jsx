@@ -158,7 +158,7 @@ const AnalyticsSection = ({
         return {
           id: assignmentId,
           title: assignment.title || rows[0]?.assignmentTitle || 'Без названия',
-          subject: assignment.subject || 'Без предмета',
+          subject: assignment.subject || 'Без дисциплины',
           pending,
           returned,
           graded,

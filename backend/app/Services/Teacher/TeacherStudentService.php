@@ -35,7 +35,7 @@ class TeacherStudentService
 
         $assignments = Assignment::query()
             ->where('teacher_id', $teacher->id)
-            ->whereIn('status', ['active', 'inactive'])
+            ->where('status', 'active')
             ->with('groups:id')
             ->get(['id', 'title', 'status', 'max_score', 'deadline']);
 
@@ -132,7 +132,7 @@ class TeacherStudentService
 
         $assignments = Assignment::query()
             ->where('teacher_id', $teacher->id)
-            ->whereIn('status', ['active', 'inactive'])
+            ->where('status', 'active')
             ->whereHas('groups', fn ($q) => $q->where('groups.id', $g))
             ->orderByDesc('deadline')
             ->orderByDesc('id')
@@ -204,7 +204,7 @@ class TeacherStudentService
 
         $assignmentsForStats = Assignment::query()
             ->where('teacher_id', $teacher->id)
-            ->whereIn('status', ['active', 'inactive'])
+            ->where('status', 'active')
             ->with(['groups:id', 'subject:id,name'])
             ->get(['id', 'subject_id']);
 
@@ -217,7 +217,7 @@ class TeacherStudentService
                 $groupAssignmentIds[$gid][$assignment->id] = true;
 
                 $subjectKey = (int) ($assignment->subject_id ?? 0);
-                $subjectName = $assignment->subject?->name ?: 'Без предмета';
+                $subjectName = $assignment->subject?->name ?: 'Без дисциплины';
                 $groupSubjectStats[$gid] ??= [];
                 $groupSubjectStats[$gid][$subjectKey] ??= ['subjectId' => $subjectKey, 'subjectName' => $subjectName, 'assignmentsCount' => 0];
                 $groupSubjectStats[$gid][$subjectKey]['assignmentsCount']++;
@@ -300,7 +300,7 @@ class TeacherStudentService
     ): array {
         $assignmentsQuery = Assignment::query()
             ->where('teacher_id', $teacher->id)
-            ->whereIn('status', ['active', 'inactive'])
+            ->where('status', 'active')
             ->whereHas('groups', fn ($q) => $q->where('groups.id', $group->id))
             ->with('subject:id,name')
             ->orderByDesc('deadline')
@@ -336,7 +336,7 @@ class TeacherStudentService
         $subjects = $assignments
             ->map(fn (Assignment $a) => [
                 'id' => (int) ($a->subject_id ?? 0),
-                'name' => $a->subject?->name ?: 'Без предмета',
+                'name' => $a->subject?->name ?: 'Без дисциплины',
             ])
             ->unique('id')
             ->sortBy('name')
@@ -358,7 +358,7 @@ class TeacherStudentService
             ->mapWithKeys(fn (Assignment $a) => [
                 (int) $a->id => [
                     'title' => $a->title,
-                    'subjectName' => $a->subject?->name ?: 'Без предмета',
+                    'subjectName' => $a->subject?->name ?: 'Без дисциплины',
                 ],
             ])
             ->all();
@@ -376,7 +376,7 @@ class TeacherStudentService
                 $submission = $latestMap[$student->id . ':' . $aid] ?? null;
                 if (! $submission) {
                     $debt++;
-                    $meta = $assignmentMeta[$aid] ?? ['title' => '', 'subjectName' => 'Без предмета'];
+                    $meta = $assignmentMeta[$aid] ?? ['title' => '', 'subjectName' => 'Без дисциплины'];
                     $debtItems[] = [
                         'subjectName' => $meta['subjectName'],
                         'assignmentTitle' => $meta['title'],
@@ -457,7 +457,7 @@ class TeacherStudentService
     ): array {
         $assignmentsQuery = Assignment::query()
             ->where('teacher_id', $teacher->id)
-            ->whereIn('status', ['active', 'inactive'])
+            ->where('status', 'active')
             ->whereHas('groups', fn ($q) => $q->where('groups.id', $group->id))
             ->with('subject:id,name')
             ->orderByDesc('deadline')
@@ -490,7 +490,7 @@ class TeacherStudentService
                 'assignmentId' => (int) $assignment->id,
                 'title' => $assignment->title,
                 'subjectId' => (int) ($assignment->subject_id ?? 0),
-                'subjectName' => $assignment->subject?->name ?: 'Без предмета',
+                'subjectName' => $assignment->subject?->name ?: 'Без дисциплины',
                 'deadline' => $assignment->deadline?->format('Y-m-d'),
                 'maxScore' => (int) $assignment->max_score,
                 'submissionId' => $submission?->id,
@@ -501,7 +501,7 @@ class TeacherStudentService
         })->filter()->values();
 
         $subjects = $assignments
-            ->map(fn (Assignment $a) => ['id' => (int) ($a->subject_id ?? 0), 'name' => $a->subject?->name ?: 'Без предмета'])
+            ->map(fn (Assignment $a) => ['id' => (int) ($a->subject_id ?? 0), 'name' => $a->subject?->name ?: 'Без дисциплины'])
             ->unique('id')
             ->sortBy('name')
             ->values()
