@@ -5,7 +5,7 @@ namespace App\Services\Submissions;
 use App\Models\Assignment;
 use App\Models\Submission;
 use App\Models\User;
-use App\Services\Assignments\AssignmentService;
+use App\Services\Assignments\AssignmentService as AssignmentsAssignmentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -16,8 +16,6 @@ use Illuminate\Validation\ValidationException;
 class SubmissionService
 {
     public const DEFAULT_ALLOWED_FORMATS = ['pdf', 'doc', 'docx', 'zip', 'rar'];
-
-    public const DEFAULT_MAX_FILE_SIZE_MB = 50;
 
     public const DEFAULT_PER_PAGE = 20;
 
@@ -175,37 +173,9 @@ class SubmissionService
                 break;
         }
 
-        $mapSubmission = fn ($sub) => [
-            'id' => $sub->id,
-            'assignment_id' => $sub->assignment_id,
-            'assignment_title' => $sub->assignment?->title ?? '',
-            'subject_id' => $sub->assignment?->subject_id,
-            'subject_name' => $sub->assignment?->subject?->name ?? '',
-            'max_score' => $sub->assignment?->max_score ?? 100,
-            'submission_type' => $sub->assignment?->submission_type ?? 'file',
-            'assignment_deadline' => $sub->assignment?->deadline?->format('Y-m-d'),
-            'student_id' => $sub->student_id,
-            'student_name' => $sub->student?->full_name ?? '',
-            'student_login' => $sub->student?->login ?? '',
-            'group_id' => $sub->student?->group_id,
-            'group_name' => $sub->student?->studentGroup?->name ?? '',
-            'status' => $sub->status,
-            'score' => $sub->score,
-            'grade_label' => $sub->gradeLabel(),
-            'comment' => $sub->comment,
-            'teacher_comment' => $sub->teacher_comment,
-            'criterion_scores' => $sub->criterion_scores,
-            'file_name' => $sub->file_name,
-            'file_size' => $sub->file_size,
-            'file_type' => $sub->file_type,
-            'is_resubmission' => $sub->is_resubmission,
-            'submission_date' => $sub->submitted_at ?? $sub->created_at,
-            'created_at' => $sub->created_at,
-        ];
-
         if ($shouldPaginate) {
             $paginated = $query->paginate($perPage, ['*'], 'page', $requestedPage);
-            $paginated->getCollection()->transform($mapSubmission);
+            $paginated->getCollection()->transform(fn (Submission $submission) => $this->submissionPayload($submission));
 
             return [
                 'data' => $paginated->items(),
@@ -218,7 +188,47 @@ class SubmissionService
             ];
         }
 
-        return $query->get()->map($mapSubmission)->values()->all();
+        return $query->get()->map(fn (Submission $submission) => $this->submissionPayload($submission))->values()->all();
+    }
+
+    /** @return array<string, mixed> */
+    public function submissionPayload(Submission $submission): array
+    {
+        $submission->loadMissing([
+            'assignment:id,title,subject_id,max_score,submission_type,deadline,teacher_id',
+            'assignment.subject:id,name',
+            'assignment.teacher:id,grade_scale',
+            'student:id,login,group_id,last_name,first_name,middle_name',
+            'student.studentGroup:id,name',
+        ]);
+
+        return [
+            'id' => $submission->id,
+            'assignment_id' => $submission->assignment_id,
+            'assignment_title' => $submission->assignment?->title ?? '',
+            'subject_id' => $submission->assignment?->subject_id,
+            'subject_name' => $submission->assignment?->subject?->name ?? '',
+            'max_score' => $submission->assignment?->max_score ?? 100,
+            'submission_type' => $submission->assignment?->submission_type ?? 'file',
+            'assignment_deadline' => $submission->assignment?->deadline?->format('Y-m-d'),
+            'student_id' => $submission->student_id,
+            'student_name' => $submission->student?->full_name ?? '',
+            'student_login' => $submission->student?->login ?? '',
+            'group_id' => $submission->student?->group_id,
+            'group_name' => $submission->student?->studentGroup?->name ?? '',
+            'status' => $submission->status,
+            'score' => $submission->score,
+            'grade_label' => $submission->gradeLabel(),
+            'comment' => $submission->comment,
+            'teacher_comment' => $submission->teacher_comment,
+            'criterion_scores' => $submission->criterion_scores,
+            'file_name' => $submission->file_name,
+            'file_size' => $submission->file_size,
+            'file_type' => $submission->file_type,
+            'is_resubmission' => $submission->is_resubmission,
+            'submission_date' => $submission->submitted_at ?? $submission->created_at,
+            'created_at' => $submission->created_at,
+        ];
     }
 
     /**
@@ -255,7 +265,7 @@ class SubmissionService
             return;
         }
 
-        $metrics = app(AssignmentService::class)
+        $metrics = app(AssignmentsAssignmentService::class)
             ->batchCompletionMetrics(collect([$assignment]))[(int) $assignment->id] ?? [
                 'total_students' => 0,
                 'submitted_students' => 0,
@@ -294,9 +304,9 @@ class SubmissionService
 
     public function resolveMaxFileSizeKilobytes(Assignment $assignment): int
     {
-        $maxFileSizeMb = (int) ($assignment->max_file_size ?? self::DEFAULT_MAX_FILE_SIZE_MB);
+        $maxFileSizeMb = (int) ($assignment->max_file_size ?? AssignmentsAssignmentService::DEFAULT_MAX_FILE_SIZE_MB);
         if ($maxFileSizeMb <= 0) {
-            $maxFileSizeMb = self::DEFAULT_MAX_FILE_SIZE_MB;
+            $maxFileSizeMb = AssignmentsAssignmentService::DEFAULT_MAX_FILE_SIZE_MB;
         }
 
         return $maxFileSizeMb * 1024;

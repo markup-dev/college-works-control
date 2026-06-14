@@ -55,8 +55,6 @@ class BroadcastController extends Controller
 
     public function store(Request $request)
     {
-        $this->ensureAdmin($request);
-
         $validated = $request->validate([
             'audience_type' => ['required', Rule::in(['all', 'teachers', 'students', 'groups'])],
             'group_ids' => ['nullable', 'array', 'max:50'],
@@ -123,7 +121,6 @@ class BroadcastController extends Controller
 
     public function show(Request $request, AdminBroadcast $broadcast)
     {
-        $this->ensureAdmin($request);
         $broadcast->load('admin:id,last_name,first_name,middle_name,login,email');
 
         $groupNames = [];
@@ -156,7 +153,6 @@ class BroadcastController extends Controller
 
     public function resend(Request $request, AdminBroadcast $broadcast)
     {
-        $this->ensureAdmin($request);
         $admin = $request->user();
         $groupIds = is_array($broadcast->group_ids) ? array_map('intval', $broadcast->group_ids) : [];
 
@@ -181,13 +177,6 @@ class BroadcastController extends Controller
         ]);
 
         return response()->json(['success' => true, 'sent' => $sent]);
-    }
-
-    private function ensureAdmin(Request $request): void
-    {
-        if ($request->user()?->role !== 'admin') {
-            abort(403);
-        }
     }
 
     private function resolveRecipients(string $audience, array $groupIds, int $adminId): Collection

@@ -79,11 +79,14 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
 
     // Отправки работ
     Route::get('/submissions', [SubmissionController::class, 'index']);
+    Route::get('/submissions/{submission}', [SubmissionController::class, 'show']);
     Route::get('/submissions/{submission}/download', [SubmissionController::class, 'download']);
 
     // Отправка работы — только для студентов
     Route::middleware('role:student')->group(function () {
         Route::post('/submissions', [SubmissionController::class, 'store']);
+        Route::post('/submissions/chunks', [SubmissionController::class, 'uploadChunk']);
+        Route::post('/submissions/chunks/complete', [SubmissionController::class, 'completeChunkedUpload']);
     });
 
     // Оценка и возврат — только для преподавателей

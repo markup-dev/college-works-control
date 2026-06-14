@@ -85,16 +85,14 @@ const Notifications = () => {
       setItems(
         rawItems.map((row) => ({
           ...row,
-          readAt: row.readAt ?? row.read_at ?? null,
-          createdAt: row.createdAt ?? row.created_at ?? null,
+          readAt: row.readAt ?? null,
+          createdAt: row.createdAt ?? null,
         }))
       );
-      setUnreadTotal(
-        Number(data.meta?.unreadTotal ?? data.meta?.unread_total ?? 0)
-      );
+      setUnreadTotal(Number(data.meta?.unreadTotal ?? 0));
       setMeta({
-        currentPage: data.meta?.currentPage ?? data.meta?.current_page ?? 1,
-        lastPage: data.meta?.lastPage ?? data.meta?.last_page ?? 1,
+        currentPage: data.meta?.currentPage ?? 1,
+        lastPage: data.meta?.lastPage ?? 1,
         total: data.meta?.total ?? 0,
       });
     } catch (err) {
@@ -233,13 +231,13 @@ const Notifications = () => {
           <ul className="notifications-page__list app-reveal-stagger">
             {items.map((n) => {
               const d = n.data || {};
-              const title = notificationText(d.title, 'Уведомление') || 'Уведомление';
+              const title = notificationText(d.title, 'Уведомление');
               const isBroadcast = isAdminBroadcastNotification(d);
               const body = notificationText(d.body, '');
               const teacherName = user?.role === 'student'
-                ? notificationText(d.teacherName ?? d.teacher_name, '')
+                ? notificationText(d.teacherName, '')
                 : user?.role === 'admin'
-                  ? notificationText(d.teacherName ?? d.teacher_name, '')
+                  ? notificationText(d.teacherName, '')
                   : '';
               const unread = !n.readAt;
               const navigable = Boolean(user?.role && getNotificationNavigatePath(user.role, d));
@@ -302,8 +300,8 @@ const Notifications = () => {
           <>
             <ModalSection title="Информация" variant="soft">
               <p className="notifications-page__modal-meta">
-                {selectedNotification.data?.adminName || selectedNotification.data?.admin_name
-                  ? `Отправитель: ${selectedNotification.data?.adminName || selectedNotification.data?.admin_name}`
+                {selectedNotification.data?.adminName
+                  ? `Отправитель: ${selectedNotification.data.adminName}`
                   : 'Администрация'}
                 <br />
                 {formatDateTimeShortMonth(selectedNotification.createdAt, '')}

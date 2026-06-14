@@ -5,13 +5,27 @@ import { getApiErrorMessage } from '../utils/adminApiErrors';
 import { DEFAULT_ALLOWED_FORMATS, getAllowedFormatsFromAssignment, normalizeGroupName, PAGINATION_DEFAULTS } from '../utils';
 import { resolveAssignmentSubjectId, resolveAssignmentSubjectName } from '../utils/filterHelpers';
 
+const resolveMaterialFiles = (assignment = {}) => (
+  assignment.materialFiles
+  || assignment.materialItems
+  || []
+);
+
+const resolveCriteria = (assignment = {}) => (
+  assignment.criteria
+  || assignment.criteriaItems
+  || []
+);
+
 export const normalizeAssignment = (assignment) => ({
   ...assignment,
   subject: resolveAssignmentSubjectName(assignment),
   subjectId: resolveAssignmentSubjectId(assignment),
   studentGroups: assignment.studentGroups || assignment.groups?.map((g) => g.name) || [],
   allowedFormats: getAllowedFormatsFromAssignment(assignment),
-  materialFiles: assignment.materialFiles || assignment.materialItems || [],
+  materialFiles: resolveMaterialFiles(assignment),
+  criteria: resolveCriteria(assignment),
+  isCompleted: Boolean(assignment.isCompleted ?? assignment.status === 'archived'),
 });
 
 export const normalizeSubmission = (submission) => ({
@@ -20,7 +34,7 @@ export const normalizeSubmission = (submission) => ({
   group: normalizeGroupName(submission.group || submission.groupName || ''),
   teacherComment: submission.teacherComment || '',
   submissionType: submission.submissionType || 'file',
-  assignmentDeadline: submission.assignmentDeadline || submission.assignment_deadline || null,
+  assignmentDeadline: submission.assignmentDeadline || null,
 });
 
 const parsePositiveId = (raw) => {
@@ -54,7 +68,7 @@ const getCreatedAssignmentIdFromResponse = (response) => {
     return null;
   }
 
-  const topLevel = parsePositiveId(data.assignmentId ?? data.assignment_id);
+  const topLevel = parsePositiveId(data.assignmentId);
   if (topLevel) {
     return topLevel;
   }
@@ -63,7 +77,7 @@ const getCreatedAssignmentIdFromResponse = (response) => {
     if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
       return null;
     }
-    return parsePositiveId(obj.id ?? obj.assignmentId ?? obj.assignment_id);
+    return parsePositiveId(obj.id ?? obj.assignmentId);
   };
 
   return (
@@ -239,10 +253,9 @@ export const TeacherProvider = ({ children }) => {
     }
     try {
       const metaRes = await api.get('/assignments/meta');
-      const rawTeachingLoads = metaRes?.data?.teachingLoads ?? metaRes?.data?.teaching_loads;
       setMetaSubjects(Array.isArray(metaRes?.data?.subjects) ? metaRes.data.subjects : []);
       setMetaGroups(Array.isArray(metaRes?.data?.groups) ? metaRes.data.groups : []);
-      setMetaTeachingLoads(Array.isArray(rawTeachingLoads) ? rawTeachingLoads : []);
+      setMetaTeachingLoads(Array.isArray(metaRes?.data?.teachingLoads) ? metaRes.data.teachingLoads : []);
       setMetaAssignments(Array.isArray(metaRes?.data?.assignments) ? metaRes.data.assignments : []);
       setError(null);
     } catch {
@@ -288,21 +301,18 @@ export const TeacherProvider = ({ children }) => {
       return;
     }
 
-    const formData = new FormData();
-    files.forEach((file) => formData.append('files[]', file));
-    removeIds.forEach((id) => formData.append('remove_ids[]', String(id)));
+    if (removeIds.length > 0) {
+      const removeData = new FormData();
+      removeIds.forEach((id) => removeData.append('remove_ids[]', String(id)));
+      await api.post(`/assignments/${assignmentId}/materials`, removeData);
+    }
 
-    await api.post(`/assignments/${assignmentId}/materials`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    for (const file of files) {
+      const fileData = new FormData();
+      fileData.append('files[]', file);
+      await api.post(`/assignments/${assignmentId}/materials`, fileData);
+    }
   }, []);
-
-  const refreshAfterAssignmentMutation = useCallback(async () => {
-    await Promise.all([
-      loadTeacherMeta({ silent: true }),
-      loadTeacherAssignments({ ...assignmentsQueryRef.current }, { silent: true }),
-    ]);
-  }, [loadTeacherAssignments, loadTeacherMeta]);
 
   const replaceAssignmentInList = useCallback((assignment) => {
     if (!assignment || typeof assignment !== 'object') {
@@ -321,7 +331,10 @@ export const TeacherProvider = ({ children }) => {
         return [normalized, ...prev];
       }
       const next = [...prev];
-      next[index] = normalized;
+      next[index] = {
+        ...next[index],
+        ...normalized,
+      };
       return next;
     });
 
@@ -356,6 +369,12 @@ export const TeacherProvider = ({ children }) => {
     }
 
     setAllSubmissions((prev) => {
+      const currentStatus = submissionsQueryRef.current?.status || 'all';
+      const shouldKeepInCurrentList = currentStatus === 'all' || currentStatus === normalized.status;
+      if (!shouldKeepInCurrentList) {
+        return prev.filter((item) => Number(item.id) !== submissionId);
+      }
+
       const index = prev.findIndex((item) => Number(item.id) === submissionId);
       if (index === -1) {
         return [normalized, ...prev];
@@ -415,11 +434,14 @@ export const TeacherProvider = ({ children }) => {
         studentGroups,
       });
 
-      if (response.data?.assignment && typeof response.data.assignment === 'object') {
-        prependCreatedAssignment(response.data.assignment);
-      } else {
-        Promise.resolve(refreshAfterAssignmentMutation()).catch(() => {});
+      if (!response.data?.assignment || typeof response.data.assignment !== 'object') {
+        return {
+          success: false,
+          error: 'Не удалось выдать задание из банка. Попробуйте ещё раз.',
+        };
       }
+
+      prependCreatedAssignment(response.data.assignment);
 
       return {
         success: true,
@@ -431,7 +453,7 @@ export const TeacherProvider = ({ children }) => {
         error: getApiErrorMessage(err, 'Не удалось выдать задание из банка'),
       };
     }
-  }, [prependCreatedAssignment, refreshAfterAssignmentMutation]);
+  }, [prependCreatedAssignment]);
 
   const createAssignment = useCallback(async (assignmentData) => {
     try {
@@ -451,22 +473,24 @@ export const TeacherProvider = ({ children }) => {
         criteria: payload.criteria || [],
         studentGroups: payload.studentGroups || [],
         allowedFormats: payload.allowedFormats || DEFAULT_ALLOWED_FORMATS,
-        maxFileSize: payload.maxFileSize || null,
       });
 
       const createdAssignmentId = getCreatedAssignmentIdFromResponse(response);
       if (!createdAssignmentId) {
         return {
           success: false,
-          error: 'Сервер не вернул идентификатор созданного задания. Обновите страницу.',
+          error: 'Не удалось создать задание. Попробуйте ещё раз.',
         };
       }
 
-      if (response.data?.assignment && typeof response.data.assignment === 'object') {
-        prependCreatedAssignment(response.data.assignment);
-      } else {
-        Promise.resolve(refreshAfterAssignmentMutation()).catch(() => {});
+      if (!response.data?.assignment || typeof response.data.assignment !== 'object') {
+        return {
+          success: false,
+          error: 'Не удалось создать задание. Попробуйте ещё раз.',
+        };
       }
+
+      prependCreatedAssignment(response.data.assignment);
 
       const files = Array.isArray(materialFiles) ? materialFiles.filter(Boolean) : [];
       const removeIds = Array.isArray(removedMaterialIds) ? removedMaterialIds.filter(Boolean) : [];
@@ -485,7 +509,6 @@ export const TeacherProvider = ({ children }) => {
     }
   }, [
     prependCreatedAssignment,
-    refreshAfterAssignmentMutation,
     showNotificationError,
     uploadAssignmentMaterials,
   ]);
@@ -503,11 +526,14 @@ export const TeacherProvider = ({ children }) => {
         subjectId: payload.subjectId,
       });
 
-      if (response.data?.assignment && typeof response.data.assignment === 'object') {
-        replaceAssignmentInList(response.data.assignment);
-      } else {
-        void refreshAfterAssignmentMutation();
+      if (!response.data?.assignment || typeof response.data.assignment !== 'object') {
+        return {
+          success: false,
+          error: 'Не удалось обновить задание. Попробуйте ещё раз.',
+        };
       }
+
+      replaceAssignmentInList(response.data.assignment);
 
       const files = Array.isArray(materialFiles) ? materialFiles.filter(Boolean) : [];
       const removeIds = Array.isArray(removedMaterialIds) ? removedMaterialIds.filter(Boolean) : [];
@@ -531,7 +557,6 @@ export const TeacherProvider = ({ children }) => {
       return { success: false, error: getApiErrorMessage(err, 'Ошибка при обновлении задания') };
     }
   }, [
-    refreshAfterAssignmentMutation,
     replaceAssignmentInList,
     showNotificationError,
     uploadAssignmentMaterials,
@@ -575,10 +600,10 @@ export const TeacherProvider = ({ children }) => {
   const teachingLoadPairs = useMemo(() => {
     return metaTeachingLoads
       .map((load) => {
-        const subjectId = Number(load?.subject_id ?? load?.subjectId);
-        const groupId = Number(load?.group_id ?? load?.groupId);
-        const subjectName = String(load?.subject_name ?? load?.subjectName ?? '').trim();
-        const groupName = normalizeGroupName(load?.group_name ?? load?.groupName ?? '');
+        const subjectId = Number(load?.subjectId);
+        const groupId = Number(load?.groupId);
+        const subjectName = String(load?.subjectName ?? '').trim();
+        const groupName = normalizeGroupName(load?.groupName ?? '');
 
         if (!Number.isFinite(subjectId) || subjectId <= 0 || !Number.isFinite(groupId) || groupId <= 0 || !subjectName || !groupName) {
           return null;

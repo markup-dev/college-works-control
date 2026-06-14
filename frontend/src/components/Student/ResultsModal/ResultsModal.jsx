@@ -12,7 +12,7 @@ const ResultsModal = ({
 
   const maxScore = assignment.maxScore || 100;
   const score = assignment.score;
-  const gradeLabel = assignment.gradeLabel || assignment.grade_label || null;
+  const gradeLabel = assignment.gradeLabel || null;
   const percentage = score !== null && score !== undefined 
     ? Math.round((score / maxScore) * 100) 
     : 0;
@@ -175,9 +175,8 @@ const normalizeCriteria = (criteria = []) => {
         return null;
       }
 
-      const maxPoints = Number(criterion.maxPoints ?? criterion.max_points ?? 0);
+      const maxPoints = Number(criterion.maxPoints ?? 0);
       const receivedRaw = criterion.receivedPoints
-        ?? criterion.received_points
         ?? criterion.score
         ?? criterion.points
         ?? null;

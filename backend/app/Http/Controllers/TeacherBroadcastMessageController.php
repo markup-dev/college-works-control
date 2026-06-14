@@ -18,11 +18,7 @@ class TeacherBroadcastMessageController extends Controller
 
     public function store(Request $request)
     {
-        // Только преподаватель; маршрут дублирует роль, проверка — защита при смене конфигурации.
         $teacher = $request->user();
-        if ($teacher->role !== 'teacher') {
-            abort(403);
-        }
 
         $validated = $request->validate([
             'user_ids' => ['required', 'array', 'min:1', 'max:' . self::MAX_RECIPIENTS],

@@ -25,20 +25,15 @@ class SendAssignmentDeadlineReminders extends Command
 
     public function handle(AssignmentNotificationService $assignmentNotificationService): int
     {
-        // Якорь «сегодня» без времени — сравнение deadline идёт по календарной дате.
         $today = now()->startOfDay();
-
-        // Два окна: за 3 дня и за 1 день до дедлайна. label — часть ключа кэша, days — число в уведомлении.
         $windows = [
             ['days' => 3, 'label' => '3'],
             ['days' => 1, 'label' => '1'],
         ];
 
         foreach ($windows as $window) {
-            // Дата дедлайна, к которой относится это напоминание (например «сегодня + 3 дня»).
             $targetDate = $today->copy()->addDays($window['days']);
 
-            // Задания с нужным днём сдачи; archived не берём — работа с архивом закрыта.
             $assignments = Assignment::query()
                 ->where('status', 'active')
                 ->whereDate('deadline', $targetDate->toDateString())
@@ -55,7 +50,6 @@ class SendAssignmentDeadlineReminders extends Command
             );
 
             foreach ($assignments as $assignment) {
-                // Студенты из групп, привязанных к заданию (та же логика, что при выдаче задания).
                 $students = $assignmentNotificationService->studentsForAssignment($assignment);
 
                 foreach ($students as $student) {

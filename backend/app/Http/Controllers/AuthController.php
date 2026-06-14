@@ -59,8 +59,15 @@ class AuthController extends Controller
 
         // Опционально: на клиенте выбрали «войти как студент», а аккаунт преподавателя — отказ.
         if (!empty($validated['role']) && $user->role !== $validated['role']) {
+            $roleLabels = [
+                'student' => 'студентом',
+                'teacher' => 'преподавателем',
+                'admin' => 'администратором',
+            ];
+            $roleLabel = $roleLabels[$validated['role']] ?? 'выбранной роли';
+
             throw ValidationException::withMessages([
-                'role' => ["Этот аккаунт не является {$validated['role']}"],
+                'role' => ["Этот аккаунт не является {$roleLabel}."],
             ]);
         }
 

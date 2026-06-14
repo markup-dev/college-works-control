@@ -25,9 +25,9 @@ export const toSpecialtySelectOptions = (items = []) => items.map((specialty) =>
 
 const defaultTeacherLabel = (teacher) => {
   if (!teacher) return '—';
-  const last = (teacher.lastName ?? teacher.last_name ?? '').trim();
-  const first = (teacher.firstName ?? teacher.first_name ?? '').trim()?.[0];
-  const middle = (teacher.middleName ?? teacher.middle_name ?? '').trim()?.[0];
+  const last = (teacher.lastName ?? '').trim();
+  const first = (teacher.firstName ?? '').trim()?.[0];
+  const middle = (teacher.middleName ?? '').trim()?.[0];
   const initials = [first && `${first}.`, middle && `${middle}.`].filter(Boolean).join('');
   return initials ? `${last} ${initials}`.trim() : last || teacher.login || '—';
 };

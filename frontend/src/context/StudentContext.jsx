@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useAuth } from './AuthContext';
 import api from '../services/api';
 import { getApiErrorMessage } from '../utils/adminApiErrors';
-import { getAllowedFormatsFromAssignment, PAGINATION_DEFAULTS } from '../utils';
+import { getAllowedFormatsFromAssignment, getDaysUntilDeadline, PAGINATION_DEFAULTS } from '../utils';
 import { resolveAssignmentSubjectId, resolveAssignmentSubjectName } from '../utils/filterHelpers';
 
 const formatAssignmentTeacherDisplay = (teacher) => {
@@ -15,8 +15,7 @@ const formatAssignmentTeacherDisplay = (teacher) => {
   if (typeof teacher === 'object') {
     const full =
       teacher.fullName
-      ?? teacher.full_name
-      ?? [teacher.lastName ?? teacher.last_name, teacher.firstName ?? teacher.first_name]
+      ?? [teacher.lastName, teacher.firstName]
         .filter(Boolean)
         .join(' ')
         .trim();
@@ -32,15 +31,17 @@ const formatAssignmentTeacherDisplay = (teacher) => {
 
 export const normalizeStudentAssignment = (assignment) => ({
   ...assignment,
+  isCompleted: Boolean(assignment.isCompleted),
   subject: resolveAssignmentSubjectName(assignment),
   subjectId: resolveAssignmentSubjectId(assignment),
   teacher: formatAssignmentTeacherDisplay(assignment.teacher),
   studentGroups: assignment.studentGroups || assignment.groups?.map((g) => g.name) || [],
   allowedFormats: getAllowedFormatsFromAssignment(assignment),
   materialFiles: assignment.materialFiles || assignment.materialItems || [],
-  retakeUsed: Boolean(assignment.retakeUsed ?? assignment.retake_used),
-  canSubmitFirstAttempt: Boolean(assignment.canSubmitFirstAttempt ?? assignment.can_submit_first_attempt),
-  canSubmitRetake: Boolean(assignment.canSubmitRetake ?? assignment.can_submit_retake),
+  criteria: assignment.criteria || assignment.criteriaItems || [],
+  retakeUsed: Boolean(assignment.retakeUsed),
+  canSubmitFirstAttempt: Boolean(assignment.canSubmitFirstAttempt),
+  canSubmitRetake: Boolean(assignment.canSubmitRetake),
 });
 
 const normalizeAssignment = normalizeStudentAssignment;
@@ -55,6 +56,58 @@ const areQueriesEqual = (a = {}, b = {}) =>
   && (a.subject || 'all') === (b.subject || 'all')
   && (a.teacher || 'all') === (b.teacher || 'all')
   && (a.submissionType || 'all') === (b.submissionType || 'all');
+
+const SUBMISSION_CHUNK_SIZE = 1024 * 1024;
+const SUBMISSION_CHUNK_CONCURRENCY = 4;
+
+const createUploadId = () => {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+};
+
+const uploadSubmissionInChunks = async (assignmentId, file) => {
+  const uploadId = createUploadId();
+  const totalChunks = Math.ceil(file.size / SUBMISSION_CHUNK_SIZE);
+
+  const uploadChunk = async (chunkIndex) => {
+    const start = chunkIndex * SUBMISSION_CHUNK_SIZE;
+    const chunk = file.slice(start, Math.min(start + SUBMISSION_CHUNK_SIZE, file.size));
+    const formData = new FormData();
+    formData.append('assignment_id', String(assignmentId));
+    formData.append('upload_id', uploadId);
+    formData.append('chunk_index', String(chunkIndex));
+    formData.append('total_chunks', String(totalChunks));
+    formData.append('file_name', file.name);
+    formData.append('file_size', String(file.size));
+    formData.append('chunk', chunk, `${file.name}.part${chunkIndex}`);
+
+    await api.post('/submissions/chunks', formData);
+  };
+
+  const chunkIndexes = Array.from({ length: totalChunks }, (_, index) => index);
+  const workers = Array.from(
+    { length: Math.min(SUBMISSION_CHUNK_CONCURRENCY, totalChunks) },
+    async () => {
+      while (chunkIndexes.length > 0) {
+        const nextIndex = chunkIndexes.shift();
+        if (typeof nextIndex === 'number') {
+          await uploadChunk(nextIndex);
+        }
+      }
+    },
+  );
+  await Promise.all(workers);
+
+  await api.post('/submissions/chunks/complete', {
+    assignmentId,
+    uploadId,
+    totalChunks,
+    fileName: file.name,
+    fileSize: file.size,
+  });
+};
 
 const StudentContext = createContext();
 
@@ -78,6 +131,7 @@ export const StudentProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const { user } = useAuth();
   const assignmentsQueryRef = useRef(assignmentsQuery);
+  const assignmentsRef = useRef(assignments);
   const requestIdRef = useRef(0);
   const inFlightQueryKeyRef = useRef(null);
   const queryCacheRef = useRef(new Map());
@@ -85,6 +139,10 @@ export const StudentProvider = ({ children }) => {
   useEffect(() => {
     assignmentsQueryRef.current = assignmentsQuery;
   }, [assignmentsQuery]);
+
+  useEffect(() => {
+    assignmentsRef.current = assignments;
+  }, [assignments]);
 
   useEffect(() => {
     if (!user) {
@@ -210,22 +268,80 @@ export const StudentProvider = ({ children }) => {
     return loadStudentData(queryOverrides, fetchOptions);
   }, [loadStudentData]);
 
+  const markAssignmentAsSubmitted = useCallback((assignmentId) => {
+    const submittedAt = new Date().toISOString();
+    const previousAssignment = assignmentsRef.current.find((assignment) => assignment.id === assignmentId);
+    const previousStatus = previousAssignment?.status || null;
+    const wasUrgent = previousStatus === 'not_submitted'
+      && getDaysUntilDeadline(previousAssignment?.deadline) <= 3;
+    const currentStatusFilter = assignmentsQueryRef.current?.status || 'all';
+
+    setAssignments((currentAssignments) => {
+      const nextAssignments = currentAssignments.map((assignment) => {
+        if (assignment.id !== assignmentId) {
+          return assignment;
+        }
+
+        return {
+          ...assignment,
+          status: 'submitted',
+          submittedAt,
+          canSubmitFirstAttempt: false,
+          canSubmitRetake: false,
+          retakeUsed: previousStatus === 'returned' ? true : assignment.retakeUsed,
+        };
+      });
+
+      if (currentStatusFilter !== 'all' && currentStatusFilter !== 'submitted') {
+        return nextAssignments.filter((assignment) => assignment.id !== assignmentId);
+      }
+
+      return nextAssignments;
+    });
+
+    setAssignmentsMeta((currentMeta) => {
+      const counts = currentMeta?.counts;
+      if (!counts || typeof counts !== 'object') {
+        return currentMeta;
+      }
+
+      const decrease = (value) => Math.max(0, Number(value || 0) - 1);
+      const increase = (value) => Number(value || 0) + 1;
+
+      return {
+        ...currentMeta,
+        counts: {
+          ...counts,
+          notSubmitted: previousStatus === 'not_submitted' ? decrease(counts.notSubmitted) : counts.notSubmitted,
+          returned: previousStatus === 'returned' ? decrease(counts.returned) : counts.returned,
+          urgent: wasUrgent ? decrease(counts.urgent) : counts.urgent,
+          submitted: previousStatus !== 'submitted' ? increase(counts.submitted) : counts.submitted,
+        },
+      };
+    });
+  }, []);
+
   const submitWork = useCallback(async (assignmentId, file) => {
     setLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('assignment_id', assignmentId);
-      if (file) {
-        formData.append('file', file);
-      }
-      formData.append('comment', '');
+      if (file && file.size > SUBMISSION_CHUNK_SIZE) {
+        await uploadSubmissionInChunks(assignmentId, file);
+      } else {
+        const formData = new FormData();
+        formData.append('assignment_id', assignmentId);
+        if (file) {
+          formData.append('file', file);
+        }
+        formData.append('comment', '');
 
-      await api.post('/submissions', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+        await api.post('/submissions', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }
 
       queryCacheRef.current.clear();
-      await loadStudentData({ ...assignmentsQueryRef.current }, { force: true });
+      markAssignmentAsSubmitted(assignmentId);
+      void loadStudentData({ ...assignmentsQueryRef.current }, { force: true, silent: true });
 
       return { success: true };
     } catch (err) {
@@ -233,7 +349,7 @@ export const StudentProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [loadStudentData]);
+  }, [loadStudentData, markAssignmentAsSubmitted]);
 
   const value = {
     assignments,

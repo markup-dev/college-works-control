@@ -23,7 +23,7 @@ export const shouldShowRetakeBadge = (entity) => {
     return false;
   }
 
-  const isResubmission = Boolean(entity.isResubmission ?? entity.is_resubmission);
+  const isResubmission = Boolean(entity.isResubmission);
   const status = String(entity.status || '');
 
   return isResubmission && status === 'submitted';
@@ -35,7 +35,7 @@ export const shouldShowStudentRetakeBadge = (assignment) => {
     return false;
   }
 
-  return String(assignment.status || '') === 'returned' && !assignment.is_completed;
+  return String(assignment.status || '') === 'returned' && !assignment.isCompleted;
 };
 
 export const formatFileSize = (bytes) => {

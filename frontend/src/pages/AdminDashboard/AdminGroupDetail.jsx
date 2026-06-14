@@ -492,7 +492,7 @@ const AdminGroupDetail = () => {
 
       const { data: response } = await api.get('/admin/users', { params });
       const items = Array.isArray(response?.data) ? response.data : [];
-      setAddCandidates(items.filter((student) => Number(student.groupId || student.group_id) !== Number(id)));
+      setAddCandidates(items.filter((student) => Number(student.groupId) !== Number(id)));
     } catch {
       setAddCandidates([]);
       showError('Не удалось загрузить список студентов');

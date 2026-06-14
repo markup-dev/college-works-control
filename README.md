@@ -161,11 +161,13 @@ DB_PASSWORD=
 php artisan migrate --seed
 ```
 
-Запустите API:
+Запустите API (важно для загрузки файлов до 50 МБ — используйте `php.ini` проекта):
 
 ```bash
-php artisan serve
+php -c php.ini artisan serve
 ```
+
+На Windows можно двойным щелчком запустить `serve.bat` в папке `backend`.
 
 #### 2) Настройка frontend (React)
 
@@ -192,7 +194,7 @@ npm start
 ```bash
 # Терминал 1
 cd backend
-php artisan serve
+php -c php.ini artisan serve
 ```
 
 ```bash

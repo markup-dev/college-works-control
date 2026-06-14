@@ -22,5 +22,13 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Illuminate\Http\Exceptions\PostTooLargeException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Файл слишком большой для разовой отправки. Обновите страницу и попробуйте ещё раз.',
+                ], 413);
+            }
+
+            return null;
+        });
     })->create();

@@ -202,9 +202,7 @@ class Assignment extends Model
         $submittedStudents = (int) ($metrics['submitted_students'] ?? 0);
         $gradedStudents = (int) ($metrics['graded_students'] ?? 0);
 
-        // Архив только когда у каждого студента из целевых групп есть сдача и последняя версия оценена.
-        // Раньше при частичной eager-load связи submissions (например, только текущий студент) метрики
-        // искажались и задание ошибочно уходило в archived — студент с просроченным дедлайном терял сдачу.
+        // Архивируем только после оценки последней сдачи каждого студента из целевых групп.
         $nextStatus = (
             $totalStudents > 0
             && $submittedStudents === $totalStudents

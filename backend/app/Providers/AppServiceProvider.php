@@ -14,7 +14,6 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // Доп. биндинги контейнера при необходимости — пока пусто.
     }
 
     public function boot(): void

@@ -35,7 +35,7 @@ const emptyForm = {
 };
 
 const resolveSubjectId = (item) => {
-  const id = item?.subjectId ?? item?.subject_id ?? item?.subject?.id;
+  const id = item?.subjectId ?? item?.subject?.id;
   return id ? String(id) : '';
 };
 
@@ -337,7 +337,7 @@ const AdminSpecialtyDetail = () => {
 
   const groupsSummary = useMemo(() => ({
     groups: groups.length,
-    students: groups.reduce((sum, group) => sum + (group.studentsCount ?? group.students_count ?? 0), 0),
+    students: groups.reduce((sum, group) => sum + (group.studentsCount ?? 0), 0),
     active: groups.filter((group) => group.status === 'active').length,
   }), [groups]);
 
@@ -1062,8 +1062,8 @@ const AdminSpecialtyDetail = () => {
           ) : (
             <div className="admin-entity-detail__linked-groups-grid">
               {groups.map((group) => {
-                const stud = group.studentsCount ?? group.students_count ?? 0;
-                const teach = group.teachersCount ?? group.teachers_count ?? 0;
+                const stud = group.studentsCount ?? 0;
+                const teach = group.teachersCount ?? 0;
                 const st = groupStatusPresentation(group);
 
                 return (

@@ -18,7 +18,7 @@ return new class extends Migration
             $table->enum('status', ['active', 'archived'])->default('active');
             $table->integer('max_score')->default(100);
             $table->string('submission_type')->default('file');
-            $table->integer('max_file_size')->nullable();
+            $table->integer('max_file_size')->default(50);
             $table->foreignId('teacher_id')->constrained('users')->onDelete('cascade');
             $table->timestamps();
         });

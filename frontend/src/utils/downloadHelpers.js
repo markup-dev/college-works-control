@@ -57,7 +57,7 @@ export const downloadAssignmentMaterial = async (apiClient, assignmentId, materi
     throw new Error('Материал не найден');
   }
 
-  const fileName = material.fileName || material.file_name || 'material';
+  const fileName = material.fileName || 'material';
   let saveHandle = null;
 
   if (typeof window.showSaveFilePicker === 'function') {

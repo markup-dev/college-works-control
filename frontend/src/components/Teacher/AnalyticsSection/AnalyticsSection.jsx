@@ -22,7 +22,6 @@ const getSubmissionDate = (submission) => (
   parseDate(submission?.submissionDate)
   || parseDate(submission?.submittedAt)
   || parseDate(submission?.createdAt)
-  || parseDate(submission?.created_at)
   || null
 );
 
@@ -148,7 +147,7 @@ const AnalyticsSection = ({
         const returned = rows.filter((row) => row.status === 'returned').length;
         const graded = rows.filter((row) => row.status === 'graded').length;
         const submitted = rows.filter((row) => ['submitted', 'graded', 'returned'].includes(row.status)).length;
-        const expected = Number(assignment.totalStudents || assignment.total_students || rows.length || 0);
+        const expected = Number(assignment.totalStudents ?? rows.length ?? 0);
         const completionRate = expected > 0 ? Math.round((submitted / expected) * 100) : 0;
         const scores = rows
           .map((row) => normalizeScore(row.score))

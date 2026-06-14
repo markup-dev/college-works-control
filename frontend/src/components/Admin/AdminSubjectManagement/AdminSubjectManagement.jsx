@@ -375,7 +375,7 @@ const AdminSubjectManagement = () => {
           const { data } = await api.get(`/admin/subjects/${editRow.id}`);
           setViewData(data);
         } catch {
-          /* ignore */
+          /* Подробности обновятся при следующем открытии карточки. */
         }
       }
     } catch (e) {
@@ -396,7 +396,7 @@ const AdminSubjectManagement = () => {
           const { data } = await api.get(`/admin/subjects/${row.id}`);
           setViewData(data);
         } catch {
-          /* ignore */
+          /* Подробности обновятся при следующем открытии карточки. */
         }
       }
     } catch (e) {
@@ -471,7 +471,7 @@ const AdminSubjectManagement = () => {
         const { data } = await api.get(`/admin/subjects/${viewData.subject.id}`);
         setViewData(data);
       } catch {
-        /* ignore */
+        /* Список уже обновляется отдельно, карточку можно открыть заново. */
       }
       void fetchSubjects();
     } catch (e) {
@@ -488,7 +488,7 @@ const AdminSubjectManagement = () => {
         const { data } = await api.get(`/admin/subjects/${viewData.subject.id}`);
         setViewData(data);
       } catch {
-        /* ignore */
+        /* Список уже обновляется отдельно, карточку можно открыть заново. */
       }
     }
   };
@@ -920,12 +920,12 @@ const AdminSubjectManagement = () => {
                   ) : (
                     <ul className="admin-subject-view__loads">
                       {viewData.teachingLoads.map((row) => {
-                        const loadKey = String(row.teachingLoadId ?? row.teaching_load_id);
+                        const loadKey = String(row.teachingLoadId);
                         const teacherLabel = row.teacher
                           ? shortName(row.teacher.lastName, row.teacher.firstName, row.teacher.middleName)
                           : '—';
                         const groupName = row.group?.name || '—';
-                        const activeCount = row.activeAssignmentsCount ?? row.active_assignments_count ?? 0;
+                        const activeCount = row.activeAssignmentsCount ?? 0;
 
                         return (
                           <li key={loadKey} className="admin-subject-view__load-card">

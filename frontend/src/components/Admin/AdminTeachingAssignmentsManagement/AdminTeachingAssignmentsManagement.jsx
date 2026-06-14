@@ -54,14 +54,14 @@ const ruAssignments = (n) => {
 
 const teacherShort = (t) => {
   if (!t) return '—';
-  const last = (t.lastName ?? t.last_name ?? '').trim();
-  const a = (t.firstName ?? t.first_name ?? '').trim()?.[0];
-  const b = (t.middleName ?? t.middle_name ?? '').trim()?.[0];
+  const last = (t.lastName ?? '').trim();
+  const a = (t.firstName ?? '').trim()?.[0];
+  const b = (t.middleName ?? '').trim()?.[0];
   const io = [a && `${a}.`, b && `${b}.`].filter(Boolean).join('');
   return io ? `${last} ${io}`.trim() : last || '—';
 };
 
-/** Показ среднего балла по связке (после правки расчёта на бэкенде). */
+/** Формат среднего балла по связке преподаватель-дисциплина-группа. */
 const formatTeachingLoadAvgScore = (raw) => {
   if (raw == null || raw === '') {
     return { primary: 'Нет данных', muted: true };
@@ -301,22 +301,22 @@ const AdminTeachingAssignmentsManagement = () => {
       let subtitle = null;
       let extra = null;
       if (groupBy === 'teacher') {
-        key = `t-${row.teacherId ?? row.teacher_id}`;
-        title = row.teacher?.fullName ?? row.teacher?.full_name ?? teacherShort(row.teacher);
+        key = `t-${row.teacherId}`;
+        title = row.teacher?.fullName ?? teacherShort(row.teacher);
         subtitle = row.teacher?.email ?? row.teacher?.login ?? '';
       } else if (groupBy === 'subject') {
-        key = `s-${row.subjectId ?? row.subject_id}`;
+        key = `s-${row.subjectId}`;
         const sub = row.subject;
         title = sub ? (sub.code ? `${sub.name} (${sub.code})` : sub.name) : '—';
       } else {
-        key = `g-${row.groupId ?? row.group_id}`;
+        key = `g-${row.groupId}`;
         const g = row.group;
         title = g ? `Группа ${g.name}` : '—';
         subtitle = g?.specialty || null;
         extra = g?.id
           ? (() => {
               const st = groups.find((x) => Number(x.id) === Number(g.id));
-              const cnt = st?.studentsCount ?? st?.students_count;
+              const cnt = st?.studentsCount;
               if (cnt != null) return `${cnt} студ. в справочнике`;
               return null;
             })()
@@ -477,7 +477,7 @@ const AdminTeachingAssignmentsManagement = () => {
         });
         if (cancelled) return;
         const list = Array.isArray(data?.data) ? data.data : [];
-        const existing = new Set(list.map((x) => Number(x.groupId ?? x.group_id)));
+        const existing = new Set(list.map((x) => Number(x.groupId)));
         setCreateExistingGroupIds(existing);
       } catch {
         if (!cancelled) setCreateExistingGroupIds(new Set());
@@ -511,7 +511,7 @@ const AdminTeachingAssignmentsManagement = () => {
         groupIds,
         status: 'active',
       });
-      const skipped = data?.skippedGroupIds ?? data?.skipped_group_ids ?? [];
+      const skipped = data?.skippedGroupIds ?? [];
       const n = Array.isArray(data?.created) ? data.created.length : 0;
       if (skipped.length && n === 0) {
         showError('Все выбранные группы уже назначены.');
@@ -547,8 +547,8 @@ const AdminTeachingAssignmentsManagement = () => {
   };
 
   const openEditGroups = async (row) => {
-    const tid = row.teacherId ?? row.teacher_id;
-    const sid = row.subjectId ?? row.subject_id;
+    const tid = row.teacherId;
+    const sid = row.subjectId;
     setEditPair({ teacherId: tid, subjectId: sid, teacher: row.teacher, subject: row.subject });
     setEditGroupSearch('');
     setEditSubmitting(false);
@@ -557,7 +557,7 @@ const AdminTeachingAssignmentsManagement = () => {
         params: { teacher_id: tid, subject_id: sid, per_page: 100, sort: 'group_asc' },
       });
       const list = Array.isArray(data?.data) ? data.data : [];
-      const ids = new Set(list.map((x) => Number(x.groupId ?? x.group_id)));
+      const ids = new Set(list.map((x) => Number(x.groupId)));
       setEditSelected(ids);
       setEditPair((p) => ({ ...p, existingRows: list }));
     } catch (e) {
@@ -671,8 +671,8 @@ const AdminTeachingAssignmentsManagement = () => {
       setTransferEligibleTeachers([]);
       return undefined;
     }
-    const subjectId = transferRow.subjectId ?? transferRow.subject_id ?? transferRow.subject?.id;
-    const teacherId = transferRow.teacherId ?? transferRow.teacher_id ?? transferRow.teacher?.id;
+    const subjectId = transferRow.subjectId ?? transferRow.subject?.id;
+    const teacherId = transferRow.teacherId ?? transferRow.teacher?.id;
     if (!subjectId) {
       setTransferEligibleTeachers([]);
       return undefined;
@@ -705,8 +705,8 @@ const AdminTeachingAssignmentsManagement = () => {
   }, [transferRow, showError]);
 
   const renderCard = (row) => {
-    const sc = row.studentsCount ?? row.students_count ?? 0;
-    const ac = row.assignmentsCount ?? row.assignments_count ?? 0;
+    const sc = row.studentsCount ?? 0;
+    const ac = row.assignmentsCount ?? 0;
     return (
       <EntityCard
         key={row.id}
@@ -864,7 +864,7 @@ const AdminTeachingAssignmentsManagement = () => {
                     size="small"
                     onClick={() =>
                       openCreate({
-                        teacherId: section.items[0].teacherId ?? section.items[0].teacher_id,
+                        teacherId: section.items[0].teacherId,
                       })
                     }
                   >
@@ -878,7 +878,7 @@ const AdminTeachingAssignmentsManagement = () => {
                     size="small"
                     onClick={() =>
                       openCreate({
-                        groupId: section.items[0].groupId ?? section.items[0].group_id,
+                        groupId: section.items[0].groupId,
                       })
                     }
                   >
@@ -1052,7 +1052,7 @@ const AdminTeachingAssignmentsManagement = () => {
                 ) : (
                   <ul className="admin-ta-wizard__checks">
                     {groupsForCreate.map((g) => {
-                      const st = g.studentsCount ?? g.students_count;
+                      const st = g.studentsCount;
                       const labelSt = st != null ? ` (${st} студ.)` : '';
                       const alreadyAssigned = createExistingGroupIds.has(Number(g.id));
                       return (
@@ -1130,7 +1130,7 @@ const AdminTeachingAssignmentsManagement = () => {
           {!detailLoading && detailData?.teachingLoad && (() => {
             const tl = detailData.teachingLoad;
             const dept = (tl.teacher?.department || '').trim();
-            const avg = formatTeachingLoadAvgScore(detailData.stats?.averageScore ?? detailData.stats?.average_score);
+            const avg = formatTeachingLoadAvgScore(detailData.stats?.averageScore);
 
             return (
               <div className="admin-ta-detail">
@@ -1156,22 +1156,22 @@ const AdminTeachingAssignmentsManagement = () => {
                     </div>
                     <div className="admin-ta-detail__meta-item">
                       <span>Студенты</span>
-                      <strong>{ruStudents(detailData.stats?.studentsCount ?? detailData.stats?.students_count ?? 0)}</strong>
+                      <strong>{ruStudents(detailData.stats?.studentsCount ?? 0)}</strong>
                     </div>
                   </div>
                 </div>
               <div className="admin-ta-detail__stats">
                 <div className="admin-ta-detail__stat-card">
                   <span>Активных заданий</span>
-                  <strong>{detailData.stats?.assignmentsActive ?? detailData.stats?.assignments_active ?? 0}</strong>
+                  <strong>{detailData.stats?.assignmentsActive ?? 0}</strong>
                 </div>
                 <div className="admin-ta-detail__stat-card">
                   <span>Всего заданий</span>
-                  <strong>{detailData.stats?.assignmentsTotal ?? detailData.stats?.assignments_total ?? 0}</strong>
+                  <strong>{detailData.stats?.assignmentsTotal ?? 0}</strong>
                 </div>
                 <div className="admin-ta-detail__stat-card">
                   <span>Сдано работ</span>
-                  <strong>{detailData.stats?.submissionsCount ?? detailData.stats?.submissions_count ?? 0}</strong>
+                  <strong>{detailData.stats?.submissionsCount ?? 0}</strong>
                 </div>
                 <div className="admin-ta-detail__stat-card">
                   <span>Средний балл</span>

@@ -26,12 +26,12 @@ const AssignmentCard = ({
   const canSubmitRetake = assignment.canSubmitRetake ?? (assignment.status === 'returned');
   const retakeUsed = Boolean(assignment.retakeUsed);
   const showRetakeBadge = shouldShowStudentRetakeBadge(assignment);
-  const gradeLabel = assignment.gradeLabel || assignment.grade_label || null;
+  const gradeLabel = assignment.gradeLabel || null;
 
   const renderActions = () => {
     switch (assignment.status) {
     case 'not_submitted':
-      if (assignment?.is_completed) {
+      if (assignment?.isCompleted) {
         return (
           <Button variant="secondary" disabled fullWidth>
             Приём работ завершён

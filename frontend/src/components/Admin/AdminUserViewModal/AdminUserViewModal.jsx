@@ -118,7 +118,7 @@ const AdminUserViewModal = ({
   const addTeacherDiscipline = async () => {
     if (!row?.id || !newDisciplineId) return;
     const { data } = await api.post(`/admin/teachers/${row.id}/disciplines`, { subjectId: Number(newDisciplineId) });
-    const next = data?.teacherSubject || data?.teacher_subject;
+    const next = data?.teacherSubject;
     if (next) {
       setTeacherDisciplines((prev) => [...prev.filter((item) => Number(item.subjectId) !== Number(next.subjectId)), next]);
     }
@@ -185,7 +185,6 @@ const AdminUserViewModal = ({
         </>
       )}
     >
-            {/* Шапка: ФИО и бейджи */}
             <div className="profile-header">
               <div className="profile-header__avatar">
                 {fullName.charAt(0) || row.login?.charAt(0) || '?'}
@@ -203,7 +202,6 @@ const AdminUserViewModal = ({
               </div>
             </div>
 
-            {/* Статусная карточка с описанием */}
             <div className={`status-card status-card--${st.tone}`}>
               <div className="status-card__icon">
                 {st.tone === 'active' && 'A'}
@@ -216,7 +214,6 @@ const AdminUserViewModal = ({
               </div>
             </div>
 
-            {/* Роль и группа / кафедра */}
             <div
               className={`key-fields${
                 row.role === 'admin' ? ' key-fields--one' : ' key-fields--two'
@@ -314,7 +311,6 @@ const AdminUserViewModal = ({
               </ModalSection>
             )}
 
-            {/* Информация о последнем входе */}
             <div className="last-login">
               <div className="last-login__content">
                 <span className="last-login__label">Последний вход</span>
@@ -325,7 +321,6 @@ const AdminUserViewModal = ({
               </div>
             </div>
 
-            {/* Мета информация о создании */}
             {row.createdAt && (
               <div className="meta-info">
                 <span>Создан: {formatDateTime(row.createdAt)}</span>

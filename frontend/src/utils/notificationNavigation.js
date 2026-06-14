@@ -17,8 +17,8 @@ export function getNotificationNavigatePath(role, data) {
     }
   }
 
-  const assignmentId = data.assignmentId ?? data.assignment_id;
-  const submissionId = data.submissionId ?? data.submission_id;
+  const assignmentId = data.assignmentId;
+  const submissionId = data.submissionId;
   if (assignmentId === undefined || assignmentId === null || assignmentId === '') {
     return null;
   }

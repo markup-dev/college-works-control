@@ -3,7 +3,7 @@ import Button from '../../UI/Button/Button';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import Modal from '../../UI/Modal/Modal';
 import { useNotification } from '../../../context/NotificationContext';
-import { formatDate, getAllowedFormatsFromAssignment } from '../../../utils';
+import { formatDate, getAllowedFormatsFromAssignment, resolveAssignmentMaxFileSizeMb } from '../../../utils';
 import './SubmissionModal.scss';
 
 const SubmissionModal = ({ 
@@ -46,9 +46,10 @@ const SubmissionModal = ({
         return;
       }
 
-      const maxFileSize = (assignment.maxFileSize || 50) * 1024 * 1024;
+      const maxFileSizeMb = resolveAssignmentMaxFileSizeMb(assignment);
+      const maxFileSize = maxFileSizeMb * 1024 * 1024;
       if (submissionFile.size > maxFileSize) {
-        showError(`Файл слишком большой. Максимальный размер: ${assignment.maxFileSize || 50} МБ`);
+        showError(`Файл слишком большой. Максимальный размер: ${maxFileSizeMb} МБ`);
         return;
       }
 
@@ -130,7 +131,7 @@ const SubmissionModal = ({
 
 const SubmissionInfo = ({ assignment }) => {
   const allowedFormats = getAllowedFormatsFromAssignment(assignment);
-  const maxFileSize = assignment.maxFileSize || 50;
+  const maxFileSize = resolveAssignmentMaxFileSizeMb(assignment);
   
   return (
     <div className="submission-info">
@@ -170,14 +171,15 @@ const SubmissionInfo = ({ assignment }) => {
 const FileUpload = ({ assignment, submissionFile, onFileSelect }) => {
   const { showError } = useNotification();
   const allowedFormats = getAllowedFormatsFromAssignment(assignment);
-  const maxFileSize = (assignment.maxFileSize || 50) * 1024 * 1024;
+  const maxFileSizeMb = resolveAssignmentMaxFileSizeMb(assignment);
+  const maxFileSize = maxFileSizeMb * 1024 * 1024;
   
   const handleFileChange = (files = []) => {
     const file = files[0];
     if (!file) return;
     
     if (file.size > maxFileSize) {
-      showError(`Файл слишком большой. Максимальный размер: ${assignment.maxFileSize || 50} МБ`);
+      showError(`Файл слишком большой. Максимальный размер: ${maxFileSizeMb} МБ`);
       return;
     }
     

@@ -17,7 +17,7 @@ const SubmissionDetailsModal = ({
   if (!isOpen || !submission) return null;
 
   const maxScore = assignment?.maxScore || submission.maxScore || 100;
-  const gradeLabel = submission.gradeLabel || submission.grade_label || null;
+  const gradeLabel = submission.gradeLabel || null;
   const effectiveSubmissionType = assignment?.submissionType || submission.submissionType || 'file';
   const isDemoSubmission = effectiveSubmissionType === 'demo';
   const statusInfo = {
@@ -112,11 +112,7 @@ const SubmissionDetailsModal = ({
               )}
               <div className="info-item">
                 <strong>Дата создания:</strong>
-                <span>
-                  {assignment?.createdAt || assignment?.created_at
-                    ? formatDate(assignment.createdAt || assignment.created_at)
-                    : '—'}
-                </span>
+                <span>{assignment?.createdAt ? formatDate(assignment.createdAt) : '—'}</span>
               </div>
               {assignment?.deadline && (
                 <div className="info-item">
@@ -223,11 +219,11 @@ const SubmissionDetailsModal = ({
             </div>
           )}
 
-          {assignment?.criteria && assignment.criteria.length > 0 && (
+          {(assignment?.criteria || assignment?.criteriaItems)?.length > 0 && (
             <div className="details-section">
               <h4 className="section-title">Критерии оценки</h4>
               <ul className="criteria-list">
-                {assignment.criteria.map((criterion, index) => {
+                {(assignment.criteria || assignment.criteriaItems).map((criterion, index) => {
                   const text = typeof criterion === 'string' ? criterion : criterion.text;
                   const points = typeof criterion === 'object' ? criterion.maxPoints : 0;
                   return (

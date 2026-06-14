@@ -9,7 +9,6 @@ use App\Models\TeachingLoad;
 use App\Models\User;
 use App\Notifications\AssignmentAnnouncedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -19,8 +18,6 @@ class AssignmentAnnouncedNotificationTest extends TestCase
 
     public function test_creating_assignment_notifies_students_in_target_groups(): void
     {
-        Notification::fake();
-
         $teacher = $this->createUser('teacher');
         $group = Group::create([
             'name' => 'ИСП-TEST',
@@ -59,11 +56,18 @@ class AssignmentAnnouncedNotificationTest extends TestCase
 
         $response->assertCreated();
 
-        Notification::assertSentTo(
-            $student,
-            AssignmentAnnouncedNotification::class,
-            fn (AssignmentAnnouncedNotification $notification) => $notification->viaChannels === ['database']
-        );
+        $this->assertDatabaseHas('notifications', [
+            'type' => AssignmentAnnouncedNotification::class,
+            'notifiable_type' => User::class,
+            'notifiable_id' => $student->id,
+        ]);
+
+        $notification = $student->notifications()->first();
+        $payload = is_array($notification?->data)
+            ? $notification->data
+            : json_decode((string) $notification?->data, true);
+        $this->assertSame('assignment_announced', $payload['kind'] ?? null);
+        $this->assertSame($response->json('assignment_id'), $payload['assignment_id'] ?? null);
     }
 
     private function createUser(string $role, ?int $groupId = null): User

@@ -40,7 +40,7 @@ const AdminUserWarningsModal = ({ isOpen, onClose, loading, detail, userRow }) =
   const teacherPayload = detail?.teacher;
 
   const goHomeworkStudent = () => {
-    const gid = userRow?.studentGroup?.id ?? userRow?.groupId ?? userRow?.group_id;
+    const gid = userRow?.studentGroup?.id ?? userRow?.groupId;
     const q = new URLSearchParams();
     if (gid) q.set('group_id', String(gid));
     if ((studentPayload?.overdueAssignments?.length ?? 0) > 0) {

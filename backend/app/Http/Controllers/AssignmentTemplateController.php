@@ -26,9 +26,6 @@ class AssignmentTemplateController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        if ($user->role !== 'teacher') {
-            return response()->json(['message' => 'Доступ запрещён'], 403);
-        }
 
         $items = AssignmentTemplate::query()
             ->where('teacher_id', $user->id)
@@ -58,7 +55,7 @@ class AssignmentTemplateController extends Controller
     public function storeFromAssignment(Request $request, Assignment $assignment)
     {
         $user = $request->user();
-        if ($user->role !== 'teacher' || (int) $assignment->teacher_id !== (int) $user->id) {
+        if ((int) $assignment->teacher_id !== (int) $user->id) {
             return response()->json(['message' => 'Недостаточно прав'], 403);
         }
 
@@ -73,18 +70,13 @@ class AssignmentTemplateController extends Controller
             ->where('source_assignment_id', $assignment->id)
             ->exists();
 
-        if ($alreadyInBank) {
-            return response()->json([
-                'message' => 'Это задание уже добавлено в банк. Откройте «Банк заданий», чтобы изменить заготовку.',
-            ], 422);
-        }
-
         $template = $this->templates->createFromAssignment($assignment, $user);
 
         return response()->json([
             'success' => true,
+            'created' => ! $alreadyInBank,
             'template' => $this->templates->serializeTemplate($template),
-        ], 201);
+        ], $alreadyInBank ? 200 : 201);
     }
 
     public function update(Request $request, AssignmentTemplate $assignmentTemplate)
@@ -102,7 +94,6 @@ class AssignmentTemplateController extends Controller
                 'criteria.*.max_points' => ['nullable', 'integer', 'min:1', 'max:100'],
                 'allowed_formats' => ['nullable', 'array', 'max:20'],
                 'allowed_formats.*' => ['string', 'max:30'],
-                'max_file_size' => ['nullable', 'integer', 'min:1', 'max:102400'],
             ],
             [
                 'title.required' => 'Введите название.',
@@ -121,6 +112,7 @@ class AssignmentTemplateController extends Controller
         $formats = $request->has('allowed_formats') ? $request->input('allowed_formats', []) : null;
 
         unset($validated['criteria'], $validated['allowed_formats']);
+        $validated['max_file_size'] = AssignmentService::DEFAULT_MAX_FILE_SIZE_MB;
         $assignmentTemplate->update($validated);
 
         if (is_array($criteria)) {
@@ -311,7 +303,7 @@ class AssignmentTemplateController extends Controller
     private function authorizeTemplate(Request $request, AssignmentTemplate $assignmentTemplate): void
     {
         $user = $request->user();
-        if ($user->role !== 'teacher' || (int) $assignmentTemplate->teacher_id !== (int) $user->id) {
+        if ((int) $assignmentTemplate->teacher_id !== (int) $user->id) {
             abort(response()->json(['message' => 'Недостаточно прав'], 403));
         }
     }

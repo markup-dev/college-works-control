@@ -8,6 +8,7 @@ import {
   getDaysUntilDeadline,
   getAllowedFormatsFromAssignment,
   resolveAssignmentSubjectName,
+  resolveAssignmentMaxFileSizeMb,
   shouldShowStudentRetakeBadge,
 } from '../../../utils';
 import './AssignmentDetailsModal.scss';
@@ -19,8 +20,8 @@ const resolveMaterialFiles = (assignment) => {
   return [...directFiles, ...relationFiles]
     .map((file) => ({
       id: file?.id,
-      fileName: file?.fileName || file?.file_name || '',
-      fileSize: file?.fileSize || file?.file_size || '',
+      fileName: file?.fileName || '',
+      fileSize: file?.fileSize || '',
     }))
     .filter((file) => file.id && file.fileName)
     .filter((file, index, array) => array.findIndex((item) => item.id === file.id) === index);
@@ -64,15 +65,15 @@ const AssignmentDetailsModal = ({
   const statusInfo = getAssignmentStatusInfo(assignment);
   const deadline = assignment.deadline ? formatDate(assignment.deadline) : '—';
   const createdAt = assignment.createdAt ? formatDate(assignment.createdAt) : '—';
-  const updatedAtRaw = assignment.updatedAt || assignment.updated_at || null;
+  const updatedAtRaw = assignment.updatedAt || null;
   const updatedAt = updatedAtRaw ? formatDate(updatedAtRaw) : '';
   const submissionType = getSubmissionTypeLabel(assignment.submissionType);
   const allowedFormats = getAllowedFormatsFromAssignment(assignment);
   const groups = getGroupsList(assignment);
   const description = assignment.description || 'Описание отсутствует';
-  const criteria = normalizeCriteria(assignment.criteria);
+  const criteria = normalizeCriteria(assignment.criteria || assignment.criteriaItems);
   const criteriaCount = formatCriteriaCount(criteria.length);
-  const maxFileSize = assignment.maxFileSize ? `${assignment.maxFileSize} МБ` : '50 МБ';
+  const maxFileSize = `${resolveAssignmentMaxFileSizeMb(assignment)} МБ`;
   const daysUntilDeadline = assignment.deadline ? getDaysUntilDeadline(assignment.deadline) : null;
   const materialFiles = resolveMaterialFiles(assignment);
   const canSubmitRetake = assignment?.canSubmitRetake ?? (assignment?.status === 'returned');
@@ -320,7 +321,7 @@ const renderStudentActions = ({
 }) => {
   switch (assignment?.status) {
     case 'not_submitted':
-      if (assignment?.is_completed) {
+      if (assignment?.isCompleted) {
         return (
           <Button variant="secondary" disabled>
             Приём работ завершён

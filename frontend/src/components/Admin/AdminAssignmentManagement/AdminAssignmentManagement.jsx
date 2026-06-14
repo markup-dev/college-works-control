@@ -686,7 +686,7 @@ const AdminAssignmentManagement = () => {
     try {
       const { data } = await api.get(`/admin/assignments/${reassignRow.id}/eligible-teachers`);
       const list = Array.isArray(data?.data) ? data.data : [];
-      const currentTeacherId = reassignRow?.teacher?.id ?? reassignRow?.teacherId ?? reassignRow?.teacher_id;
+      const currentTeacherId = reassignRow?.teacher?.id ?? reassignRow?.teacherId;
       setEligibleTeachers(list.filter((teacher) => Number(teacher.id) !== Number(currentTeacherId)));
       if (!preserveSelection) {
         setReassignTeacherId('');
@@ -709,7 +709,7 @@ const AdminAssignmentManagement = () => {
 
   const reassignSubjectId = useMemo(() => {
     const subject = reassignRow?.subject;
-    return Number(subject?.id ?? reassignRow?.subjectId ?? reassignRow?.subject_id ?? 0) || null;
+    return Number(subject?.id ?? reassignRow?.subjectId ?? 0) || null;
   }, [reassignRow]);
 
   const reassignGroupLabels = useMemo(() => {
@@ -772,7 +772,7 @@ const AdminAssignmentManagement = () => {
           setEditStatus(a.status || 'active');
         }
       } catch {
-        /* use row only */
+        /* Если подробности не загрузились, формы достаточно заполнить данными строки. */
       }
     })();
   };
@@ -804,7 +804,7 @@ const AdminAssignmentManagement = () => {
 
   const submitQuickTeachingLoad = async (teacher) => {
     const teacherId = Number(teacher?.id ?? 0);
-    const groupIds = (teacher?.missingGroupIds ?? teacher?.missing_group_ids ?? [])
+    const groupIds = (teacher?.missingGroupIds ?? [])
       .map((id) => Number(id))
       .filter((id) => id > 0);
 
@@ -1344,7 +1344,7 @@ const AdminAssignmentManagement = () => {
               <ul className="admin-assignment-form__warning-list">
                 {reassignMissingLoadTeachers.map((teacher) => {
                   const teacherId = Number(teacher.id);
-                  const missingGroupIds = (teacher.missingGroupIds ?? teacher.missing_group_ids ?? [])
+                  const missingGroupIds = (teacher.missingGroupIds ?? [])
                     .map((id) => Number(id))
                     .filter((id) => id > 0);
                   const missingGroupNames = missingGroupIds
@@ -1354,7 +1354,7 @@ const AdminAssignmentManagement = () => {
                   return (
                     <li key={teacher.id} className="admin-assignment-form__warning-item">
                       <div className="admin-assignment-form__warning-copy">
-                        <strong>{teacher.shortName ?? teacher.short_name ?? 'Преподаватель'}</strong>
+                        <strong>{teacher.shortName ?? 'Преподаватель'}</strong>
                         {missingGroupNames ? (
                           <span>{missingGroupNames}</span>
                         ) : null}

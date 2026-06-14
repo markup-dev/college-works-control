@@ -192,33 +192,59 @@ class AssignmentTemplateService
     public function createFromAssignment(Assignment $assignment, User $user): AssignmentTemplate
     {
         return DB::transaction(function () use ($assignment, $user) {
-            $t = AssignmentTemplate::create([
+            $assignment->loadMissing([
+                'criteriaItems',
+                'allowedFormatItems',
+                'materialItems',
+            ]);
+
+            $t = AssignmentTemplate::updateOrCreate([
+                'teacher_id' => $user->id,
+                'source_assignment_id' => $assignment->id,
+            ], [
                 'teacher_id' => $user->id,
                 'source_assignment_id' => $assignment->id,
                 'title' => $assignment->title,
                 'subject_id' => $assignment->subject_id,
                 'description' => $assignment->description,
                 'submission_type' => $assignment->submission_type ?? 'file',
-                'max_file_size' => $assignment->max_file_size,
+                'max_file_size' => AssignmentService::DEFAULT_MAX_FILE_SIZE_MB,
             ]);
 
-            foreach ($assignment->criteriaItems as $c) {
-                $t->criteriaItems()->create([
+            $t->criteriaItems()->delete();
+            $criteriaRows = $assignment->criteriaItems
+                ->map(fn ($c) => [
                     'position' => $c->position,
                     'text' => $c->text,
                     'max_points' => $c->max_points,
-                ]);
+                ])
+                ->values()
+                ->all();
+            if ($criteriaRows !== []) {
+                $t->criteriaItems()->createMany($criteriaRows);
             }
-            foreach ($assignment->allowedFormatItems as $f) {
-                $t->allowedFormatItems()->create(['format' => $f->format]);
+
+            $t->allowedFormatItems()->delete();
+            $formatRows = $assignment->allowedFormatItems
+                ->map(fn ($f) => ['format' => $f->format])
+                ->values()
+                ->all();
+            if ($formatRows !== []) {
+                $t->allowedFormatItems()->createMany($formatRows);
             }
-            foreach ($assignment->materialItems as $m) {
-                $t->materialItems()->create([
+
+            $t->materialItems()->delete();
+            $materialRows = $assignment->materialItems
+                ->map(fn ($m) => [
                     'file_name' => $m->file_name,
                     'file_path' => $m->file_path,
                     'file_size' => $m->file_size,
                     'file_type' => $m->file_type,
-                ]);
+                ])
+                ->values()
+                ->all();
+            if ($materialRows !== []) {
+                $t->materialItems()->createMany($materialRows);
             }
 
             return $t->fresh([
@@ -249,7 +275,7 @@ class AssignmentTemplateService
                 'status' => 'active',
                 'max_score' => 100,
                 'submission_type' => $assignmentTemplate->submission_type ?? 'file',
-                'max_file_size' => $assignmentTemplate->max_file_size,
+                'max_file_size' => AssignmentService::DEFAULT_MAX_FILE_SIZE_MB,
                 'teacher_id' => $user->id,
             ]);
             $a->groups()->sync($groupIds);
@@ -291,9 +317,6 @@ class AssignmentTemplateService
                 'teacher:id,login,last_name,first_name,middle_name,grade_scale',
                 'subject:id,name',
                 'groups:id,name',
-                'criteriaItems:id,assignment_id,position,text,max_points',
-                'allowedFormatItems:id,assignment_id,format',
-                'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
             ]);
         });
     }

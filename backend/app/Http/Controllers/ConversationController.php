@@ -320,10 +320,6 @@ class ConversationController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /**
-     * Любое новое сообщение возвращает диалог в активные у обоих участников
-     * (в т.ч. если получатель ранее отправил переписку в архив).
-     */
     /** @return \Illuminate\Database\Eloquent\Builder<Conversation> */
     private function scopedConversationQuery(User $user, string $scope)
     {
@@ -390,6 +386,9 @@ class ConversationController extends Controller
             ->keyBy('conversation_id');
     }
 
+    /**
+     * Новое сообщение возвращает диалог в активные у обоих участников.
+     */
     private function restoreConversationFromArchive(Conversation $conversation): void
     {
         $conversation->forceFill([

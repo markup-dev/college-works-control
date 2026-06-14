@@ -109,7 +109,7 @@ const buildNestedDebtListText = ({ groupName = '', entries }) => {
 const sanitizeExportFilePart = (value) => {
   const raw = typeof value === 'string' ? value : '';
   const cleaned = raw.replace(/[<>:"/\\|?*]+/g, '').replace(/\s+/g, '_').trim();
-  return cleaned.slice(0, 96) || 'eksport';
+  return cleaned.slice(0, 96) || 'экспорт';
 };
 
 const getDeadlineTone = (deadline) => {
@@ -279,7 +279,7 @@ const TeacherStudentsSection = () => {
       showSuccess('Список скопирован в буфер обмена');
       return;
     } catch {
-      /* fall through */
+      /* Если Clipboard API недоступен, пробуем копирование через временное поле. */
     }
     try {
       const textarea = document.createElement('textarea');

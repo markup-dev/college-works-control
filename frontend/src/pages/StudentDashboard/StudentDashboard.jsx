@@ -176,7 +176,7 @@ const StudentDashboard = () => {
   }, [teacherFilter, teacherOptions]);
 
   const handleSubmitWork = useCallback((assignment) => {
-    if (assignment?.is_completed) {
+    if (assignment?.isCompleted) {
       showError('Приём работ по этому заданию завершён: задание в архиве. Новые отправки не принимаются.');
       return;
     }
@@ -186,7 +186,7 @@ const StudentDashboard = () => {
     const canSubmitCurrentAttempt = isRetake ? canSubmitRetake : true;
 
     if (!canSubmitCurrentAttempt) {
-      showWarning('Сдача недоступна: лимит пересдачи исчерпан или срок первичной сдачи завершен.');
+      showWarning('Сдача недоступна: пересдача уже использована или задание закрыто для отправки.');
       return;
     }
 
@@ -492,7 +492,7 @@ const StudentDashboard = () => {
 
       return {
         all: toNumber(metaCounts.all, fallbackAll),
-        not_submitted: toNumber(metaCounts.not_submitted ?? metaCounts.notSubmitted, fallbackNotSubmitted),
+        not_submitted: toNumber(metaCounts.notSubmitted, fallbackNotSubmitted),
         submitted: toNumber(metaCounts.submitted, fallbackSubmitted),
         graded: toNumber(metaCounts.graded, fallbackGraded),
         returned: toNumber(metaCounts.returned, fallbackReturned),
@@ -522,33 +522,17 @@ const StudentDashboard = () => {
   }, [assignmentsMeta, assignments, dashboardStats.urgent]);
 
   const handleSubmission = useCallback(async () => {
-    if (selectedAssignment.submissionType === 'file') {
-      if (!submissionFile) {
-        showWarning('Пожалуйста, выберите файл для загрузки');
-        return;
-      }
-
-      if (submissionFile.size > 50 * 1024 * 1024) {
-        showError('Файл слишком большой. Максимальный размер: 50 МБ');
-        return;
-      }
+    const result = await submitWork(selectedAssignment.id, submissionFile);
+    if (result.success) {
+      setShowSubmissionModal(false);
+      setSubmissionFile(null);
+      setSelectedAssignment(null);
+      loadAttentionAssignments();
+      showSuccess(`Работа "${selectedAssignment.title}" успешно сдана на проверку!`);
+    } else {
+      showError(result.error);
     }
-
-    try {
-      const result = await submitWork(selectedAssignment.id, submissionFile);
-      if (result.success) {
-        setShowSubmissionModal(false);
-        setSubmissionFile(null);
-        setSelectedAssignment(null);
-        loadAttentionAssignments();
-        showSuccess(`Работа "${selectedAssignment.title}" успешно сдана на проверку!`);
-      } else {
-        showError(result.error || 'Ошибка при сдаче работы');
-      }
-    } catch (error) {
-      showError(getApiErrorMessage(error, 'Ошибка при сдаче работы'));
-    }
-  }, [submissionFile, selectedAssignment, submitWork, showSuccess, showError, showWarning, loadAttentionAssignments]);
+  }, [submissionFile, selectedAssignment, submitWork, showSuccess, showError, loadAttentionAssignments]);
 
   const handleDownloadAssignmentMaterial = useCallback(async (assignment, material) => {
     if (!assignment?.id || !material?.id) {

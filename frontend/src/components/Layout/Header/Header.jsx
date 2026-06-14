@@ -37,7 +37,7 @@ const Header = ({ user, onLogout, loggingOut = false }) => {
   }, [refreshPlatformBanner]);
 
   useEffect(() => {
-    const rawEndsAt = platformBanner?.endsAt || platformBanner?.ends_at || null;
+    const rawEndsAt = platformBanner?.endsAt || null;
     if (!rawEndsAt) {
       return undefined;
     }
@@ -55,7 +55,7 @@ const Header = ({ user, onLogout, loggingOut = false }) => {
     }, Math.min(delay, 2147483647));
 
     return () => window.clearTimeout(timer);
-  }, [platformBanner?.endsAt, platformBanner?.ends_at, refreshPlatformBanner]);
+  }, [platformBanner?.endsAt, refreshPlatformBanner]);
 
   useEffect(() => {
     const onRefresh = () => {
@@ -89,7 +89,7 @@ const Header = ({ user, onLogout, loggingOut = false }) => {
       const { data } = await api.get('/notifications/unread-count');
       setNotificationsUnreadTotal(Number(data.count) || 0);
     } catch {
-      /* ignore */
+      /* Счётчик в шапке не должен мешать работе страницы. */
     }
   }, [user?.role]);
 
@@ -107,7 +107,7 @@ const Header = ({ user, onLogout, loggingOut = false }) => {
             showInfo(`У вас ${c} непрочитанных уведомлений — откройте раздел «Уведомления».`);
           }
         } catch {
-          /* ignore */
+          /* Приветственное уведомление необязательное. */
         }
       })();
     }

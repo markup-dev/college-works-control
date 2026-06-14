@@ -92,7 +92,7 @@ const AdminCsvImportModal = ({ isOpen, onClose, config, onImported }) => {
         mode,
       };
       if (config.importOptions?.sendCredentials) {
-        payload.send_credentials = sendCredentials;
+        payload.sendCredentials = sendCredentials;
       }
       const { data } = await api.post(config.importUrl, payload);
       onImported?.(data);

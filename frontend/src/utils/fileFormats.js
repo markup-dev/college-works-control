@@ -16,8 +16,9 @@ export const normalizeAllowedFormats = (formats = []) => {
 
 export const getAllowedFormatsFromAssignment = (assignment = {}) => {
   const directFormats = Array.isArray(assignment.allowedFormats) ? assignment.allowedFormats : [];
-  const relationFormats = Array.isArray(assignment.allowedFormatItems)
-    ? assignment.allowedFormatItems.map((item) => item?.format)
+  const relationItems = Array.isArray(assignment.allowedFormatItems) ? assignment.allowedFormatItems : [];
+  const relationFormats = relationItems.length > 0
+    ? relationItems.map((item) => item?.format)
     : [];
 
   return normalizeAllowedFormats([...directFormats, ...relationFormats]);

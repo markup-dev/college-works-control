@@ -5,8 +5,11 @@ import './AssignmentBankCard.scss';
 
 const AssignmentBankCard = ({ template, onOpenTemplate, onDelete, onPublish }) => {
   const subject = template.subject?.name || '—';
-  const critCount = template.criteriaCount ?? (Array.isArray(template.criteria) ? template.criteria.length : 0);
-  const matCount = template.materialFilesCount ?? (Array.isArray(template.materialFiles) ? template.materialFiles.length : 0);
+  const critCount = template.criteriaCount
+    ?? (Array.isArray(template.criteria) ? template.criteria.length : 0);
+  const templateMaterials = template.materialFiles || [];
+  const matCount = template.materialFilesCount
+    ?? (Array.isArray(templateMaterials) ? templateMaterials.length : 0);
   const preview =
     (template.description || '').trim().slice(0, 160) + ((template.description || '').length > 160 ? '…' : '');
 

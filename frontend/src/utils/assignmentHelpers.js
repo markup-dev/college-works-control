@@ -47,3 +47,10 @@ export const teacherAssignmentFilters = [
   { key: 'with_submissions', label: 'С работами', icon: '' },
   { key: 'without_submissions', label: 'Без работ', icon: '' },
 ];
+
+export const DEFAULT_MAX_FILE_SIZE_MB = 50;
+
+export const resolveAssignmentMaxFileSizeMb = (assignment) => {
+  const value = Number(assignment?.maxFileSize);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_FILE_SIZE_MB;
+};

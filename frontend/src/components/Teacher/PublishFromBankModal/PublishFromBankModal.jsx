@@ -32,8 +32,8 @@ const normalizeTeachingLoadPairs = (pairs = []) => {
 
   return pairs
     .map((pair) => {
-      const subjectId = Number(pair?.subjectId ?? pair?.subject_id);
-      const groupName = normalizeGroupSelection(pair?.groupName ?? pair?.group_name)[0] || '';
+      const subjectId = Number(pair?.subjectId);
+      const groupName = normalizeGroupSelection(pair?.groupName)[0] || '';
 
       if (!Number.isFinite(subjectId) || subjectId <= 0 || !groupName) {
         return null;
@@ -86,7 +86,7 @@ const PublishFromBankModal = ({
     }
   }, [isOpen, template?.id]);
 
-  const templateSubjectId = Number(template?.subject_id ?? template?.subjectId ?? template?.subject?.id);
+  const templateSubjectId = Number(template?.subjectId ?? template?.subject?.id);
   const relationPairs = useMemo(() => normalizeTeachingLoadPairs(teachingLoadPairs), [teachingLoadPairs]);
 
   const groupOptions = useMemo(() => {

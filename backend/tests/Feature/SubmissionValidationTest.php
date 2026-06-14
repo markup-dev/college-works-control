@@ -61,7 +61,38 @@ class SubmissionValidationTest extends TestCase
             ->assertJsonValidationErrors('file');
     }
 
-    private function createAssignment(int $teacherId, array $formats, int $maxFileSizeMb, ?Group $group = null): Assignment
+    public function test_student_can_submit_active_assignment_after_deadline(): void
+    {
+        $teacher = $this->createUser('teacher');
+        $group = Group::create([
+            'name' => 'Тест-' . uniqid(),
+            'status' => 'active',
+        ]);
+        $student = $this->createUser('student', $group->id);
+        $assignment = $this->createAssignment($teacher->id, ['pdf'], 10, $group, [
+            'deadline' => now()->subDays(5)->toDateString(),
+            'status' => 'active',
+        ]);
+
+        Sanctum::actingAs($student);
+
+        $response = $this->postJson('/api/submissions', [
+            'assignment_id' => $assignment->id,
+            'file' => UploadedFile::fake()->create('late-work.pdf', 100, 'application/pdf'),
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('submissions', [
+            'assignment_id' => $assignment->id,
+            'student_id' => $student->id,
+            'status' => 'submitted',
+        ]);
+    }
+
+    private function createAssignment(int $teacherId, array $formats, int $maxFileSizeMb, ?Group $group = null, array $overrides = []): Assignment
     {
         $subject = Subject::create([
             'name' => 'Тестовая дисциплина ' . uniqid(),
@@ -82,8 +113,8 @@ class SubmissionValidationTest extends TestCase
             'title' => 'Тестовое задание',
             'subject_id' => $subject->id,
             'description' => 'Описание тестового задания для проверки валидации файлов.',
-            'deadline' => now()->addDays(7)->toDateString(),
-            'status' => 'active',
+            'deadline' => $overrides['deadline'] ?? now()->addDays(7)->toDateString(),
+            'status' => $overrides['status'] ?? 'active',
             'max_score' => 100,
             'submission_type' => 'file',
             'max_file_size' => $maxFileSizeMb,

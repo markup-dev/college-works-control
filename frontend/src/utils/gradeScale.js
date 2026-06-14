@@ -16,7 +16,7 @@ export const normalizeGradeScale = (scale) => {
   return source
     .map((item) => {
       const label = String(item?.label || '').trim();
-      const minScore = Number(item?.minScore ?? item?.min_score);
+      const minScore = Number(item?.minScore);
 
       if (!/^[1-5][+-]?$/.test(label) || !Number.isInteger(minScore) || minScore < 0 || minScore > 100) {
         return null;
@@ -35,7 +35,7 @@ export const getGradeScaleDuplicateError = (scale) => {
 
   rows.forEach((item) => {
     const label = String(item?.label || '').trim();
-    const minScore = Number(item?.minScore ?? item?.min_score);
+    const minScore = Number(item?.minScore);
 
     if (!/^[1-5][+-]?$/.test(label) || !Number.isInteger(minScore)) {
       return;
@@ -72,7 +72,7 @@ export const getGradeScaleRanges = (scale) => {
   const indexed = rows.map((item, index) => ({
     index,
     label: String(item?.label || '').trim(),
-    minScore: Number(item?.minScore ?? item?.min_score),
+    minScore: Number(item?.minScore),
   }));
 
   const validSorted = indexed

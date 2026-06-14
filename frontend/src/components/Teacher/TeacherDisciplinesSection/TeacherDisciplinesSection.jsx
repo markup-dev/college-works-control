@@ -53,9 +53,9 @@ const TeacherDisciplinesSection = () => {
   const loadsByGroup = useMemo(() => {
     const map = new Map();
     data.teachingLoads.forEach((item) => {
-      const groupId = item.group?.id ?? item.group_id ?? item.id;
+      const groupId = item.group?.id ?? item.groupId ?? item.id;
       const groupName = item.group?.name || 'Группа';
-      const course = item.group?.currentCourse ?? item.group?.current_course;
+      const course = item.group?.currentCourse;
       const label = course ? `${groupName} · ${course} курс` : groupName;
       if (!map.has(groupId)) {
         map.set(groupId, { id: groupId, label, items: [] });
@@ -83,7 +83,7 @@ const TeacherDisciplinesSection = () => {
       ]);
       setData({
         disciplines: listRes.data?.disciplines || [],
-        teachingLoads: listRes.data?.teachingLoads || listRes.data?.teaching_loads || [],
+        teachingLoads: listRes.data?.teachingLoads || [],
         disciplineRequests: listRes.data?.disciplineRequests || [],
         teachingLoadRequests: listRes.data?.teachingLoadRequests || [],
       });
@@ -119,8 +119,8 @@ const TeacherDisciplinesSection = () => {
       return ids;
     }
     (data.teachingLoads || []).forEach((load) => {
-      const subjectId = load.subject?.id ?? load.subjectId ?? load.subject_id;
-      const groupId = load.group?.id ?? load.groupId ?? load.group_id;
+      const subjectId = load.subject?.id ?? load.subjectId;
+      const groupId = load.group?.id ?? load.groupId;
       if (String(subjectId) === String(loadSubjectId) && groupId != null && groupId !== '') {
         ids.add(String(groupId));
       }
@@ -137,8 +137,8 @@ const TeacherDisciplinesSection = () => {
       if (request.status !== 'pending') {
         return;
       }
-      const subjectId = request.subject?.id ?? request.subjectId ?? request.subject_id;
-      const groupId = request.group?.id ?? request.groupId ?? request.group_id;
+      const subjectId = request.subject?.id ?? request.subjectId;
+      const groupId = request.group?.id ?? request.groupId;
       if (String(subjectId) === String(loadSubjectId) && groupId != null && groupId !== '') {
         ids.add(String(groupId));
       }
@@ -177,7 +177,7 @@ const TeacherDisciplinesSection = () => {
   const ownedSubjectIds = useMemo(() => {
     const ids = new Set();
     data.disciplines.forEach((item) => {
-      const id = item.subject?.id ?? item.subjectId ?? item.subject_id;
+      const id = item.subject?.id ?? item.subjectId;
       if (id != null && id !== '') {
         ids.add(String(id));
       }
@@ -191,7 +191,7 @@ const TeacherDisciplinesSection = () => {
       if (request.status !== 'pending') {
         return;
       }
-      const id = request.subject?.id ?? request.subjectId ?? request.subject_id;
+      const id = request.subject?.id ?? request.subjectId;
       if (id != null && id !== '') {
         ids.add(String(id));
       }
@@ -608,7 +608,7 @@ const TeacherDisciplinesSection = () => {
                   : TEACHER_REQUEST_MESSAGES.load.selectDisciplineFirst}
               </option>
               {selectableGroupsForSubject.map((group) => {
-                const course = group.currentCourse ?? group.current_course;
+                const course = group.currentCourse;
                 return (
                   <option key={group.id} value={String(group.id)}>
                     {course ? `${group.name} · ${course} курс` : group.name}

@@ -21,6 +21,8 @@ class AssignmentService
 {
     public const DEFAULT_PER_PAGE = 9;
 
+    public const DEFAULT_MAX_FILE_SIZE_MB = 50;
+
     /** @return array<string, mixed> */
     public function metaPayload(User $user): array
     {
@@ -144,54 +146,13 @@ class AssignmentService
                     'submissions',
                     'submissions as pending_count' => fn ($q) => $q->where('status', 'submitted'),
                 ]);
+            $this->applyStudentVisibleAssignmentsFilter($query, $user);
 
-            if (! empty($validated['search'])) {
-                $term = trim((string) $validated['search']);
-                $query->where(function ($builder) use ($term) {
-                    $builder
-                        ->where('title', 'like', "%{$term}%")
-                        ->orWhere('description', 'like', "%{$term}%")
-                        ->orWhereHas('subject', fn ($subjectQuery) => $subjectQuery->where('name', 'like', "%{$term}%"))
-                        ->orWhereHas('teacher', function ($teacherQuery) use ($term) {
-                            $teacherQuery
-                                ->where('last_name', 'like', "%{$term}%")
-                                ->orWhere('first_name', 'like', "%{$term}%")
-                                ->orWhere('middle_name', 'like', "%{$term}%")
-                                ->orWhere('login', 'like', "%{$term}%");
-                        });
-                });
-            }
-
-            if (! empty($validated['subject_id'])) {
-                $query->where('subject_id', (int) $validated['subject_id']);
-            }
-            if (! empty($validated['subject'])) {
-                $subjectName = trim((string) $validated['subject']);
-                $query->whereHas('subject', fn ($subjectQuery) => $subjectQuery->where('name', $subjectName));
-            }
-
-            if (! empty($validated['teacher_id'])) {
-                $query->where('teacher_id', (int) $validated['teacher_id']);
-            }
-            if (! empty($validated['teacher'])) {
-                $this->applyTeacherTextFilter($query, (string) $validated['teacher']);
-            }
-
-            if (! empty($validated['submission_type'])) {
-                $query->where('submission_type', (string) $validated['submission_type']);
-            }
-
-            if (! empty($validated['group_id'])) {
-                $query->whereHas('groups', fn ($groupQuery) => $groupQuery->where('groups.id', (int) $validated['group_id']));
-            }
-            if (! empty($validated['group'])) {
-                $groupName = trim((string) $validated['group']);
-                $query->whereHas('groups', fn ($groupQuery) => $groupQuery->where('groups.name', $groupName));
-            }
+            $this->applyStudentBaseFilters($query, $validated);
 
             $query->orderBy('deadline');
 
-            $counts = $this->buildStudentStatusCountsFromDb($user);
+            $counts = $this->buildStudentStatusCountsFromDb($user, $validated);
 
             if (! empty($validated['status'])) {
                 $this->applyStudentListStatusFilter($query, $user, (string) $validated['status']);
@@ -374,12 +335,28 @@ class AssignmentService
     /** @return array<string, mixed> */
     public function mapCreatedAssignmentResponse(Assignment $assignment): array
     {
-        $metrics = $this->batchCompletionMetrics(collect([$assignment]));
+        return $this->mapAssignmentSnapshot($assignment);
+    }
 
-        return $this->mapAssignmentForIndex(
-            $assignment,
-            $metrics[(int) $assignment->id] ?? null,
-        );
+    /** @return array<string, mixed> */
+    public function mapAssignmentSnapshot(Assignment $assignment): array
+    {
+        $data = $assignment->toArray();
+        unset($data['teacher']);
+
+        return [
+            ...$data,
+            'teacher' => $assignment->teacher?->full_name ?? 'Не указан',
+            'is_completed' => $assignment->status === 'archived',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function mapAssignmentDetailsResponse(Assignment $assignment): array
+    {
+        $metrics = $this->batchCompletionMetrics([$assignment])[(int) $assignment->id] ?? null;
+
+        return $this->mapAssignmentForIndex($assignment, $metrics);
     }
 
     /**
@@ -761,7 +738,7 @@ class AssignmentService
     }
 
     /** @return array<string, int> */
-    private function buildStudentStatusCountsFromDb(User $student): array
+    private function buildStudentStatusCountsFromDb(User $student, array $validated = []): array
     {
         if (! $student->group_id) {
             return [
@@ -776,6 +753,8 @@ class AssignmentService
 
         $base = Assignment::query()
             ->whereHas('groups', fn (Builder $groupQuery) => $groupQuery->where('groups.id', $student->group_id));
+        $this->applyStudentVisibleAssignmentsFilter($base, $student);
+        $this->applyStudentBaseFilters($base, $validated);
 
         $all = (clone $base)->count();
         $submitted = (clone $base)->whereIn('assignments.id', $this->latestStudentSubmissionAssignmentIds((int) $student->id, ['submitted']))->count();
@@ -828,6 +807,66 @@ class AssignmentService
     private function isStudentActionRequiredStatus(string $status): bool
     {
         return in_array($status, ['not_submitted', 'returned'], true);
+    }
+
+    private function applyStudentVisibleAssignmentsFilter(Builder $query, User $student): void
+    {
+        $gradedAssignmentIds = $this->latestStudentSubmissionAssignmentIds((int) $student->id, ['graded']);
+
+        $query->where(function (Builder $builder) use ($gradedAssignmentIds) {
+            $builder->where('assignments.status', '!=', 'archived');
+
+            if ($gradedAssignmentIds !== []) {
+                $builder->orWhereIn('assignments.id', $gradedAssignmentIds);
+            }
+        });
+    }
+
+    private function applyStudentBaseFilters(Builder $query, array $validated): void
+    {
+        if (! empty($validated['search'])) {
+            $term = trim((string) $validated['search']);
+            $query->where(function ($builder) use ($term) {
+                $builder
+                    ->where('title', 'like', "%{$term}%")
+                    ->orWhere('description', 'like', "%{$term}%")
+                    ->orWhereHas('subject', fn ($subjectQuery) => $subjectQuery->where('name', 'like', "%{$term}%"))
+                    ->orWhereHas('teacher', function ($teacherQuery) use ($term) {
+                        $teacherQuery
+                            ->where('last_name', 'like', "%{$term}%")
+                            ->orWhere('first_name', 'like', "%{$term}%")
+                            ->orWhere('middle_name', 'like', "%{$term}%")
+                            ->orWhere('login', 'like', "%{$term}%");
+                    });
+            });
+        }
+
+        if (! empty($validated['subject_id'])) {
+            $query->where('subject_id', (int) $validated['subject_id']);
+        }
+        if (! empty($validated['subject'])) {
+            $subjectName = trim((string) $validated['subject']);
+            $query->whereHas('subject', fn ($subjectQuery) => $subjectQuery->where('name', $subjectName));
+        }
+
+        if (! empty($validated['teacher_id'])) {
+            $query->where('teacher_id', (int) $validated['teacher_id']);
+        }
+        if (! empty($validated['teacher'])) {
+            $this->applyTeacherTextFilter($query, (string) $validated['teacher']);
+        }
+
+        if (! empty($validated['submission_type'])) {
+            $query->where('submission_type', (string) $validated['submission_type']);
+        }
+
+        if (! empty($validated['group_id'])) {
+            $query->whereHas('groups', fn ($groupQuery) => $groupQuery->where('groups.id', (int) $validated['group_id']));
+        }
+        if (! empty($validated['group'])) {
+            $groupName = trim((string) $validated['group']);
+            $query->whereHas('groups', fn ($groupQuery) => $groupQuery->where('groups.name', $groupName));
+        }
     }
 
     /** @param  array<string, mixed>  $assignment */

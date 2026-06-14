@@ -9,7 +9,9 @@ use App\Notifications\SubmissionGradedStudentNotification;
 use App\Notifications\SubmissionReturnedStudentNotification;
 use App\Services\Submissions\SubmissionService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -61,6 +63,24 @@ class SubmissionController extends Controller
         );
     }
 
+    public function show(Request $request, Submission $submission)
+    {
+        $user = $request->user();
+        $submission->loadMissing('assignment:id,teacher_id');
+
+        if ($user->role === 'teacher' && (int) $submission->assignment?->teacher_id !== (int) $user->id) {
+            return response()->json(['message' => 'Недостаточно прав для просмотра работы.'], 403);
+        }
+
+        if ($user->role === 'student' && (int) $submission->student_id !== (int) $user->id) {
+            return response()->json(['message' => 'Недостаточно прав для просмотра работы.'], 403);
+        }
+
+        return response()->json([
+            'submission' => $this->submissions->submissionPayload($submission),
+        ]);
+    }
+
     public function store(Request $request)
     {
         $student = $request->user();
@@ -76,29 +96,6 @@ class SubmissionController extends Controller
         );
 
         $assignment = Assignment::with('groups:id')->findOrFail($baseValidated['assignment_id']);
-        $assignment->syncCompletionStatus();
-
-        if ($assignment->status !== 'active') {
-            $message = $assignment->status === 'archived'
-                ? 'Приём работ по этому заданию завершён: задание снято с активных (архив).'
-                : 'Сдача работ по этому заданию недоступна.';
-
-            return response()->json([
-                'message' => $message,
-            ], 422);
-        }
-
-        if (! $student->group_id) {
-            return response()->json([
-                'message' => 'Чтобы сдать работу, у вашего аккаунта должна быть указана учебная группа.',
-            ], 422);
-        }
-
-        if (! $assignment->groups->contains(fn($g) => (int) $g->id === (int) $student->group_id)) {
-            return response()->json([
-                'message' => 'Это задание не назначено вашей группе.',
-            ], 422);
-        }
 
         $isDemoSubmission = $assignment->submission_type === 'demo';
         $allowedFormats = $this->submissions->resolveAllowedFormats($assignment);
@@ -111,9 +108,8 @@ class SubmissionController extends Controller
             'mimes:' . implode(',', $allowedFormats),
         ];
 
-        $validated = $request->validate(
+        $request->validate(
             [
-                'assignment_id' => ['required', 'exists:assignments,id'],
                 'file' => $fileRules,
             ],
             [
@@ -123,27 +119,7 @@ class SubmissionController extends Controller
             ]
         );
 
-        $studentSubmissions = Submission::where('assignment_id', $assignment->id)
-            ->where('student_id', $student->id)
-            ->orderByDesc('submitted_at')
-            ->orderByDesc('id')
-            ->get(['id', 'status', 'is_resubmission', 'submitted_at', 'created_at']);
-
-        $latestSubmission = $studentSubmissions->first();
-        $retakeUsed = $studentSubmissions->contains(fn($item) => (bool) $item->is_resubmission);
-        if ($latestSubmission) {
-            if ($latestSubmission->status !== 'returned') {
-                return response()->json([
-                    'message' => 'Повторная отправка доступна только после возврата работы на доработку преподавателем.',
-                ], 422);
-            }
-
-            if ($retakeUsed) {
-                return response()->json([
-                    'message' => 'Лимит пересдачи исчерпан. Дополнительная пересдача недоступна.',
-                ], 422);
-            }
-        }
+        $latestSubmission = $this->validateSubmissionTarget($request, $assignment);
 
         $file = $request->file('file');
         $path = $file ? $file->store('submissions', 'public') : null;
@@ -173,14 +149,147 @@ class SubmissionController extends Controller
             'student.studentGroup:id,name',
         ]);
 
-        $teacher = $submission->assignment?->teacher;
-        if ($teacher && $teacher->is_active) {
-            try {
-                $teacher->notify(new NewSubmissionTeacherNotification($submission));
-            } catch (\Throwable $e) {
-                report($e);
-            }
+        $this->insertTeacherSubmissionNotification($submission);
+
+        return response()->json([
+            'success' => true,
+            'submission' => $submission,
+        ], 201);
+    }
+
+    public function uploadChunk(Request $request)
+    {
+        $validated = $request->validate([
+            'assignment_id' => ['required', 'exists:assignments,id'],
+            'upload_id' => ['required', 'string', 'max:80', 'regex:/^[A-Za-z0-9_-]+$/'],
+            'chunk_index' => ['required', 'integer', 'min:0'],
+            'total_chunks' => ['required', 'integer', 'min:1', 'max:100'],
+            'file_name' => ['required', 'string', 'max:255'],
+            'file_size' => ['required', 'integer', 'min:1'],
+            'chunk' => ['required', 'file', 'max:1536'],
+        ], [
+            'chunk.required' => 'Не удалось загрузить часть файла. Попробуйте отправить работу ещё раз.',
+            'chunk.max' => 'Не удалось загрузить часть файла. Попробуйте отправить работу ещё раз.',
+        ]);
+
+        $chunkIndex = (int) $validated['chunk_index'];
+        $totalChunks = (int) $validated['total_chunks'];
+        if ($chunkIndex >= $totalChunks) {
+            throw ValidationException::withMessages([
+                'chunk_index' => ['Некорректный номер части файла.'],
+            ]);
         }
+
+        $student = $request->user();
+        $uploadId = (string) $validated['upload_id'];
+        $chunkPath = $this->chunkPath((int) $student->id, $uploadId, $chunkIndex);
+
+        Storage::put($chunkPath, file_get_contents($request->file('chunk')->getRealPath()));
+
+        return response()->json([
+            'success' => true,
+            'chunk_index' => $chunkIndex,
+        ]);
+    }
+
+    public function completeChunkedUpload(Request $request)
+    {
+        $validated = $request->validate([
+            'assignment_id' => ['required', 'exists:assignments,id'],
+            'upload_id' => ['required', 'string', 'max:80', 'regex:/^[A-Za-z0-9_-]+$/'],
+            'total_chunks' => ['required', 'integer', 'min:1', 'max:100'],
+            'file_name' => ['required', 'string', 'max:255'],
+            'file_size' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $student = $request->user();
+        $assignment = Assignment::with('groups:id')->findOrFail($validated['assignment_id']);
+
+        if ($assignment->submission_type === 'demo') {
+            throw ValidationException::withMessages([
+                'file' => ['Для демонстрационного задания файл прикреплять не нужно.'],
+            ]);
+        }
+
+        $latestSubmission = $this->validateSubmissionTarget($request, $assignment);
+        $allowedFormats = $this->submissions->resolveAllowedFormats($assignment);
+        $maxBytes = $this->submissions->resolveMaxFileSizeKilobytes($assignment) * 1024;
+        $fileName = trim((string) $validated['file_name']);
+        $fileSize = (int) $validated['file_size'];
+        $extension = mb_strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+
+        if ($fileSize > $maxBytes) {
+            throw ValidationException::withMessages([
+                'file' => ['Размер файла не должен превышать ' . (int) floor($maxBytes / 1024 / 1024) . ' МБ.'],
+            ]);
+        }
+        if ($extension === '' || ! in_array($extension, $allowedFormats, true)) {
+            throw ValidationException::withMessages([
+                'file' => ['Допустимые форматы: ' . implode(', ', array_map(fn($format) => '.' . $format, $allowedFormats)) . '.'],
+            ]);
+        }
+
+        $uploadId = (string) $validated['upload_id'];
+        $totalChunks = (int) $validated['total_chunks'];
+        $safeName = $this->sanitizeFileName($fileName);
+        $storedPath = 'submissions/' . Str::uuid() . '_' . $safeName;
+
+        Storage::disk('public')->makeDirectory('submissions');
+        $targetPath = Storage::disk('public')->path($storedPath);
+        $target = fopen($targetPath, 'wb');
+        $writtenBytes = 0;
+
+        try {
+            for ($i = 0; $i < $totalChunks; $i++) {
+                $chunkPath = $this->chunkPath((int) $student->id, $uploadId, $i);
+                if (! Storage::exists($chunkPath)) {
+                    throw ValidationException::withMessages([
+                        'file' => ['Файл загрузился не полностью. Выберите файл и отправьте работу ещё раз.'],
+                    ]);
+                }
+
+                $chunk = fopen(Storage::path($chunkPath), 'rb');
+                $writtenBytes += stream_copy_to_stream($chunk, $target);
+                fclose($chunk);
+            }
+        } finally {
+            fclose($target);
+        }
+
+        Storage::deleteDirectory($this->chunkDirectory((int) $student->id, $uploadId));
+
+        if ($writtenBytes !== $fileSize) {
+            Storage::disk('public')->delete($storedPath);
+            throw ValidationException::withMessages([
+                'file' => ['Файл загрузился некорректно. Выберите файл и отправьте работу ещё раз.'],
+            ]);
+        }
+
+        $submission = Submission::create([
+            'assignment_id' => $assignment->id,
+            'student_id' => $student->id,
+            'status' => 'submitted',
+            'file_name' => $fileName,
+            'file_path' => $storedPath,
+            'file_size' => $this->submissions->formatFileSize($fileSize),
+            'file_type' => mime_content_type($targetPath) ?: null,
+            'comment' => null,
+            'is_resubmission' => $latestSubmission !== null,
+            'previous_submission_id' => $latestSubmission?->id,
+            'submitted_at' => now(),
+        ]);
+
+        $this->submissions->syncAssignmentCompletionStatus($assignment);
+
+        $submission->load([
+            'assignment:id,title,subject_id,max_score,teacher_id',
+            'assignment.subject:id,name',
+            'assignment.teacher:id,is_active',
+            'student:id,login,group_id,last_name,first_name,middle_name',
+            'student.studentGroup:id,name',
+        ]);
+
+        $this->insertTeacherSubmissionNotification($submission);
 
         return response()->json([
             'success' => true,
@@ -366,6 +475,112 @@ class SubmissionController extends Controller
             Storage::disk('public')->path($submission->file_path),
             $submission->file_name ?: basename($submission->file_path)
         );
+    }
+
+    private function validateSubmissionTarget(Request $request, Assignment $assignment): ?Submission
+    {
+        $student = $request->user();
+
+        if ($assignment->status !== 'active') {
+            $message = $assignment->status === 'archived'
+                ? 'Приём работ по этому заданию завершён: задание снято с активных.'
+                : 'Сдача работ по этому заданию недоступна.';
+
+            throw ValidationException::withMessages([
+                'assignment_id' => [$message],
+            ]);
+        }
+
+        if (! $student->group_id) {
+            throw ValidationException::withMessages([
+                'assignment_id' => ['Чтобы сдать работу, у вашего аккаунта должна быть указана учебная группа.'],
+            ]);
+        }
+
+        if (! $assignment->groups->contains(fn($g) => (int) $g->id === (int) $student->group_id)) {
+            throw ValidationException::withMessages([
+                'assignment_id' => ['Это задание не назначено вашей группе.'],
+            ]);
+        }
+
+        $studentSubmissions = Submission::where('assignment_id', $assignment->id)
+            ->where('student_id', $student->id)
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
+            ->get(['id', 'status', 'is_resubmission', 'submitted_at', 'created_at']);
+
+        $latestSubmission = $studentSubmissions->first();
+        if (! $latestSubmission) {
+            return null;
+        }
+
+        if ($latestSubmission->status !== 'returned') {
+            throw ValidationException::withMessages([
+                'assignment_id' => ['Повторная отправка доступна только после возврата работы на доработку преподавателем.'],
+            ]);
+        }
+
+        if ($studentSubmissions->contains(fn($item) => (bool) $item->is_resubmission)) {
+            throw ValidationException::withMessages([
+                'assignment_id' => ['Лимит пересдачи исчерпан. Дополнительная пересдача недоступна.'],
+            ]);
+        }
+
+        return $latestSubmission;
+    }
+
+    private function chunkDirectory(int $studentId, string $uploadId): string
+    {
+        return 'submission-chunks/' . $studentId . '/' . $uploadId;
+    }
+
+    private function chunkPath(int $studentId, string $uploadId, int $chunkIndex): string
+    {
+        return $this->chunkDirectory($studentId, $uploadId) . '/' . str_pad((string) $chunkIndex, 5, '0', STR_PAD_LEFT) . '.part';
+    }
+
+    private function sanitizeFileName(string $fileName): string
+    {
+        $safeName = trim(preg_replace('/[<>:"\/\\\\|?*\x00-\x1F]+/u', '_', basename($fileName)) ?? '');
+
+        return $safeName !== '' ? $safeName : 'submission-file';
+    }
+
+    private function insertTeacherSubmissionNotification(Submission $submission): void
+    {
+        $submission->loadMissing([
+            'assignment:id,title,teacher_id',
+            'assignment.teacher:id,is_active',
+            'student:id,first_name,last_name,middle_name,group_id',
+            'student.studentGroup:id,name',
+        ]);
+
+        $teacher = $submission->assignment?->teacher;
+        if (! $teacher || ! $teacher->is_active) {
+            return;
+        }
+
+        $studentName = $submission->student?->full_name ?? 'Студент';
+        $groupName = $submission->student?->studentGroup?->name;
+        $title = $submission->assignment?->title ?? 'Задание';
+
+        DB::table('notifications')->insert([
+            'id' => (string) Str::uuid(),
+            'type' => NewSubmissionTeacherNotification::class,
+            'notifiable_type' => \App\Models\User::class,
+            'notifiable_id' => $teacher->id,
+            'data' => json_encode([
+                'title' => 'Новая работа на проверке',
+                'body' => $studentName.($groupName ? ' ('.$groupName.')' : '').' — «'.$title.'»',
+                'kind' => 'submission_submitted_teacher',
+                'assignment_id' => $submission->assignment_id,
+                'submission_id' => $submission->id,
+                'student_group_name' => $groupName,
+            ], JSON_UNESCAPED_UNICODE),
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     /**

@@ -17,7 +17,7 @@ return new class extends Migration
             $table->unsignedBigInteger('subject_id')->nullable();
             $table->text('description')->nullable();
             $table->string('submission_type')->default('file');
-            $table->integer('max_file_size')->nullable();
+            $table->integer('max_file_size')->default(50);
             $table->timestamps();
 
             $table->foreign('teacher_id', 'asg_bnk_teach_fk')

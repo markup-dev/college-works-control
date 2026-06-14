@@ -26,7 +26,6 @@ const getSubjectId = (item) => {
   }
   return Number(
     item?.subjectId
-    ?? item?.subject_id
     ?? item?.subjectRelation?.id
   );
 };
@@ -42,11 +41,11 @@ export const resolveAssignmentSubjectId = (item) => {
 const getTeacherName = (item) => String(
   item?.teacher
   || item?.teacherName
-  || item?.teacherRelation?.full_name
+  || item?.teacherRelation?.fullName
   || ''
 ).trim();
 
-const getTeacherId = (item) => Number(item?.teacherId ?? item?.teacher_id);
+const getTeacherId = (item) => Number(item?.teacherId);
 
 export const buildStudentFilterCatalog = (assignments = []) => {
   const catalogMap = new Map();

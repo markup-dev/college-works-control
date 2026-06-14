@@ -47,7 +47,7 @@ const TEACHER_DASHBOARD_FILTERS_KEY = 'teacher-dashboard-filters-v1';
 const DEFAULT_SUBMISSION_STATUS_FILTER = 'submitted';
 
 const isCompletedAssignment = (assignment) => (
-  Boolean(assignment?.isCompleted || assignment?.is_completed || assignment?.status === 'archived')
+  Boolean(assignment?.isCompleted || assignment?.status === 'archived')
 );
 
 const normalizeStoredSubmissionStatus = (value) => {
@@ -352,12 +352,13 @@ const TeacherDashboard = () => {
     setTeacherNotificationNav({
       assignmentId: String(assignmentId),
       submissionId: submissionId ? String(submissionId) : null,
+      loaded: false,
     });
     setSearchParams({ tab: 'submissions' }, { replace: true });
   }, [searchParams, user?.role, setSearchParams]);
 
   useEffect(() => {
-    if (!teacherNotificationNav || activeTab !== 'submissions') {
+    if (!teacherNotificationNav || teacherNotificationNav.loaded || activeTab !== 'submissions') {
       return;
     }
     const { assignmentId, submissionId } = teacherNotificationNav;
@@ -367,7 +368,7 @@ const TeacherDashboard = () => {
       try {
         await loadTeacherSubmissions({
           page: 1,
-          perPage: 80,
+          perPage: 100,
           assignmentId,
           subjectId: 'all',
           group: 'all',
@@ -388,6 +389,14 @@ const TeacherDashboard = () => {
       }
       if (!submissionId) {
         setTeacherNotificationNav(null);
+      } else {
+        setTeacherNotificationNav((prev) => (
+          prev
+          && String(prev.assignmentId) === String(assignmentId)
+          && String(prev.submissionId) === String(submissionId)
+            ? { ...prev, loaded: true }
+            : prev
+        ));
       }
     })();
 
@@ -398,22 +407,60 @@ const TeacherDashboard = () => {
   }, [teacherNotificationNav, activeTab, loadTeacherSubmissions]);
 
   useEffect(() => {
-    if (!teacherNotificationNav?.submissionId || loading) {
-      return;
+    if (!teacherNotificationNav?.submissionId || !teacherNotificationNav.loaded || loading || submissionsPanelLoading) {
+      return undefined;
     }
+
+    let cancelled = false;
     const sid = String(teacherNotificationNav.submissionId);
-    const sub = submissions.find((s) => String(s.id) === sid);
-    if (sub) {
-      const relatedAssignment = assignments.find((a) => Number(a.id) === Number(sub.assignmentId));
-      setSelectedSubmission(sub);
-      setSelectedAssignment(relatedAssignment || null);
+
+    const openSubmission = (submission) => {
+      if (cancelled || !submission) {
+        return;
+      }
+
+      const relatedAssignment = assignments.find((a) => Number(a.id) === Number(submission.assignmentId));
+      const fallbackAssignment = {
+        id: submission.assignmentId,
+        title: submission.assignmentTitle,
+        subject: submission.subjectName,
+        maxScore: submission.maxScore,
+        submissionType: submission.submissionType,
+        deadline: submission.assignmentDeadline,
+      };
+
+      if (['submitted', 'graded', 'returned'].includes(submission.status)) {
+        setStatusFilter(submission.status);
+      }
+      setSelectedSubmission(submission);
+      setSelectedAssignment(relatedAssignment || fallbackAssignment);
       setShowDetailsModal(true);
       setTeacherNotificationNav(null);
-      return;
+    };
+
+    const existingSubmission = submissions.find((s) => String(s.id) === sid);
+    if (existingSubmission) {
+      openSubmission(existingSubmission);
+      return undefined;
     }
-    setTeacherNotificationNav(null);
-    showInfoRef.current('Сдача не найдена в списке. Обновите фильтры или откройте задание вручную.');
-  }, [submissions, teacherNotificationNav, loading, assignments]);
+
+    (async () => {
+      try {
+        const { data } = await api.get(`/submissions/${sid}`);
+        const submission = normalizeSubmission(data?.submission || data);
+        openSubmission(submission);
+      } catch {
+        if (!cancelled) {
+          setTeacherNotificationNav(null);
+          showInfoRef.current('Сдача не найдена. Возможно, она удалена или у вас нет доступа.');
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [submissions, teacherNotificationNav, loading, submissionsPanelLoading, assignments]);
 
   const loadAnalyticsSnapshot = useCallback(async () => {
     if (!user) return;
@@ -452,10 +499,10 @@ const TeacherDashboard = () => {
   }, [user, loadTeacherMeta]);
 
   useEffect(() => {
-    if (activeTab === 'analytics' && !analyticsLoaded) {
+    if (activeTab === 'analytics') {
       loadAnalyticsSnapshot();
     }
-  }, [activeTab, analyticsLoaded, loadAnalyticsSnapshot]);
+  }, [activeTab, loadAnalyticsSnapshot]);
 
   useEffect(() => {
     if (activeTab === 'assignments' || activeTab === 'completed') {
@@ -684,7 +731,7 @@ const TeacherDashboard = () => {
   const bankSourceAssignmentIds = useMemo(() => {
     const ids = new Set();
     bankTemplates.forEach((t) => {
-      const sid = t.source_assignment_id;
+      const sid = t.sourceAssignmentId;
       if (sid == null || sid === '') {
         return;
       }
@@ -754,19 +801,25 @@ const TeacherDashboard = () => {
     if (!templateId || (files.length === 0 && removeIds.length === 0)) {
       return;
     }
-    const formData = new FormData();
-    files.forEach((file) => formData.append('files[]', file));
-    removeIds.forEach((id) => formData.append('remove_ids[]', String(id)));
-    await api.post(`/assignment-bank/${templateId}/materials`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+
+    if (removeIds.length > 0) {
+      const removeData = new FormData();
+      removeIds.forEach((id) => removeData.append('remove_ids[]', String(id)));
+      await api.post(`/assignment-bank/${templateId}/materials`, removeData);
+    }
+
+    for (const file of files) {
+      const fileData = new FormData();
+      fileData.append('files[]', file);
+      await api.post(`/assignment-bank/${templateId}/materials`, fileData);
+    }
   };
 
   const handleAddAssignmentToBank = async (assignment) => {
     if (!assignment?.id) return;
     try {
-      await api.post(`/assignment-bank/from-assignment/${assignment.id}`);
-      showSuccess('Заготовка добавлена в банк заданий');
+      const { data } = await api.post(`/assignment-bank/from-assignment/${assignment.id}`);
+      showSuccess(data?.created === false ? 'Заготовка обновлена в банке заданий' : 'Заготовка добавлена в банк заданий');
       await loadBankTemplates({ silent: true });
     } catch (err) {
       showError(getApiErrorMessage(err, 'Не удалось добавить в банк'));
@@ -777,15 +830,16 @@ const TeacherDashboard = () => {
     if (!template?.id) {
       return;
     }
-    setEditingBankTemplate(template);
-    setShowBankTemplateModal(true);
+
     void api.get(`/assignment-bank/${template.id}`)
       .then(({ data }) => {
-        if (data?.id) {
-          setEditingBankTemplate(data);
-        }
+        setEditingBankTemplate(data?.id ? data : template);
+        setShowBankTemplateModal(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        setEditingBankTemplate(template);
+        setShowBankTemplateModal(true);
+      });
   };
 
   const handleSaveBankTemplate = async (data) => {
@@ -856,19 +910,13 @@ const TeacherDashboard = () => {
     try {
       const result = await publishAssignmentFromBank({ templateId, deadline, studentGroups });
       if (!result.success) {
-        showError(result.error || 'Не удалось выдать задание');
+        showError(result.error);
         return;
       }
 
       showSuccess('Задание выдано студентам');
       setShowPublishBankModal(false);
       setPublishBankTemplate(null);
-
-      if (assignmentsBankMode) {
-        void loadBankTemplates({ silent: true });
-      }
-    } catch (err) {
-      showError(getApiErrorMessage(err, 'Не удалось выдать задание'));
     } finally {
       setPublishBankSubmitting(false);
     }
@@ -907,9 +955,9 @@ const TeacherDashboard = () => {
 
     const criterionScores = assignmentCriteria.map((criterion, index) => {
       const text = (criterion?.text || '').toString().trim();
-      const maxPoints = Number(criterion?.maxPoints ?? criterion?.max_points ?? 0) || 0;
+      const maxPoints = Number(criterion?.maxPoints ?? 0) || 0;
       const existing = savedScores[index] || savedScores.find((item) => (item?.text || '').toString().trim() === text);
-      const receivedPoints = existing?.receivedPoints ?? existing?.received_points ?? 0;
+      const receivedPoints = existing?.receivedPoints ?? 0;
 
       return {
         text,
@@ -949,33 +997,29 @@ const TeacherDashboard = () => {
       return;
     }
 
-    try {
-      const trimmedComment = (gradeData.comment || '').trim();
-      const normalizedCriterionScores = Array.isArray(gradeData.criterionScores)
-        ? gradeData.criterionScores.map((criterion) => ({
-            text: (criterion.text || '').trim(),
-            maxPoints: Number(criterion.maxPoints || 0),
-            receivedPoints: Number(criterion.receivedPoints || 0),
-          })).filter((criterion) => criterion.text)
-        : [];
+    const trimmedComment = (gradeData.comment || '').trim();
+    const normalizedCriterionScores = Array.isArray(gradeData.criterionScores)
+      ? gradeData.criterionScores.map((criterion) => ({
+          text: (criterion.text || '').trim(),
+          maxPoints: Number(criterion.maxPoints || 0),
+          receivedPoints: Number(criterion.receivedPoints || 0),
+        })).filter((criterion) => criterion.text)
+      : [];
 
-      const result = await gradeSubmission(
-        selectedSubmission.id,
-        parseInt(gradeData.score),
-        trimmedComment,
-        gradeData.useCriteriaScoring ? normalizedCriterionScores : []
-      );
-      if (result.success) {
-        loadAnalyticsSnapshot();
-        setShowGradingModal(false);
-        setSelectedSubmission(null);
-        setGradeData({ score: '', comment: '', criterionScores: [], draftSubmissionId: null, useCriteriaScoring: false });
-        showSuccess(`Оценка для работы "${selectedSubmission.assignmentTitle}" сохранена!`);
-      } else {
-        showError(result.error || 'Ошибка при сохранении оценки');
-      }
-    } catch (error) {
-      showError('Ошибка при сохранении оценки');
+    const result = await gradeSubmission(
+      selectedSubmission.id,
+      parseInt(gradeData.score),
+      trimmedComment,
+      gradeData.useCriteriaScoring ? normalizedCriterionScores : []
+    );
+    if (result.success) {
+      loadAnalyticsSnapshot();
+      setShowGradingModal(false);
+      setSelectedSubmission(null);
+      setGradeData({ score: '', comment: '', criterionScores: [], draftSubmissionId: null, useCriteriaScoring: false });
+      showSuccess(`Оценка для работы "${selectedSubmission.assignmentTitle}" сохранена!`);
+    } else {
+      showError(result.error);
     }
   };
 
@@ -989,16 +1033,12 @@ const TeacherDashboard = () => {
       rows: 6,
       onSubmit: async (comment) => {
         if (comment && comment.trim()) {
-          try {
-            const result = await returnSubmission(submission.id, comment);
-            if (result.success) {
-              loadAnalyticsSnapshot();
-              showSuccess(`Работа "${submission.assignmentTitle}" возвращена студенту на доработку`);
-            } else {
-              showError(result.error || 'Ошибка при возврате работы');
-            }
-          } catch (error) {
-            showError('Ошибка при возврате работы');
+          const result = await returnSubmission(submission.id, comment);
+          if (result.success) {
+            loadAnalyticsSnapshot();
+            showSuccess(`Работа "${submission.assignmentTitle}" возвращена студенту на доработку`);
+          } else {
+            showError(result.error);
           }
         }
       }
@@ -1019,7 +1059,7 @@ const TeacherDashboard = () => {
 
       const blob = response.data;
       const objectUrl = URL.createObjectURL(blob);
-      const fileName = submission.fileName || 'submission-file';
+      const fileName = submission.fileName || 'файл_работы';
 
       const link = document.createElement('a');
       link.href = objectUrl;
@@ -1104,13 +1144,15 @@ const TeacherDashboard = () => {
   };
 
   const handleViewAssignmentDetails = (assignment) => {
-    setDetailsAssignment(assignment);
+    setDetailsAssignment(normalizeAssignment(assignment));
     setShowAssignmentDetails(true);
     if (assignment?.id) {
       void api.get(`/assignments/${assignment.id}`)
         .then(({ data }) => {
           setDetailsAssignment((prev) => (
-            Number(prev?.id) === Number(assignment.id) ? normalizeAssignment(data) : prev
+            Number(prev?.id) === Number(assignment.id)
+              ? normalizeAssignment({ ...prev, ...data })
+              : prev
           ));
         })
         .catch(() => {});
@@ -1126,13 +1168,15 @@ const TeacherDashboard = () => {
     if (!assignment || isCompletedAssignment(assignment)) return;
     setDetailsAssignment(null);
     setShowAssignmentDetails(false);
-    setSelectedAssignment(assignment);
+    setSelectedAssignment(normalizeAssignment(assignment));
     setShowAssignmentModal(true);
     if (assignment.id) {
       void api.get(`/assignments/${assignment.id}`)
         .then(({ data }) => {
           setSelectedAssignment((prev) => (
-            Number(prev?.id) === Number(assignment.id) ? normalizeAssignment(data) : prev
+            Number(prev?.id) === Number(assignment.id)
+              ? normalizeAssignment({ ...prev, ...data })
+              : prev
           ));
         })
         .catch(() => {});
@@ -1160,19 +1204,14 @@ const TeacherDashboard = () => {
     const assignment = assignmentToDelete;
     if (!assignment) return;
 
-    try {
-      const result = await deleteAssignment(assignment.id);
-      if (result.success) {
-        loadAnalyticsSnapshot();
-        showSuccess(`Задание "${assignment.title}" удалено`);
-      } else {
-        showError(result.error || 'Не удалось удалить задание');
-      }
-    } catch (error) {
-      showError('Ошибка при удалении задания');
-    } finally {
-      setAssignmentToDelete(null);
+    const result = await deleteAssignment(assignment.id);
+    if (result.success) {
+      loadAnalyticsSnapshot();
+      showSuccess(`Задание "${assignment.title}" удалено`);
+    } else {
+      showError(result.error);
     }
+    setAssignmentToDelete(null);
   };
 
   const handleCloseDeleteModal = () => {
@@ -1181,25 +1220,21 @@ const TeacherDashboard = () => {
   };
 
   const handleSaveAssignment = async (assignmentData) => {
-    try {
-      const result = selectedAssignment
-        ? await updateAssignment(selectedAssignment.id, {
-            ...assignmentData,
-            id: selectedAssignment.id
-          })
-        : await createAssignment(assignmentData);
-      if (result.success) {
-        setAssignmentFormDraft(null);
-        closeAssignmentModal();
-        showSuccess(selectedAssignment ? 'Задание обновлено!' : 'Задание успешно создано!');
-        if (analyticsLoaded) {
-          void loadAnalyticsSnapshot();
-        }
-      } else {
-        showError(result.error || (selectedAssignment ? 'Ошибка при обновлении задания' : 'Ошибка при создании задания'));
+    const result = selectedAssignment
+      ? await updateAssignment(selectedAssignment.id, {
+          ...assignmentData,
+          id: selectedAssignment.id
+        })
+      : await createAssignment(assignmentData);
+    if (result.success) {
+      setAssignmentFormDraft(null);
+      closeAssignmentModal();
+      showSuccess(selectedAssignment ? 'Задание обновлено!' : 'Задание успешно создано!');
+      if (analyticsLoaded) {
+        void loadAnalyticsSnapshot();
       }
-    } catch (error) {
-      showError(selectedAssignment ? 'Ошибка при обновлении задания' : 'Ошибка при создании задания');
+    } else {
+      showError(result.error);
     }
   };
 

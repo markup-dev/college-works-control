@@ -20,9 +20,6 @@ class TeacherStudentController extends Controller
     public function index(Request $request)
     {
         $teacher = $request->user();
-        if ($teacher->role !== 'teacher') {
-            abort(403);
-        }
 
         return response()->json($this->teacherStudents->studentsIndexData($teacher));
     }
@@ -30,7 +27,7 @@ class TeacherStudentController extends Controller
     public function show(Request $request, User $user)
     {
         $teacher = $request->user();
-        if ($teacher->role !== 'teacher' || $user->role !== 'student') {
+        if ($user->role !== 'student') {
             abort(404);
         }
 
@@ -46,9 +43,6 @@ class TeacherStudentController extends Controller
     public function groupsOverview(Request $request)
     {
         $teacher = $request->user();
-        if ($teacher->role !== 'teacher') {
-            abort(403);
-        }
 
         return response()->json($this->teacherStudents->groupsOverviewData($teacher));
     }
@@ -56,9 +50,6 @@ class TeacherStudentController extends Controller
     public function groupDetails(Request $request, Group $group)
     {
         $teacher = $request->user();
-        if ($teacher->role !== 'teacher') {
-            abort(403);
-        }
         $allowed = $teacher->attachedTeachingGroupIds()->map(fn ($id) => (int) $id)->all();
         if (! in_array((int) $group->id, $allowed, true)) {
             abort(403, 'Нет доступа к этой группе.');
@@ -77,7 +68,7 @@ class TeacherStudentController extends Controller
     public function studentDetails(Request $request, Group $group, User $user)
     {
         $teacher = $request->user();
-        if ($teacher->role !== 'teacher' || $user->role !== 'student') {
+        if ($user->role !== 'student') {
             abort(404);
         }
         $allowed = $teacher->attachedTeachingGroupIds()->map(fn ($id) => (int) $id)->all();

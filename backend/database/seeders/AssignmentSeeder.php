@@ -7,6 +7,7 @@ use App\Models\Group;
 use App\Models\Subject;
 use App\Models\TeachingLoad;
 use App\Models\User;
+use App\Services\Assignments\AssignmentService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
@@ -70,7 +71,7 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->addDays(2)->toDateString(),
                 'status' => 'active',
                 'submission_type' => 'file',
-                'max_file_size' => 20,
+                'max_file_size' => 50,
                 'group_ids' => [$group029->id],
                 'criteria' => [
                     ['text' => 'ER-модель и связи', 'max_points' => 35],
@@ -104,12 +105,12 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->addDays(1)->toDateString(),
                 'status' => 'active',
                 'submission_type' => 'file',
-                'max_file_size' => 15,
+                'max_file_size' => 50,
                 'group_ids' => [$group029->id],
                 'criteria' => [
                     ['text' => 'Профилирование запросов', 'max_points' => 30],
                     ['text' => 'Обоснование индексов', 'max_points' => 30],
-                    ['text' => 'Итоговый отчет', 'max_points' => 30],
+                    ['text' => 'Итоговый отчет', 'max_points' => 40],
                 ],
                 'formats' => ['.pdf', '.docx'],
             ],
@@ -122,12 +123,12 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->addDays(21)->toDateString(),
                 'status' => 'active',
                 'submission_type' => 'file',
-                'max_file_size' => 10,
+                'max_file_size' => 50,
                 'group_ids' => [$group029->id],
                 'criteria' => [
-                    ['text' => 'Декомпозиция модулей', 'max_points' => 30],
-                    ['text' => 'План миграции', 'max_points' => 25],
-                    ['text' => 'Оценка рисков', 'max_points' => 25],
+                    ['text' => 'Декомпозиция модулей', 'max_points' => 40],
+                    ['text' => 'План миграции', 'max_points' => 30],
+                    ['text' => 'Оценка рисков', 'max_points' => 30],
                 ],
                 'formats' => ['.pdf', '.docx'],
             ],
@@ -139,25 +140,25 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->addDays(24)->toDateString(),
                 'status' => 'active',
                 'submission_type' => 'file',
-                'max_file_size' => 10,
+                'max_file_size' => 50,
                 'group_ids' => [$group0029->id],
                 'criteria' => [
-                    ['text' => 'Покрытие кейсов', 'max_points' => 25],
-                    ['text' => 'Качество ошибок и UX', 'max_points' => 25],
-                    ['text' => 'Чистота кода', 'max_points' => 20],
+                    ['text' => 'Покрытие кейсов', 'max_points' => 35],
+                    ['text' => 'Качество ошибок и UX', 'max_points' => 35],
+                    ['text' => 'Чистота кода', 'max_points' => 30],
                 ],
                 'formats' => ['.pdf', '.zip'],
             ],
-            // Kartseva - ARCHIVED
+            // Kartseva - OVERDUE ACTIVE
             [
                 'title' => 'Нормализация учебной базы данных',
                 'subject_id' => $subjectDb->id,
                 'teacher_id' => $teacherJs->id,
                 'description' => 'Привести схему БД к 3НФ и описать принятые решения.',
                 'deadline' => now()->subDays(10)->toDateString(),
-                'status' => 'archived',
+                'status' => 'active',
                 'submission_type' => 'file',
-                'max_file_size' => 20,
+                'max_file_size' => 50,
                 'group_ids' => [$group029->id, $group0029->id],
                 'criteria' => [
                     ['text' => 'Корректность нормализации', 'max_points' => 40],
@@ -175,7 +176,7 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->addDays(2)->toDateString(),
                 'status' => 'active',
                 'submission_type' => 'file',
-                'max_file_size' => 30,
+                'max_file_size' => 50,
                 'group_ids' => [$group0029->id],
                 'criteria' => [
                     ['text' => 'Backend-логика и архитектура', 'max_points' => 45],
@@ -192,12 +193,12 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->addDays(14)->toDateString(),
                 'status' => 'active',
                 'submission_type' => 'file',
-                'max_file_size' => 20,
+                'max_file_size' => 50,
                 'group_ids' => [$group029->id, $group0029->id],
                 'criteria' => [
                     ['text' => 'Корректность схемы БД', 'max_points' => 35],
                     ['text' => 'Качество сидеров', 'max_points' => 30],
-                    ['text' => 'Идемпотентность', 'max_points' => 30],
+                    ['text' => 'Идемпотентность', 'max_points' => 35],
                 ],
                 'formats' => ['.zip', '.sql', '.pdf'],
             ],
@@ -209,11 +210,11 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->addDays(1)->toDateString(),
                 'status' => 'active',
                 'submission_type' => 'file',
-                'max_file_size' => 20,
+                'max_file_size' => 50,
                 'group_ids' => [$group0029->id],
                 'criteria' => [
-                    ['text' => 'Настройка очередей', 'max_points' => 30],
-                    ['text' => 'Обработка ошибок', 'max_points' => 30],
+                    ['text' => 'Настройка очередей', 'max_points' => 40],
+                    ['text' => 'Обработка ошибок', 'max_points' => 35],
                     ['text' => 'Логи и мониторинг', 'max_points' => 25],
                 ],
                 'formats' => ['.zip', '.pdf'],
@@ -227,12 +228,12 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->addDays(26)->toDateString(),
                 'status' => 'active',
                 'submission_type' => 'file',
-                'max_file_size' => 10,
+                'max_file_size' => 50,
                 'group_ids' => [$group029->id],
                 'criteria' => [
-                    ['text' => 'Выбор паттернов', 'max_points' => 25],
-                    ['text' => 'Качество реализации', 'max_points' => 30],
-                    ['text' => 'Пояснительная записка', 'max_points' => 20],
+                    ['text' => 'Выбор паттернов', 'max_points' => 35],
+                    ['text' => 'Качество реализации', 'max_points' => 40],
+                    ['text' => 'Пояснительная записка', 'max_points' => 25],
                 ],
                 'formats' => ['.pdf', '.zip'],
             ],
@@ -244,12 +245,12 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->addDays(28)->toDateString(),
                 'status' => 'active',
                 'submission_type' => 'file',
-                'max_file_size' => 15,
+                'max_file_size' => 50,
                 'group_ids' => [$group029->id, $group0029->id],
                 'criteria' => [
-                    ['text' => 'Покрытие тестами', 'max_points' => 35],
-                    ['text' => 'Качество сценариев', 'max_points' => 25],
-                    ['text' => 'Читаемость кода', 'max_points' => 20],
+                    ['text' => 'Покрытие тестами', 'max_points' => 40],
+                    ['text' => 'Качество сценариев', 'max_points' => 35],
+                    ['text' => 'Читаемость кода', 'max_points' => 25],
                 ],
                 'formats' => ['.zip', '.pdf'],
             ],
@@ -262,7 +263,7 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->subDays(4)->toDateString(),
                 'status' => 'archived',
                 'submission_type' => 'file',
-                'max_file_size' => 25,
+                'max_file_size' => 50,
                 'group_ids' => [$group029->id, $group0029->id],
                 'criteria' => [
                     ['text' => 'Маршруты и контроллеры', 'max_points' => 40],
@@ -279,11 +280,11 @@ class AssignmentSeeder extends Seeder
                 'deadline' => now()->subDays(15)->toDateString(),
                 'status' => 'archived',
                 'submission_type' => 'file',
-                'max_file_size' => 20,
+                'max_file_size' => 50,
                 'group_ids' => [$group0029->id],
                 'criteria' => [
-                    ['text' => 'Корректность прав доступа', 'max_points' => 35],
-                    ['text' => 'Безопасность токенов', 'max_points' => 30],
+                    ['text' => 'Корректность прав доступа', 'max_points' => 40],
+                    ['text' => 'Безопасность токенов', 'max_points' => 35],
                     ['text' => 'Пояснения и примеры', 'max_points' => 25],
                 ],
                 'formats' => ['.zip', '.pdf'],
@@ -310,7 +311,7 @@ class AssignmentSeeder extends Seeder
             'deadline' => $payload['deadline'],
             'status' => $payload['status'],
             'submission_type' => $payload['submission_type'],
-            'max_file_size' => $payload['max_file_size'] ?? null,
+            'max_file_size' => $payload['max_file_size'] ?? AssignmentService::DEFAULT_MAX_FILE_SIZE_MB,
         ]);
 
         $assignment->forceFill([

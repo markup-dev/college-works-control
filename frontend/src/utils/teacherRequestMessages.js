@@ -20,9 +20,9 @@ export const groupsWithActiveSubjectOnCourse = (groups, subjectId) => {
     return [];
   }
   return (groups || []).filter((group) => {
-    const groupSubjects = group.activeGroupSubjects || group.active_group_subjects || [];
+    const groupSubjects = group.activeGroupSubjects || [];
     return groupSubjects.some((item) => {
-      const itemSubjectId = item.subjectId ?? item.subject_id ?? item.subject?.id;
+      const itemSubjectId = item.subjectId ?? item.subject?.id;
       return String(itemSubjectId) === String(subjectId);
     });
   });
@@ -35,12 +35,12 @@ export const mergeGroupsForSubject = (catalogGroups, teachingLoads, subjectId) =
   });
 
   (teachingLoads || []).forEach((load) => {
-    const loadSubjectId = load.subject?.id ?? load.subjectId ?? load.subject_id;
+    const loadSubjectId = load.subject?.id ?? load.subjectId;
     if (String(loadSubjectId) !== String(subjectId)) {
       return;
     }
     const group = load.group;
-    const groupId = group?.id ?? load.groupId ?? load.group_id;
+    const groupId = group?.id ?? load.groupId;
     if (groupId == null || groupId === '') {
       return;
     }
@@ -49,7 +49,7 @@ export const mergeGroupsForSubject = (catalogGroups, teachingLoads, subjectId) =
       byId.set(key, {
         id: groupId,
         name: group?.name || 'Группа',
-        currentCourse: group?.currentCourse ?? group?.current_course,
+        currentCourse: group?.currentCourse,
       });
     }
   });

@@ -87,7 +87,6 @@ class AssignmentController extends Controller
                 'student_groups.*' => ['string', 'max:50', 'regex:/^[А-ЯЁA-Z0-9-]+$/iu'],
                 'allowed_formats' => ['nullable', 'array', 'max:20'],
                 'allowed_formats.*' => ['string', 'max:30'],
-                'max_file_size' => ['nullable', 'integer', 'min:1', 'max:102400'],
             ],
             [
                 'title.required' => 'Введите название задания.',
@@ -129,6 +128,7 @@ class AssignmentController extends Controller
         $assignment = Assignment::create([
             ...$validated,
             'max_score' => 100,
+            'max_file_size' => AssignmentService::DEFAULT_MAX_FILE_SIZE_MB,
             'submission_type' => $validated['submission_type'] ?? 'file',
             'status' => 'active',
             'teacher_id' => $request->user()->id,
@@ -149,8 +149,6 @@ class AssignmentController extends Controller
             'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subject:id,name',
             'groups:id,name',
-            'criteriaItems:id,assignment_id,position,text,max_points',
-            'allowedFormatItems:id,assignment_id,format',
         ]);
 
         return response()
@@ -210,11 +208,15 @@ class AssignmentController extends Controller
             'submissions as pending_count' => fn ($q) => $q->where('status', 'submitted'),
         ]);
 
-        return response()->json($assignment);
+        return response()->json($this->assignments->mapAssignmentDetailsResponse($assignment));
     }
 
     public function update(Request $request, Assignment $assignment)
     {
+        if ((int) $assignment->teacher_id !== (int) $request->user()->id) {
+            return response()->json(['message' => 'Недостаточно прав для изменения задания.'], 403);
+        }
+
         if ($assignment->isNaturallyClosed()) {
             throw ValidationException::withMessages([
                 'status' => 'Задание закрыто автоматически: все работы сданы и проверены. Редактирование запрещено.',
@@ -236,7 +238,6 @@ class AssignmentController extends Controller
                 'student_groups.*' => ['string', 'max:50', 'regex:/^[А-ЯЁA-Z0-9-]+$/iu'],
                 'allowed_formats' => ['nullable', 'array', 'max:20'],
                 'allowed_formats.*' => ['string', 'max:30'],
-                'max_file_size' => ['nullable', 'integer', 'min:1', 'max:102400'],
             ],
             [
                 'title.required' => 'Введите название задания.',
@@ -297,6 +298,7 @@ class AssignmentController extends Controller
 
         unset($validated['student_groups'], $validated['criteria'], $validated['allowed_formats'], $validated['max_score']);
         $validated['max_score'] = 100;
+        $validated['max_file_size'] = AssignmentService::DEFAULT_MAX_FILE_SIZE_MB;
         $assignment->update($validated);
         if (is_array($newGroupIds)) {
             $assignment->groups()->sync($newGroupIds);
@@ -323,13 +325,6 @@ class AssignmentController extends Controller
             'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subject:id,name',
             'groups:id,name',
-            'criteriaItems:id,assignment_id,position,text,max_points',
-            'allowedFormatItems:id,assignment_id,format',
-            'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
-        ]);
-        $assignment->loadCount([
-            'submissions',
-            'submissions as pending_count' => fn ($q) => $q->where('status', 'submitted'),
         ]);
 
         return response()->json([
@@ -339,8 +334,12 @@ class AssignmentController extends Controller
         ]);
     }
 
-    public function destroy(Assignment $assignment)
+    public function destroy(Request $request, Assignment $assignment)
     {
+        if ((int) $assignment->teacher_id !== (int) $request->user()->id) {
+            return response()->json(['message' => 'Недостаточно прав для удаления задания.'], 403);
+        }
+
         if ($assignment->isNaturallyClosed()) {
             throw ValidationException::withMessages([
                 'status' => 'Задание закрыто автоматически: все работы сданы и проверены. Удаление запрещено.',

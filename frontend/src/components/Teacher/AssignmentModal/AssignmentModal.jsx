@@ -45,10 +45,35 @@ const normalizeMaterialFiles = (materials = []) => {
   return materials
     .map((material) => ({
       id: material?.id,
-      fileName: material?.fileName || material?.file_name || '',
-      fileSize: material?.fileSize || material?.file_size || '',
+      fileName: material?.fileName || '',
+      fileSize: material?.fileSize || '',
     }))
     .filter((material) => material.id && material.fileName);
+};
+
+const resolveExistingMaterials = (assignment = {}) => (
+  assignment.materialFiles
+  || assignment.materialItems
+  || []
+);
+
+const resolveAssignmentCriteria = (assignment = {}) => (
+  assignment.criteria
+  || assignment.criteriaItems
+  || []
+);
+
+const getAssignmentAllowedFormats = (assignment = {}) => {
+  const directFormats = assignment.allowedFormats || [];
+  const relationItems = assignment.allowedFormatItems || [];
+  const relationFormats = Array.isArray(relationItems)
+    ? relationItems.map((item) => item?.format)
+    : [];
+
+  return normalizeAllowedFormats([
+    ...(Array.isArray(directFormats) ? directFormats : []),
+    ...relationFormats,
+  ]);
 };
 
 const normalizeSubjectOptions = (subjects = []) => {
@@ -72,10 +97,10 @@ const normalizeTeachingLoadPairs = (pairs = []) => {
 
   return pairs
     .map((pair) => {
-      const subjectId = Number(pair?.subjectId ?? pair?.subject_id);
-      const subjectName = String(pair?.subjectName ?? pair?.subject_name ?? '').trim();
-      const groupId = Number(pair?.groupId ?? pair?.group_id);
-      const groupName = normalizeGroupSelection(pair?.groupName ?? pair?.group_name)[0] || '';
+      const subjectId = Number(pair?.subjectId);
+      const subjectName = String(pair?.subjectName ?? '').trim();
+      const groupId = Number(pair?.groupId);
+      const groupName = normalizeGroupSelection(pair?.groupName)[0] || '';
 
       if (!Number.isFinite(subjectId) || subjectId <= 0 || !Number.isFinite(groupId) || groupId <= 0 || !subjectName || !groupName) {
         return null;
@@ -228,7 +253,7 @@ const AssignmentModal = ({
     }
 
     if (assignment) {
-      const criteria = normalizeCriteriaForForm(assignment.criteria);
+      const criteria = normalizeCriteriaForForm(resolveAssignmentCriteria(assignment));
 
       const base = {
         ...buildEmptyFormData(),
@@ -245,9 +270,9 @@ const AssignmentModal = ({
         maxScore: assignment.maxScore || 100,
         submissionType: assignment.submissionType || 'file',
         criteria,
-        allowedFormats: normalizeAllowedFormats(assignment.allowedFormats || assignment.allowedFormatItems?.map((item) => item?.format) || []),
+        allowedFormats: getAssignmentAllowedFormats(assignment),
         materialFiles: [],
-        existingMaterials: normalizeMaterialFiles(assignment.materialFiles || assignment.materialItems || []),
+        existingMaterials: normalizeMaterialFiles(resolveExistingMaterials(assignment)),
         removedMaterialIds: [],
       };
 
