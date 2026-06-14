@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import Modal from '../../UI/Modal/Modal';
 import Button from '../../UI/Button/Button';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
@@ -8,6 +8,7 @@ import {
   getDaysUntilDeadline,
   getAllowedFormatsFromAssignment,
   resolveAssignmentSubjectName,
+  shouldShowStudentRetakeBadge,
 } from '../../../utils';
 import './AssignmentDetailsModal.scss';
 
@@ -41,6 +42,21 @@ const AssignmentDetailsModal = ({
   onAddToBank = null,
   assignmentAlreadyInBank = false,
 }) => {
+  const [downloadingMaterialId, setDownloadingMaterialId] = useState(null);
+
+  const handleMaterialDownload = useCallback(async (file) => {
+    if (!assignment || typeof onDownloadMaterial !== 'function' || downloadingMaterialId != null) {
+      return;
+    }
+
+    setDownloadingMaterialId(file.id);
+    try {
+      await onDownloadMaterial(assignment, file);
+    } finally {
+      setDownloadingMaterialId(null);
+    }
+  }, [assignment, downloadingMaterialId, onDownloadMaterial]);
+
   if (!assignment) {
     return null;
   }
@@ -61,7 +77,7 @@ const AssignmentDetailsModal = ({
   const materialFiles = resolveMaterialFiles(assignment);
   const canSubmitRetake = assignment?.canSubmitRetake ?? (assignment?.status === 'returned');
   const retakeUsed = Boolean(assignment?.retakeUsed);
-  const isRetakeAssignment = assignment?.status === 'returned' || canSubmitRetake || retakeUsed;
+  const showRetakeBadge = shouldShowStudentRetakeBadge(assignment);
   const isOverdue = typeof daysUntilDeadline === 'number'
     && daysUntilDeadline < 0
     && assignment?.status === 'not_submitted';
@@ -99,9 +115,9 @@ const AssignmentDetailsModal = ({
             <StatusBadge tone={statusInfo.variant}>
               {statusInfo.label}
             </StatusBadge>
-            {mode === 'student' && isRetakeAssignment && (
-              <StatusBadge tone={retakeUsed ? 'neutral' : 'retake'}>
-                {retakeUsed ? 'Пересдача использована' : 'Пересдача'}
+            {mode === 'student' && showRetakeBadge && (
+              <StatusBadge tone="retake">
+                Пересдача
               </StatusBadge>
             )}
           </div>
@@ -167,18 +183,32 @@ const AssignmentDetailsModal = ({
           <section className="assignment-details-modal__section">
             <h4>Материалы от преподавателя</h4>
             <div className="assignment-details-modal__materials">
-              {materialFiles.map((file) => (
+              {materialFiles.map((file) => {
+                const isDownloading = downloadingMaterialId === file.id;
+
+                return (
                 <button
                   type="button"
                   key={file.id}
-                  className="assignment-details-modal__material"
-                  disabled={typeof onDownloadMaterial !== 'function'}
-                  onClick={() => onDownloadMaterial && onDownloadMaterial(assignment, file)}
+                  className={`assignment-details-modal__material${isDownloading ? ' assignment-details-modal__material--loading' : ''}`}
+                  disabled={typeof onDownloadMaterial !== 'function' || downloadingMaterialId != null}
+                  aria-busy={isDownloading}
+                  aria-label={isDownloading ? `Загрузка ${file.fileName}` : file.fileName}
+                  title={isDownloading ? undefined : file.fileName}
+                  onClick={() => handleMaterialDownload(file)}
                 >
-                  <span className="material-name">{file.fileName}</span>
-                  {file.fileSize && <span className="material-size">{file.fileSize}</span>}
+                  <span className="material-name">
+                    {file.fileName}
+                    {isDownloading && (
+                      <span className="material-status"> — Загрузка…</span>
+                    )}
+                  </span>
+                  {file.fileSize && !isDownloading && (
+                    <span className="material-size">{file.fileSize}</span>
+                  )}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}

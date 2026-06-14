@@ -15,6 +15,8 @@ import ModalDangerZone from '../../UI/Modal/ModalDangerZone';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
 import Pagination from '../../UI/Pagination/Pagination';
+import SearchableSelect from '../../UI/SearchableSelect/SearchableSelect';
+import { toGroupSelectOptions, toSubjectSelectOptions, toTeacherSelectOptions } from '../../../utils/selectOptions';
 import TeacherRequestModeration from '../TeacherRequestModeration/TeacherRequestModeration';
 import { ADMIN_CARD_GRID_PAGE_SIZE } from '../../../config/adminPagination';
 import usePaginationClamp from '../../../hooks/usePaginationClamp';
@@ -268,6 +270,21 @@ const AdminTeachingAssignmentsManagement = () => {
     setSearchParams({}, { replace: true });
   }, [setSearchParams]);
 
+  const teacherFilterOptions = useMemo(
+    () => toTeacherSelectOptions(teachers, { labelFn: teacherShort }),
+    [teachers],
+  );
+
+  const subjectFilterOptions = useMemo(
+    () => toSubjectSelectOptions(subjects),
+    [subjects],
+  );
+
+  const groupFilterOptions = useMemo(
+    () => toGroupSelectOptions(groups),
+    [groups],
+  );
+
   const resetDisabled = useMemo(
     () => !search.trim() && !teacherId && !subjectId && !groupId,
     [search, teacherId, subjectId, groupId],
@@ -354,13 +371,33 @@ const AdminTeachingAssignmentsManagement = () => {
   }, [createEligibleSubjects, createSubjectSearch]);
 
   const groupsForCreate = useMemo(() => {
-    let list = createEligibleGroups.filter((g) => !createExistingGroupIds.has(Number(g.id)));
+    let list = createEligibleGroups;
     const q = createGroupSearch.trim().toLowerCase();
     if (q) {
       list = list.filter((g) => `${g.name || ''} ${g.specialty || ''}`.toLowerCase().includes(q));
     }
     return list;
-  }, [createEligibleGroups, createGroupSearch, createExistingGroupIds]);
+  }, [createEligibleGroups, createGroupSearch]);
+
+  const createSubjectValid = useMemo(
+    () => Boolean(createSubject) && createEligibleSubjects.some((s) => String(s.id) === String(createSubject)),
+    [createSubject, createEligibleSubjects],
+  );
+
+  const createNewGroupIds = useMemo(
+    () => Array.from(createSelectedGroups).filter((id) => !createExistingGroupIds.has(Number(id))),
+    [createSelectedGroups, createExistingGroupIds],
+  );
+
+  const createCanSubmit = useMemo(
+    () => Boolean(createTeacher) && createSubjectValid && createNewGroupIds.length > 0,
+    [createTeacher, createSubjectValid, createNewGroupIds],
+  );
+
+  const editCanSubmit = useMemo(
+    () => editSelected.size > 0,
+    [editSelected],
+  );
 
   useEffect(() => {
     if (!createOpen || !createTeacher) {
@@ -442,7 +479,6 @@ const AdminTeachingAssignmentsManagement = () => {
         const list = Array.isArray(data?.data) ? data.data : [];
         const existing = new Set(list.map((x) => Number(x.groupId ?? x.group_id)));
         setCreateExistingGroupIds(existing);
-        setCreateSelectedGroups((prev) => new Set([...prev].filter((id) => !existing.has(Number(id)))));
       } catch {
         if (!cancelled) setCreateExistingGroupIds(new Set());
       }
@@ -728,55 +764,40 @@ const AdminTeachingAssignmentsManagement = () => {
           <label className="filter-popover__label" htmlFor="ta-filter-teacher">
             Преподаватель
           </label>
-          <select
-            id="ta-filter-teacher"
-            className="filter-select"
+          <SearchableSelect
             value={teacherId}
-            onChange={(e) => applyListFilter('teacher_id', e.target.value)}
-          >
-            <option value="">Все преподаватели</option>
-            {teachers.map((t) => (
-              <option key={t.id} value={String(t.id)}>
-                {teacherShort(t)}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => applyListFilter('teacher_id', value)}
+            options={teacherFilterOptions}
+            placeholder="Все преподаватели"
+            searchPlaceholder="Найти преподавателя…"
+            ariaLabel="Фильтр по преподавателю"
+          />
         </div>
         <div className="filter-popover__field">
           <label className="filter-popover__label" htmlFor="ta-filter-subject">
             Дисциплина
           </label>
-          <select
-            id="ta-filter-subject"
-            className="filter-select"
+          <SearchableSelect
             value={subjectId}
-            onChange={(e) => applyListFilter('subject_id', e.target.value)}
-          >
-            <option value="">Все дисциплины</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={String(s.id)}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => applyListFilter('subject_id', value)}
+            options={subjectFilterOptions}
+            placeholder="Все дисциплины"
+            searchPlaceholder="Найти дисциплину…"
+            ariaLabel="Фильтр по дисциплине"
+          />
         </div>
         <div className="filter-popover__field">
           <label className="filter-popover__label" htmlFor="ta-filter-group">
             Группа
           </label>
-          <select
-            id="ta-filter-group"
-            className="filter-select"
+          <SearchableSelect
             value={groupId}
-            onChange={(e) => applyListFilter('group_id', e.target.value)}
-          >
-            <option value="">Все группы</option>
-            {groups.map((g) => (
-              <option key={g.id} value={String(g.id)}>
-                {g.name}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => applyListFilter('group_id', value)}
+            options={groupFilterOptions}
+            placeholder="Все группы"
+            searchPlaceholder="Найти группу…"
+            ariaLabel="Фильтр по группе"
+          />
         </div>
       </DashboardFilterToolbar>
 
@@ -905,13 +926,21 @@ const AdminTeachingAssignmentsManagement = () => {
                 type="button"
                 variant="primary"
                 onClick={() => setCreateStep((s) => s + 1)}
-                disabled={(createStep === 1 && !createTeacher) || (createStep === 2 && !createSubject)}
+                disabled={
+                  (createStep === 1 && !createTeacher)
+                  || (createStep === 2 && !createSubjectValid)
+                }
               >
                 Далее
               </Button>
             ) : (
-              <Button type="button" variant="primary" onClick={() => void submitCreate()} disabled={createSubmitting || createSelectedGroups.size === 0}>
-                Создать {createSelectedGroups.size ? `${createSelectedGroups.size} ` : ''}
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => void submitCreate()}
+                disabled={createSubmitting || !createCanSubmit}
+              >
+                Создать {createNewGroupIds.length ? `${createNewGroupIds.length} ` : ''}
                 назначений
               </Button>
             )}
@@ -1017,7 +1046,7 @@ const AdminTeachingAssignmentsManagement = () => {
                 ) : groupsForCreate.length === 0 ? (
                   <p className="admin-ta-wizard__empty">
                     {createEligibleGroups.length > 0
-                      ? 'Все подходящие группы уже назначены этому преподавателю.'
+                      ? 'По текущему поиску групп не найдено.'
                       : 'Нет активных групп с этой дисциплиной на текущем курсе.'}
                   </p>
                 ) : (
@@ -1025,12 +1054,14 @@ const AdminTeachingAssignmentsManagement = () => {
                     {groupsForCreate.map((g) => {
                       const st = g.studentsCount ?? g.students_count;
                       const labelSt = st != null ? ` (${st} студ.)` : '';
+                      const alreadyAssigned = createExistingGroupIds.has(Number(g.id));
                       return (
                         <li key={g.id}>
                           <label>
                             <input
                               type="checkbox"
                               checked={createSelectedGroups.has(Number(g.id))}
+                              disabled={alreadyAssigned}
                               onChange={(e) => {
                                 const n = new Set(createSelectedGroups);
                                 if (e.target.checked) n.add(Number(g.id));
@@ -1041,6 +1072,7 @@ const AdminTeachingAssignmentsManagement = () => {
                             {g.name}
                             {labelSt}
                             {g.specialty ? <small>{g.specialty}</small> : null}
+                            {alreadyAssigned ? <small>Уже назначена этому преподавателю</small> : null}
                           </label>
                         </li>
                       );
@@ -1048,7 +1080,7 @@ const AdminTeachingAssignmentsManagement = () => {
                   </ul>
                 )}
                 <p className="admin-ta-wizard__hint">
-                  Выбрано групп: {createSelectedGroups.size}. Уже существующие назначения отмечаются сразу и не отправляются повторно.
+                  К созданию: {createNewGroupIds.length}. Уже существующие назначения отмечаются сразу и не отправляются повторно.
                 </p>
               </div>
             )}
@@ -1191,7 +1223,12 @@ const AdminTeachingAssignmentsManagement = () => {
         onClose={() => !editSubmitting && setEditPair(null)}
         footer={editPair ? (
           <>
-            <Button type="button" variant="primary" onClick={() => void submitEditGroups()} disabled={editSubmitting}>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void submitEditGroups()}
+              disabled={editSubmitting || !editCanSubmit}
+            >
               Сохранить
             </Button>
           </>

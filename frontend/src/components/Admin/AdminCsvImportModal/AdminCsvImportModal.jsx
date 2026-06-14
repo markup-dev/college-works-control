@@ -118,7 +118,7 @@ const AdminCsvImportModal = ({ isOpen, onClose, config, onImported }) => {
       footer={(
         <div className="admin-csv-import-modal__actions">
           {step === 'pick' && (
-            <Button type="button" variant="primary" loading={previewLoading} onClick={() => void runPreview()}>
+            <Button type="button" variant="primary" loading={previewLoading} disabled={!file || previewLoading} onClick={() => void runPreview()}>
               Проверить файл
             </Button>
           )}

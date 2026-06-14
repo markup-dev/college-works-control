@@ -18,6 +18,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['conversation_id', 'created_at']);
+            $table->index(['conversation_id', 'sender_id', 'read_at'], 'messages_conversation_sender_read_idx');
         });
     }
 

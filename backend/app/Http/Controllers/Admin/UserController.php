@@ -41,6 +41,7 @@ class UserController extends Controller
             'account_status' => ['nullable', 'in:active,must_change_password,blocked'],
             'without_group' => ['nullable', 'boolean'],
             'group_id' => ['nullable', 'integer', 'exists:groups,id'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
             'sort' => ['nullable', 'in:newest,oldest,name_asc,name_desc,last_login_desc,last_login_asc'],
             'page' => ['nullable', 'integer', 'min:1'],
@@ -70,13 +71,21 @@ class UserController extends Controller
 
         if (!empty($validated['search'])) {
             $term = trim((string) $validated['search']);
-            $query->where(function ($builder) use ($term) {
+            $tokens = preg_split('/\s+/u', $term, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $query->where(function ($builder) use ($term, $tokens) {
                 $builder
                     ->where('login', 'like', "%{$term}%")
                     ->orWhere('email', 'like', "%{$term}%")
-                    ->orWhere('last_name', 'like', "%{$term}%")
-                    ->orWhere('first_name', 'like', "%{$term}%")
-                    ->orWhere('middle_name', 'like', "%{$term}%");
+                    ->orWhere(function ($nameQuery) use ($tokens) {
+                        foreach ($tokens as $token) {
+                            $nameQuery->where(function ($tokenQuery) use ($token) {
+                                $tokenQuery
+                                    ->where('last_name', 'like', "%{$token}%")
+                                    ->orWhere('first_name', 'like', "%{$token}%")
+                                    ->orWhere('middle_name', 'like', "%{$token}%");
+                            });
+                        }
+                    });
             });
         }
 
@@ -99,6 +108,10 @@ class UserController extends Controller
             $query->whereNull('group_id');
         } elseif (!empty($validated['group_id'])) {
             $query->where('group_id', (int) $validated['group_id']);
+        }
+
+        if (!empty($validated['user_id'])) {
+            $query->where('id', (int) $validated['user_id']);
         }
 
         if (!empty($validated['subject_id'])) {

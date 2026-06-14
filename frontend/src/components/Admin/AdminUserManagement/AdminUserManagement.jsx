@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
@@ -24,6 +24,8 @@ import AdminUserPasswordResetModal from '../AdminUserPasswordResetModal/AdminUse
 import AdminUserViewModal from '../AdminUserViewModal/AdminUserViewModal';
 import AdminUserWarningsModal from '../AdminUserWarningsModal/AdminUserWarningsModal';
 import AdminUsersImportModal from '../AdminUsersImportModal/AdminUsersImportModal';
+import SearchableSelect from '../../UI/SearchableSelect/SearchableSelect';
+import { toGroupSelectOptions } from '../../../utils/selectOptions';
 import './AdminUserManagement.scss';
 
 
@@ -69,6 +71,7 @@ const getFiltersFromSearchParams = (params) => {
     role: ROLE_VALUES.has(roleParam) ? roleParam : '',
     accountStatus: ACCOUNT_STATUS_VALUES.has(accountStatusParam) ? accountStatusParam : '',
     groupId: withoutGroup ? 'none' : parsePositiveId(params.get('group_id')),
+    userId: parsePositiveId(params.get('user_id')),
     sort: SORT_VALUES.has(sortParam) ? sortParam : 'newest',
   };
 };
@@ -133,7 +136,7 @@ const AdminUserManagement = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlFilters = useMemo(() => getFiltersFromSearchParams(searchParams), [searchParams]);
-  const { role, accountStatus, groupId, sort } = urlFilters;
+  const { role, accountStatus, groupId, userId, sort } = urlFilters;
   const [search, setSearch] = useState(() => getFiltersFromSearchParams(searchParams).search);
   const debouncedSearch = useDebouncedValue(search, 300);
   const [page, setPage] = useState(1);
@@ -159,12 +162,41 @@ const AdminUserManagement = () => {
   const [warningsLoading, setWarningsLoading] = useState(false);
 
   const currentUserId = authUser?.id != null ? Number(authUser.id) : null;
-  const pendingViewUserIdRef = useRef(null);
+
+  const clearViewUserParam = useCallback(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('user_id');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const openUserView = useCallback((row) => {
+    if (!row?.id) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('user_id', String(row.id));
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   useEffect(() => {
     setSearch(urlFilters.search);
     setPage(1);
   }, [urlFilters.search, searchParams]);
+
+  const handleSearchChange = useCallback((value) => {
+    setSearch(value);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      const trimmed = value.trim();
+      if (trimmed) next.set('search', trimmed);
+      else next.delete('search');
+      next.delete('user_id');
+      return next;
+    }, { replace: true });
+    setPage(1);
+  }, [setSearchParams]);
 
   const applyUserFilter = useCallback((patch) => {
     setSearchParams((prev) => {
@@ -176,10 +208,12 @@ const AdminUserManagement = () => {
           next.delete('group_id');
           next.delete('without_group');
         }
+        next.delete('user_id');
       }
       if ('groupId' in patch) {
         next.delete('without_group');
         next.delete('group_id');
+        next.delete('user_id');
         if (patch.groupId === 'none') next.set('without_group', '1');
         else if (patch.groupId) next.set('group_id', patch.groupId);
       }
@@ -208,30 +242,26 @@ const AdminUserManagement = () => {
       setImportOpen(true);
       consumed = true;
     }
-    let nextSearch = location.search || '';
     if (st.filterGroupId != null && st.filterGroupId !== '') {
       const nextParams = new URLSearchParams(searchParams);
       nextParams.set('role', 'student');
       nextParams.set('group_id', String(st.filterGroupId));
-      nextSearch = `?${nextParams.toString()}`;
-      consumed = true;
+      nextParams.delete('user_id');
+      navigate(`${location.pathname}?${nextParams.toString()}`, { replace: true, state: {} });
+      return;
     }
-    if (st.viewUserId != null && st.viewUserId !== '') {
-      pendingViewUserIdRef.current = Number(st.viewUserId);
-      consumed = true;
-    }
-    if (consumed) navigate(`${location.pathname}${nextSearch}`, { replace: true, state: {} });
+    if (consumed) navigate(`${location.pathname}${location.search || ''}`, { replace: true, state: {} });
   }, [location.state, location.pathname, location.search, navigate, searchParams]);
 
   useEffect(() => {
-    const pendingId = pendingViewUserIdRef.current;
-    if (!pendingId || loading) return;
-    const row = users.find((user) => Number(user.id) === pendingId);
-    if (row) {
-      setViewUserRow(row);
-      pendingViewUserIdRef.current = null;
+    if (!userId) {
+      setViewUserRow(null);
+      return;
     }
-  }, [users, loading]);
+    if (loading) return;
+    const row = users.find((user) => Number(user.id) === Number(userId));
+    setViewUserRow(row || null);
+  }, [userId, users, loading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -254,7 +284,7 @@ const AdminUserManagement = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, role, accountStatus, groupId, sort]);
+  }, [debouncedSearch, role, accountStatus, groupId, userId, sort]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -274,6 +304,9 @@ const AdminUserManagement = () => {
       } else if (groupId) {
         params.group_id = Number(groupId);
       }
+      if (userId) {
+        params.user_id = Number(userId);
+      }
 
       const { data } = await api.get('/admin/users', { params });
       setUsers(Array.isArray(data?.data) ? data.data : []);
@@ -285,7 +318,7 @@ const AdminUserManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, role, accountStatus, groupId, sort]);
+  }, [page, debouncedSearch, role, accountStatus, groupId, userId, sort]);
 
   usePaginationClamp(page, meta.lastPage, setPage);
 
@@ -329,6 +362,14 @@ const AdminUserManagement = () => {
     setSearchParams({}, { replace: true });
   }, [setSearchParams]);
 
+  const groupFilterOptions = useMemo(() => {
+    const options = toGroupSelectOptions(groups);
+    if (role === 'student') {
+      return [{ value: 'none', label: 'Без группы', searchText: 'без группы' }, ...options];
+    }
+    return options;
+  }, [groups, role]);
+
   const resetDisabled = useMemo(
     () =>
       !search.trim() &&
@@ -342,8 +383,8 @@ const AdminUserManagement = () => {
   const handleViewModalEdit = useCallback(() => {
     if (!viewUserRow) return;
     setEditUserRow(viewUserRow);
-    setViewUserRow(null);
-  }, [viewUserRow]);
+    clearViewUserParam();
+  }, [viewUserRow, clearViewUserParam]);
 
   const handleViewModalReset = useCallback(() => {
     if (!viewUserRow) return;
@@ -439,7 +480,7 @@ const AdminUserManagement = () => {
       <DashboardFilterToolbar
         className="admin-user-management__filter-toolbar"
         searchValue={search}
-        onSearchChange={setSearch}
+        onSearchChange={handleSearchChange}
         searchPlaceholder="Поиск по ФИО, логину, email…"
         popoverAlign="end"
         popoverAriaLabel="Фильтры списка пользователей"
@@ -468,20 +509,14 @@ const AdminUserManagement = () => {
             <label className="filter-popover__label" htmlFor="admin-users-group">
               Группа
             </label>
-            <select
-              id="admin-users-group"
-              className="filter-select"
+            <SearchableSelect
               value={groupId}
-              onChange={(e) => applyUserFilter({ groupId: e.target.value })}
-            >
-              <option value="">Все группы</option>
-              {role === 'student' && <option value="none">Без группы</option>}
-              {groups.map((g) => (
-                <option key={g.id} value={String(g.id)}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => applyUserFilter({ groupId: value })}
+              options={groupFilterOptions}
+              placeholder="Все группы"
+              searchPlaceholder="Найти группу…"
+              ariaLabel="Фильтр по группе"
+            />
           </div>
         )}
         <div className="filter-popover__field">
@@ -559,7 +594,7 @@ const AdminUserManagement = () => {
                     className="admin-user-card__open-profile-hit"
                     tabIndex={-1}
                     aria-label={`Открыть профиль: ${[row.lastName, row.firstName].filter(Boolean).join(' ')}`}
-                    onClick={() => setViewUserRow(row)}
+                    onClick={() => openUserView(row)}
                   />
                   <div className="admin-user-card__body">
                     <div className="admin-user-card__top">
@@ -669,7 +704,10 @@ const AdminUserManagement = () => {
 
       <AdminUserViewModal
         isOpen={viewUserRow != null}
-        onClose={() => setViewUserRow(null)}
+        onClose={() => {
+          setViewUserRow(null);
+          clearViewUserParam();
+        }}
         user={viewUserRow}
         currentUserId={currentUserId}
         onEdit={handleViewModalEdit}

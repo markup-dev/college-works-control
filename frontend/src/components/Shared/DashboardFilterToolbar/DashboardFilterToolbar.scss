@@ -282,18 +282,23 @@ select.teacher-submissions-select {
   min-width: 0;
   min-height: 42px;
   padding: 0.68rem 0.9rem;
+  padding-right: 2.35rem;
   border: 1px solid #dbe3ee;
   border-left: 3px solid #3b82f6;
   border-radius: 10px;
   font-size: 0.92rem;
   line-height: 1.35;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  background: #ffffff;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%230f172a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 16px 16px;
   color: #0f172a;
   font: inherit;
   box-sizing: border-box;
   cursor: pointer;
-  appearance: auto;
+  appearance: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -319,5 +324,43 @@ select.teacher-submissions-select {
   option {
     padding: 0.5rem;
     font-size: 0.9rem;
+  }
+}
+
+.filter-popover__field {
+  .searchable-select {
+    width: 100%;
+
+    .searchable-select__trigger {
+      min-height: 42px;
+      padding: 0.68rem 0.9rem;
+      padding-right: 2.35rem;
+      border: 1px solid #dbe3ee;
+      border-left: 3px solid #3b82f6;
+      border-radius: 10px;
+      font-size: 0.92rem;
+      line-height: 1.35;
+      background-color: #ffffff;
+      color: #0f172a;
+      box-shadow: none;
+
+      &:hover:not(:disabled) {
+        border-color: #c8d4e5;
+        border-left-color: #3b82f6;
+      }
+    }
+
+    &.searchable-select--open .searchable-select__trigger,
+    .searchable-select__trigger:focus,
+    .searchable-select__trigger:focus-visible {
+      outline: none;
+      border-color: #93b0da;
+      border-left-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(44, 90, 160, 0.09);
+    }
+
+    &.searchable-select--selected .searchable-select__trigger-text {
+      font-weight: 400;
+    }
   }
 }

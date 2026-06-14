@@ -17,6 +17,28 @@ use Illuminate\Validation\ValidationException;
 class AssignmentTemplateService
 {
     /** @return array<string, mixed> */
+    public function serializeTemplateSummary(AssignmentTemplate $t): array
+    {
+        return [
+            'id' => $t->id,
+            'teacher_id' => $t->teacher_id,
+            'source_assignment_id' => $t->source_assignment_id,
+            'title' => $t->title,
+            'subject_id' => $t->subject_id,
+            'description' => $t->description,
+            'submission_type' => $t->submission_type,
+            'max_file_size' => $t->max_file_size,
+            'created_at' => $t->created_at?->toIso8601String(),
+            'updated_at' => $t->updated_at?->toIso8601String(),
+            'subject' => $t->relationLoaded('subject') && $t->subject
+                ? ['id' => $t->subject->id, 'name' => $t->subject->name]
+                : null,
+            'criteria_count' => (int) ($t->criteria_items_count ?? 0),
+            'material_files_count' => (int) ($t->material_items_count ?? 0),
+        ];
+    }
+
+    /** @return array<string, mixed> */
     public function serializeTemplate(AssignmentTemplate $t): array
     {
         return [
@@ -66,14 +88,28 @@ class AssignmentTemplateService
         if (empty($m->file_path) || ! Storage::disk('public')->exists($m->file_path)) {
             return;
         }
-        $storedPath = 'assignment-materials/' . uniqid('tmpl_', true) . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($m->file_path));
-        Storage::disk('public')->copy($m->file_path, $storedPath);
+
         $a->materialItems()->create([
             'file_name' => $m->file_name,
-            'file_path' => $storedPath,
+            'file_path' => $m->file_path,
             'file_size' => $m->file_size,
             'file_type' => $m->file_type,
         ]);
+    }
+
+    /** Удалить файл из storage, если на него больше нет ссылок в заданиях и заготовках. */
+    public function deletePublicFileIfUnreferenced(string $filePath): void
+    {
+        if ($filePath === '' || ! Storage::disk('public')->exists($filePath)) {
+            return;
+        }
+
+        $usedByAssignment = AssignmentMaterial::query()->where('file_path', $filePath)->exists();
+        $usedByTemplate = AssignmentTemplateMaterial::query()->where('file_path', $filePath)->exists();
+
+        if (! $usedByAssignment && ! $usedByTemplate) {
+            Storage::disk('public')->delete($filePath);
+        }
     }
 
     public function syncTemplateCriteria(AssignmentTemplate $template, array $criteria): void
@@ -177,7 +213,12 @@ class AssignmentTemplateService
                 $t->allowedFormatItems()->create(['format' => $f->format]);
             }
             foreach ($assignment->materialItems as $m) {
-                $this->copyAssignmentMaterialToTemplate($m, $t);
+                $t->materialItems()->create([
+                    'file_name' => $m->file_name,
+                    'file_path' => $m->file_path,
+                    'file_size' => $m->file_size,
+                    'file_type' => $m->file_type,
+                ]);
             }
 
             return $t->fresh([
@@ -213,21 +254,40 @@ class AssignmentTemplateService
             ]);
             $a->groups()->sync($groupIds);
 
-            foreach ($assignmentTemplate->criteriaItems as $c) {
-                $a->criteriaItems()->create([
+            $criteriaRows = $assignmentTemplate->criteriaItems
+                ->map(fn ($c) => [
                     'position' => $c->position,
                     'text' => $c->text,
                     'max_points' => $c->max_points,
-                ]);
-            }
-            foreach ($assignmentTemplate->allowedFormatItems as $f) {
-                $a->allowedFormatItems()->create(['format' => $f->format]);
-            }
-            foreach ($assignmentTemplate->materialItems as $m) {
-                $this->copyTemplateMaterialToAssignment($m, $a);
+                ])
+                ->values()
+                ->all();
+            if ($criteriaRows !== []) {
+                $a->criteriaItems()->createMany($criteriaRows);
             }
 
-            return $a->fresh([
+            $formatRows = $assignmentTemplate->allowedFormatItems
+                ->map(fn ($f) => ['format' => $f->format])
+                ->values()
+                ->all();
+            if ($formatRows !== []) {
+                $a->allowedFormatItems()->createMany($formatRows);
+            }
+
+            $materialRows = $assignmentTemplate->materialItems
+                ->map(fn ($m) => [
+                    'file_name' => $m->file_name,
+                    'file_path' => $m->file_path,
+                    'file_size' => $m->file_size,
+                    'file_type' => $m->file_type,
+                ])
+                ->values()
+                ->all();
+            if ($materialRows !== []) {
+                $a->materialItems()->createMany($materialRows);
+            }
+
+            return $a->load([
                 'teacher:id,login,last_name,first_name,middle_name,grade_scale',
                 'subject:id,name',
                 'groups:id,name',
@@ -242,8 +302,10 @@ class AssignmentTemplateService
     {
         $assignmentTemplate->loadMissing('materialItems');
         foreach ($assignmentTemplate->materialItems as $material) {
-            if (! empty($material->file_path) && Storage::disk('public')->exists($material->file_path)) {
-                Storage::disk('public')->delete($material->file_path);
+            $path = (string) ($material->file_path ?? '');
+            $material->delete();
+            if ($path !== '') {
+                $this->deletePublicFileIfUnreferenced($path);
             }
         }
         $assignmentTemplate->delete();

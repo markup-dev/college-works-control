@@ -9,6 +9,7 @@ use App\Models\Submission;
 use App\Models\Subject;
 use App\Models\TeacherSubject;
 use App\Models\TeachingLoad;
+use App\Models\User;
 use App\Services\Admin\AdminCsvImportService;
 use App\Services\AdminActionNotificationService;
 use Illuminate\Http\Request;
@@ -70,7 +71,7 @@ class SubjectController extends Controller
 
         $ids = $subjects->getCollection()->pluck('id');
         if ($ids->isNotEmpty()) {
-            $teacherCounts = TeachingLoad::query()
+            $teacherCounts = TeacherSubject::query()
                 ->selectRaw('subject_id, COUNT(DISTINCT teacher_id) as cnt')
                 ->where('status', 'active')
                 ->whereIn('subject_id', $ids)
@@ -140,7 +141,54 @@ class SubjectController extends Controller
             ];
         })->all();
 
-        $teachersCount = (int) TeachingLoad::query()
+        $allowances = TeacherSubject::query()
+            ->where('subject_id', $subject->id)
+            ->where('status', 'active')
+            ->with(['teacher:id,last_name,first_name,middle_name,department,login,email,is_active'])
+            ->get()
+            ->sortBy(fn (TeacherSubject $item) => ($item->teacher?->last_name ?? '').($item->teacher?->first_name ?? ''))
+            ->values();
+
+        $loadsByTeacher = TeachingLoad::query()
+            ->where('subject_id', $subject->id)
+            ->where('status', 'active')
+            ->selectRaw('teacher_id, COUNT(*) as cnt')
+            ->groupBy('teacher_id')
+            ->pluck('cnt', 'teacher_id');
+
+        $teacherAllowancesPayload = $allowances->map(function (TeacherSubject $item) use ($loadsByTeacher) {
+            $teacher = $item->teacher;
+
+            return [
+                'id' => $item->id,
+                'teacher' => $teacher
+                    ? [
+                        'id' => $teacher->id,
+                        'last_name' => $teacher->last_name,
+                        'first_name' => $teacher->first_name,
+                        'middle_name' => $teacher->middle_name,
+                        'department' => $teacher->department,
+                        'login' => $teacher->login,
+                        'email' => $teacher->email,
+                    ]
+                    : null,
+                'loads_count' => (int) ($loadsByTeacher[$item->teacher_id] ?? 0),
+            ];
+        })->all();
+
+        $allowedTeacherIds = $allowances->pluck('teacher_id')->filter()->all();
+        $availableTeachers = User::query()
+            ->where('role', 'teacher')
+            ->where('is_active', true)
+            ->when($allowedTeacherIds !== [], fn ($query) => $query->whereNotIn('id', $allowedTeacherIds))
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->orderBy('middle_name')
+            ->get(['id', 'last_name', 'first_name', 'middle_name', 'department', 'login', 'email']);
+
+        $allowancesCount = count($teacherAllowancesPayload);
+
+        $teachersWithLoadsCount = (int) TeachingLoad::query()
             ->where('subject_id', $subject->id)
             ->where('status', 'active')
             ->distinct()
@@ -173,13 +221,25 @@ class SubjectController extends Controller
                 'created_at' => optional($subject->created_at)->toISOString(),
             ],
             'stats' => [
-                'teachers_count' => $teachersCount,
+                'allowances_count' => $allowancesCount,
+                'teachers_count' => $allowancesCount,
+                'teachers_with_loads_count' => $teachersWithLoadsCount,
                 'groups_count' => $groupsCount,
                 'teaching_loads_count' => $teachingLoadsCount,
                 'assignments_count' => $assignmentsCount,
                 'active_assignments_count' => $activeAssignmentsCount,
                 'submissions_count' => $submissionsCount,
             ],
+            'teacher_allowances' => $teacherAllowancesPayload,
+            'available_teachers' => $availableTeachers->map(fn (User $teacher) => [
+                'id' => $teacher->id,
+                'last_name' => $teacher->last_name,
+                'first_name' => $teacher->first_name,
+                'middle_name' => $teacher->middle_name,
+                'department' => $teacher->department,
+                'login' => $teacher->login,
+                'email' => $teacher->email,
+            ])->all(),
             'teaching_loads' => $teachingPayload,
         ]);
     }

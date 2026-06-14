@@ -57,6 +57,7 @@ const PublishFromBankModal = ({
   const { showError } = useNotification();
   const [deadline, setDeadline] = useState('');
   const [isGroupsOpen, setIsGroupsOpen] = useState(false);
+  const [groupPickerDraft, setGroupPickerDraft] = useState([]);
   const [studentGroups, setStudentGroups] = useState([]);
   const triggerRef = useRef(null);
   const menuPortalRef = useRef(null);
@@ -108,6 +109,7 @@ const PublishFromBankModal = ({
   }, [groupOptions, studentGroups]);
 
   const selectedGroups = normalizeGroupSelection(studentGroups);
+  const draftSelectedGroups = normalizeGroupSelection(groupPickerDraft);
   const summary =
     selectedGroups.length === 0
       ? 'Выберите группы'
@@ -115,12 +117,43 @@ const PublishFromBankModal = ({
         ? selectedGroups.join(', ')
         : `Выбрано групп: ${selectedGroups.length}`;
 
+  const closeGroupsDropdown = useCallback(() => {
+    setIsGroupsOpen(false);
+  }, []);
+
+  const openGroupsDropdown = useCallback(() => {
+    setGroupPickerDraft(normalizeGroupSelection(studentGroups));
+    setIsGroupsOpen(true);
+  }, [studentGroups]);
+
+  const toggleGroupsDropdown = useCallback(() => {
+    if (isGroupsOpen) {
+      closeGroupsDropdown();
+      return;
+    }
+    openGroupsDropdown();
+  }, [closeGroupsDropdown, isGroupsOpen, openGroupsDropdown]);
+
   const toggleGroup = (groupName) => {
-    const current = normalizeGroupSelection(studentGroups);
-    const next = current.includes(groupName)
-      ? current.filter((g) => g !== groupName)
-      : [...current, groupName];
-    setStudentGroups(next);
+    setGroupPickerDraft((prev) => {
+      const current = normalizeGroupSelection(prev);
+      return current.includes(groupName)
+        ? current.filter((group) => group !== groupName)
+        : [...current, groupName];
+    });
+  };
+
+  const handleSelectAllGroups = () => {
+    setGroupPickerDraft([...groupOptions]);
+  };
+
+  const handleClearGroups = () => {
+    setGroupPickerDraft([]);
+  };
+
+  const handleConfirmGroupsSelection = () => {
+    setStudentGroups(normalizeGroupSelection(groupPickerDraft));
+    closeGroupsDropdown();
   };
 
   useLayoutEffect(() => {
@@ -145,11 +178,11 @@ const PublishFromBankModal = ({
       if (t?.contains(e.target) || m?.contains(e.target)) {
         return;
       }
-      setIsGroupsOpen(false);
+      closeGroupsDropdown();
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [isGroupsOpen]);
+  }, [closeGroupsDropdown, isGroupsOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -203,7 +236,7 @@ const PublishFromBankModal = ({
                     ref={triggerRef}
                     type="button"
                     className={`group-dropdown__trigger${isGroupsOpen ? ' is-open' : ''}`}
-                    onClick={() => setIsGroupsOpen((v) => !v)}
+                    onClick={toggleGroupsDropdown}
                   >
                     <span>{summary}</span>
                     <span aria-hidden>▾</span>
@@ -232,10 +265,10 @@ const PublishFromBankModal = ({
                           }}
                         >
                           <div className="group-dropdown__actions">
-                            <button type="button" onClick={() => setStudentGroups([...groupOptions])}>
+                            <button type="button" onClick={handleSelectAllGroups}>
                               Выбрать все
                             </button>
-                            <button type="button" onClick={() => setStudentGroups([])}>
+                            <button type="button" onClick={handleClearGroups}>
                               Очистить
                             </button>
                           </div>
@@ -244,12 +277,23 @@ const PublishFromBankModal = ({
                               <label key={group} className="group-checkbox-item">
                                 <input
                                   type="checkbox"
-                                  checked={selectedGroups.includes(group)}
+                                  checked={draftSelectedGroups.includes(group)}
                                   onChange={() => toggleGroup(group)}
                                 />
                                 <span>{group}</span>
                               </label>
                             ))}
+                          </div>
+                          <div className="group-dropdown__confirm">
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="small"
+                              fullWidth
+                              onClick={handleConfirmGroupsSelection}
+                            >
+                              Подтвердить
+                            </Button>
                           </div>
                         </div>
                       </div>,

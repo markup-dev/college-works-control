@@ -1,3 +1,4 @@
+export * from './downloadHelpers.js';
 export * from './teacherHelpers.js';
 export * from './assignmentHelpers.js';
 export * from './validation.js';

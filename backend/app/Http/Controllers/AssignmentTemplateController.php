@@ -32,17 +32,13 @@ class AssignmentTemplateController extends Controller
 
         $items = AssignmentTemplate::query()
             ->where('teacher_id', $user->id)
-            ->with([
-                'subject:id,name',
-                'criteriaItems:id,assignment_template_id,position,text,max_points',
-                'allowedFormatItems:id,assignment_template_id,format',
-                'materialItems:id,assignment_template_id,file_name,file_path,file_size,file_type,created_at',
-            ])
+            ->with(['subject:id,name'])
+            ->withCount(['criteriaItems', 'materialItems'])
             ->orderByDesc('updated_at')
             ->get();
 
         return response()->json([
-            'data' => $items->map(fn (AssignmentTemplate $t) => $this->templates->serializeTemplate($t)),
+            'data' => $items->map(fn (AssignmentTemplate $t) => $this->templates->serializeTemplateSummary($t)),
         ]);
     }
 
@@ -193,15 +189,15 @@ class AssignmentTemplateController extends Controller
             return response()->json(['message' => 'Добавьте описание заготовки (минимум 10 символов) в банке.'], 422);
         }
 
-        $groupIds = collect($validated['student_groups'])
-            ->map(fn ($name) => $this->assignments->normalizeGroupName((string) $name))
-            ->filter()
-            ->unique()
-            ->map(function ($groupName) use ($user, $subjectId) {
-                return $this->assignments->resolveGroupIdByName($groupName, $user->id, $subjectId);
-            })
-            ->values()
-            ->all();
+        $groupIds = $this->assignments->resolveGroupIdsByNames(
+            collect($validated['student_groups'])->map(fn ($name) => (string) $name)->all(),
+            $user->id,
+            $subjectId,
+        );
+
+        if ($groupIds === []) {
+            return response()->json(['message' => 'Выберите хотя бы одну группу из назначенной учебной нагрузки.'], 422);
+        }
 
         $criteriaRows = $assignmentTemplate->criteriaItems->map(fn ($c) => [
             'text' => $c->text,
@@ -231,7 +227,7 @@ class AssignmentTemplateController extends Controller
         return response()->json([
             'success' => true,
             'assignment_id' => $assignment->id,
-            'assignment' => $assignment,
+            'assignment' => $this->assignments->mapCreatedAssignmentResponse($assignment),
         ], 201)->header('X-Created-Assignment-Id', (string) $assignment->id);
     }
 

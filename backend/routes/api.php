@@ -26,6 +26,10 @@ use Illuminate\Support\Facades\Route;
 // Публичные маршруты
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 
+Route::get('/assignments/{assignment}/materials/{material}/users/{user}/download', [AssignmentController::class, 'downloadMaterialSigned'])
+    ->middleware(['signed', 'throttle:60,1'])
+    ->name('assignments.material.download');
+
 // Защищённые маршруты (требуют авторизации)
 Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(function () {
 
@@ -40,6 +44,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
     Route::get('/assignments', [AssignmentController::class, 'index']);
     Route::get('/assignments/meta', [AssignmentController::class, 'meta']);
     Route::get('/assignments/{assignment}', [AssignmentController::class, 'show']);
+    Route::get('/assignments/{assignment}/materials/{material}/download-url', [AssignmentController::class, 'materialDownloadUrl']);
     Route::get('/assignments/{assignment}/materials/{material}/download', [AssignmentController::class, 'downloadMaterial']);
 
     // Задания — только для преподавателей
@@ -98,6 +103,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
 
     Route::middleware('role:student,teacher')->group(function () {
         Route::get('/message-partners', [ConversationController::class, 'partners']);
+        Route::get('/conversations/unread-total', [ConversationController::class, 'unreadTotal']);
         Route::get('/conversations', [ConversationController::class, 'index']);
         Route::post('/conversations', [ConversationController::class, 'store']);
         Route::get('/conversations/{conversation}/messages', [ConversationController::class, 'messages']);
@@ -140,6 +146,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
         Route::post('/subjects', [AdminSubjectController::class, 'createSubject']);
         Route::put('/subjects/{subject}', [AdminSubjectController::class, 'updateSubject']);
         Route::delete('/subjects/{subject}', [AdminSubjectController::class, 'deleteSubject']);
+        Route::post('/subjects/{subject}/teacher-allowances', [AdminTeacherDisciplineController::class, 'storeSubjectTeacherAllowance']);
 
         Route::get('/teachers/{teacher}/disciplines', [AdminTeacherDisciplineController::class, 'teacherSubjects']);
         Route::post('/teachers/{teacher}/disciplines', [AdminTeacherDisciplineController::class, 'storeTeacherSubject']);

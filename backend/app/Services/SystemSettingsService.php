@@ -6,6 +6,7 @@ use App\Models\SystemSetting;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Глобальные настройки в одной строке БД: значения по умолчанию, слияние с сохранёнными, баннер для публичного API, шаблон письма с учётными данными и срез политики паролей.
@@ -30,7 +31,7 @@ class SystemSettingsService
                 'require_uppercase' => true,
                 'require_digits' => true,
                 'require_special' => false,
-                'exclude_similar' => true,
+                'exclude_similar' => false,
                 'expiry_days' => null,
             ],
             'email_template' => [
@@ -57,9 +58,11 @@ class SystemSettingsService
     /** @return array<string, mixed> */
     public static function merged(): array
     {
-        $row = SystemSetting::query()->first();
+        return Cache::remember('system_settings.merged', now()->addMinutes(5), function () {
+            $row = SystemSetting::query()->first();
 
-        return array_replace_recursive(self::defaults(), $row?->data ?? []);
+            return array_replace_recursive(self::defaults(), $row?->data ?? []);
+        });
     }
 
     /** @param  array<string, mixed>  $data */
@@ -69,6 +72,7 @@ class SystemSettingsService
         $model = SystemSetting::query()->first() ?? new SystemSetting;
         $model->data = $merged;
         $model->save();
+        Cache::forget('system_settings.merged');
     }
 
     /** @return array{active: false}|array{active: true, text: string, color: string, ends_at?: string|null} */

@@ -12,6 +12,7 @@ import LoadingState from '../../components/UI/LoadingState/LoadingState';
 import ModalSection from '../../components/UI/Modal/ModalSection';
 import StatusBadge from '../../components/UI/StatusBadge/StatusBadge';
 import SearchableSelect from '../../components/UI/SearchableSelect/SearchableSelect';
+import { toSubjectSelectOptions } from '../../utils/selectOptions';
 import DashboardFilterToolbar from '../../components/Shared/DashboardFilterToolbar';
 import {
   buildAdminGroupsHref,
@@ -144,8 +145,6 @@ const formatCourseLabel = (group, specialtyStudyYears) => {
   return `${course} курс`;
 };
 
-const formatSubjectLabel = (name, code) => (code ? `${name} (${code})` : name);
-
 const AdminSpecialtyDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -181,6 +180,11 @@ const AdminSpecialtyDetail = () => {
   const [expandedHistoryCourses, setExpandedHistoryCourses] = useState(() => new Map());
   const [form, setForm] = useState(emptyForm);
   const [programItems, setProgramItems] = useState([]);
+
+  const canSaveSpecialty = useMemo(
+    () => Boolean(form.code.trim()) && Boolean(form.name.trim()),
+    [form.code, form.name],
+  );
 
   const loadSpecialty = useCallback(async () => {
     setLoading(true);
@@ -246,8 +250,6 @@ const AdminSpecialtyDetail = () => {
     }
   }, [activeTab, programEditing, resetProgramItems]);
 
-  const formatSubjectOptionLabel = (subject) => formatSubjectLabel(subject.name, subject.code);
-
   const subjectCatalog = useMemo(() => {
     const byId = new Map(subjects.map((subject) => [Number(subject.id), subject]));
 
@@ -298,13 +300,6 @@ const AdminSpecialtyDetail = () => {
 
     return available;
   };
-
-  const toSubjectSelectOptions = (items) => items.map((subject) => ({
-    value: String(subject.id),
-    label: formatSubjectOptionLabel(subject),
-    meta: subject.code || undefined,
-    searchText: `${subject.name} ${subject.code || ''}`,
-  }));
 
   const isActiveCatalogSubject = (subjectId) => {
     const subjectNumericId = Number(subjectId);
@@ -871,7 +866,13 @@ const AdminSpecialtyDetail = () => {
           </div>
 
           <div className="admin-entity-detail__form-actions">
-            <Button type="button" variant="primary" loading={saving} onClick={() => void saveSpecialty()}>
+            <Button
+              type="button"
+              variant="primary"
+              loading={saving}
+              disabled={saving || !canSaveSpecialty}
+              onClick={() => void saveSpecialty()}
+            >
               Сохранить
             </Button>
           </div>

@@ -58,7 +58,7 @@ const AssignmentCard = React.memo(({
 
   const handleViewSubmissions = (e) => {
     e.stopPropagation();
-    onViewSubmissions(assignment.id);
+    onViewSubmissions(assignment);
   };
   const handleDeleteAssignment = (e) => {
     e.stopPropagation();

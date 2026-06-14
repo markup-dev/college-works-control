@@ -366,9 +366,10 @@
 .admin-assignment-form {
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 1rem;
 
   &__label {
+    @include admin-form-field;
     @include admin-form-label;
   }
 
@@ -391,12 +392,94 @@
     color: #475569;
   }
 
+  &__warning {
+    margin-top: 0;
+    padding: 0.85rem 1rem;
+    border: 1px solid #fcd34d;
+    border-radius: 10px;
+    background: #fffbeb;
+  }
+
+  &__warning-title {
+    margin: 0 0 0.45rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.45;
+    color: #92400e;
+  }
+
+  &__warning-list {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: #78350f;
+
+    li + li {
+      margin-top: 0.5rem;
+    }
+  }
+
+  &__warning-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0;
+    border-top: 1px solid rgba(146, 64, 14, 0.12);
+
+    &:first-child {
+      border-top: none;
+      padding-top: 0;
+    }
+  }
+
+  &__warning-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+
+    strong {
+      font-weight: 600;
+      color: #92400e;
+    }
+
+    span {
+      font-size: 0.8rem;
+      color: #78350f;
+    }
+  }
+
   &__actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.65rem;
     justify-content: flex-end;
     margin-top: 0.35rem;
+  }
+}
+
+.admin-assignment-reassign-modal {
+  min-height: min(640px, calc(100dvh - 2rem));
+
+  &__content {
+    overflow: visible;
+
+    .searchable-select__panel {
+      position: relative;
+      top: auto;
+      left: auto;
+      right: auto;
+      margin-top: 0.45rem;
+      max-height: min(18rem, 38vh);
+      overflow: hidden;
+    }
+
+    .searchable-select__list {
+      max-height: min(14rem, 30vh);
+    }
   }
 }
 

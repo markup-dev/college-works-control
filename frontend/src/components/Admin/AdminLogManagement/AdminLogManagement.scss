@@ -96,16 +96,15 @@
 
   &__card-action {
     margin: 0.25rem 0 0;
-    font-size: 0.88rem;
-    color: $text-secondary;
-    font-family: ui-monospace, monospace;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: $text-primary;
   }
 
   &__card-details {
-    margin: 0.5rem 0 0;
-    font-size: 0.9rem;
-    line-height: 1.45;
-    color: $text-primary;
-    white-space: pre-wrap;
+    margin: 0.45rem 0 0;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: $text-secondary;
   }
 }

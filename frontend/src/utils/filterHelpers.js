@@ -174,3 +174,49 @@ export const buildNormalizedGroupOptions = (groups = []) => (
   Array.from(new Set((groups || []).map((group) => normalizeGroupName(group)).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, 'ru'))
 );
+
+export const resolveAssignmentGroupNames = (assignment) => {
+  if (!assignment) {
+    return [];
+  }
+
+  const fromStudentGroups = Array.isArray(assignment.studentGroups) ? assignment.studentGroups : [];
+  const fromGroups = Array.isArray(assignment.groups)
+    ? assignment.groups.map((group) => (typeof group === 'string' ? group : group?.name))
+    : [];
+
+  return buildNormalizedGroupOptions([...fromStudentGroups, ...fromGroups]);
+};
+
+export const buildSubmissionsNavFiltersFromAssignment = (assignment, { preferredGroup, preferredSubjectId } = {}) => {
+  const searchTerm = String(assignment?.title || '').trim();
+  const groups = resolveAssignmentGroupNames(assignment);
+  const assignmentSubjectId = resolveAssignmentSubjectId(assignment);
+  const normalizedPreferredGroup = preferredGroup && preferredGroup !== 'all'
+    ? normalizeGroupName(preferredGroup)
+    : '';
+  const normalizedPreferredSubjectId = Number(preferredSubjectId);
+
+  let groupFilter = 'all';
+  if (groups.length === 1) {
+    groupFilter = groups[0];
+  } else if (normalizedPreferredGroup && groups.includes(normalizedPreferredGroup)) {
+    groupFilter = normalizedPreferredGroup;
+  }
+
+  let assignmentFilter = 'all';
+  if (assignmentSubjectId) {
+    assignmentFilter = String(assignmentSubjectId);
+  } else if (
+    Number.isFinite(normalizedPreferredSubjectId)
+    && normalizedPreferredSubjectId > 0
+  ) {
+    assignmentFilter = String(normalizedPreferredSubjectId);
+  }
+
+  return {
+    searchTerm,
+    groupFilter,
+    assignmentFilter,
+  };
+};

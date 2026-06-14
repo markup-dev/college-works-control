@@ -12,6 +12,7 @@ use App\Models\TeachingLoad;
 use App\Models\User;
 use App\Services\AcademicProgramService;
 use App\Services\AdminActionNotificationService;
+use App\Support\AdminLogMessages;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -86,10 +87,16 @@ class TeachingLoadController extends Controller
             ->orderBy('name');
 
         if ($subjectId) {
-            $groupsQuery->whereHas('groupSubjects', fn ($q) => $q
-                ->where('subject_id', $subjectId)
-                ->whereColumn('course', 'groups.current_course')
-                ->where('status', 'active'));
+            $groupsQuery->where(function ($query) use ($subjectId) {
+                $query
+                    ->whereHas('groupSubjects', fn ($q) => $q
+                        ->where('subject_id', $subjectId)
+                        ->whereColumn('course', 'groups.current_course')
+                        ->where('status', 'active'))
+                    ->orWhereHas('teachingLoads', fn ($q) => $q
+                        ->where('subject_id', $subjectId)
+                        ->where('status', 'active'));
+            });
         }
 
         if ($teacherId && $subjectId) {
@@ -321,7 +328,14 @@ class TeachingLoadController extends Controller
             app(AdminActionNotificationService::class)->notifyTeachingLoadAssigned($tl, $request->user());
         }
 
-        $this->log($request, 'create_teaching_load_batch', 'Пакетное создание назначений: '.count($created).' новых, пропуск групп: '.implode(',', $skippedGroupIds));
+        $skippedLabels = $skippedGroupIds === []
+            ? ''
+            : Group::query()->whereIn('id', $skippedGroupIds)->orderBy('name')->pluck('name')->implode(', ');
+        $batchDetails = 'Создано назначений: '.count($created);
+        if ($skippedLabels !== '') {
+            $batchDetails .= ', уже были: '.$skippedLabels;
+        }
+        $this->log($request, 'create_teaching_load_batch', $batchDetails);
 
         if (count($created) === 0 && count($skippedGroupIds) > 0) {
             return response()->json([
@@ -408,7 +422,17 @@ class TeachingLoadController extends Controller
                 }
             }
 
-            $this->log($request, 'sync_teaching_loads_pair', "Синхронизированы группы для преподавателя {$teacherId}, дисциплина {$subjectId}");
+            $teacher = User::query()->find($teacherId, ['id', 'last_name', 'first_name', 'middle_name', 'login']);
+            $subject = Subject::query()->find($subjectId, ['id', 'name']);
+            $this->log(
+                $request,
+                'sync_teaching_loads_pair',
+                'Синхронизированы группы: '.AdminLogMessages::teachingLoadTriple(
+                    $teacher?->full_name,
+                    $subject?->name,
+                    null,
+                ),
+            );
         });
 
         foreach ($removedLoads as $load) {
@@ -475,7 +499,15 @@ class TeachingLoadController extends Controller
             app(AdminActionNotificationService::class)->notifyTeachingLoadRemoved($oldLoad, $request->user());
         }
         app(AdminActionNotificationService::class)->notifyTeachingLoadAssigned($fresh, $request->user());
-        $this->log($request, 'transfer_teaching_load_teacher', "Смена преподавателя в назначении #{$teachingLoad->id}");
+        $this->log(
+            $request,
+            'transfer_teaching_load_teacher',
+            'Передано назначение: '.AdminLogMessages::teachingLoadTriple(
+                $fresh->teacher?->full_name,
+                $fresh->subject?->name,
+                $fresh->group?->name,
+            ),
+        );
 
         return response()->json([
             'success' => true,
@@ -529,7 +561,15 @@ class TeachingLoadController extends Controller
 
         app(AdminActionNotificationService::class)->notifyTeachingLoadAssigned($load, $request->user());
 
-        $this->log($request, 'create_teaching_load', "Назначена нагрузка: {$load->teacher->full_name} · {$load->subject->name} · {$load->group->name}");
+        $this->log(
+            $request,
+            'create_teaching_load',
+            'Создано назначение: '.AdminLogMessages::teachingLoadTriple(
+                $load->teacher->full_name,
+                $load->subject->name,
+                $load->group->name,
+            ),
+        );
 
         return response()->json(['success' => true, 'teaching_load' => $load], 201);
     }
@@ -600,7 +640,15 @@ class TeachingLoadController extends Controller
             );
         }
 
-        $this->log($request, 'update_teaching_load', "Изменена нагрузка: {$freshLoad->teacher->full_name} · {$freshLoad->subject->name} · {$freshLoad->group->name}");
+        $this->log(
+            $request,
+            'update_teaching_load',
+            'Изменено назначение: '.AdminLogMessages::teachingLoadTriple(
+                $freshLoad->teacher->full_name,
+                $freshLoad->subject->name,
+                $freshLoad->group->name,
+            ),
+        );
 
         return response()->json(['success' => true, 'teaching_load' => $freshLoad]);
     }
@@ -608,13 +656,17 @@ class TeachingLoadController extends Controller
     public function deleteTeachingLoad(Request $request, TeachingLoad $teachingLoad)
     {
         $teachingLoad->load(['teacher', 'subject', 'group']);
-        $details = "{$teachingLoad->teacher?->full_name} · {$teachingLoad->subject?->name} · {$teachingLoad->group?->name}";
+        $details = AdminLogMessages::teachingLoadTriple(
+            $teachingLoad->teacher?->full_name,
+            $teachingLoad->subject?->name,
+            $teachingLoad->group?->name,
+        );
         $removedLoad = clone $teachingLoad;
         $teachingLoad->delete();
 
         app(AdminActionNotificationService::class)->notifyTeachingLoadRemoved($removedLoad, $request->user());
 
-        $this->log($request, 'delete_teaching_load', "Удалена нагрузка: {$details}");
+        $this->log($request, 'delete_teaching_load', "Удалено назначение: {$details}");
 
         return response()->json(['success' => true]);
     }

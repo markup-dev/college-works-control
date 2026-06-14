@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import DashboardHeader from '../../components/Student/DashboardHeader/DashboardHeader';
 import AssignmentCard from '../../components/Student/AssignmentCard/AssignmentCard';
@@ -6,6 +6,7 @@ import SubmissionModal from '../../components/Student/SubmissionModal/Submission
 import ResultsModal from '../../components/Student/ResultsModal/ResultsModal';
 import PageShell from '../../components/UI/PageShell/PageShell';
 import LoadingState from '../../components/UI/LoadingState/LoadingState';
+import Modal from '../../components/UI/Modal/Modal';
 import EmptyState from '../../components/UI/EmptyState/EmptyState';
 import ErrorBanner from '../../components/UI/ErrorBanner/ErrorBanner';
 import AssignmentDetailsModal from '../../components/Shared/AssignmentDetailsModal/AssignmentDetailsModal';
@@ -25,6 +26,8 @@ import {
   resolveTeacherIdByName,
   PAGINATION_DEFAULTS,
   ATTENTION_BLOCK_LIMITS,
+  downloadAssignmentMaterial,
+  DownloadCancelledError,
 } from '../../utils';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
 import './StudentDashboard.scss';
@@ -122,6 +125,11 @@ const StudentDashboard = () => {
   const [detailsAssignment, setDetailsAssignment] = useState(null);
   const [filterCatalog, setFilterCatalog] = useState([]);
   const [attentionAssignments, setAttentionAssignments] = useState({ retakes: [], deadlines: [] });
+  const [assignmentDeepLinkLoading, setAssignmentDeepLinkLoading] = useState(false);
+  const assignmentDeepLinkRef = useRef(null);
+  const deepLinkRequestIdRef = useRef(0);
+  const deepLinkInFlightRef = useRef(null);
+  const suppressListLoadingRef = useRef(false);
   const debouncedSearchTerm = useDebouncedValue(searchTerm, 350);
 
   useEffect(() => {
@@ -308,6 +316,8 @@ const StudentDashboard = () => {
       return;
     }
 
+    const fromNotificationLink = Boolean(searchParams.get('assignment')) || suppressListLoadingRef.current;
+
     loadStudentAssignments({
       page,
       perPage: PAGINATION_DEFAULTS.studentAssignments,
@@ -316,7 +326,7 @@ const StudentDashboard = () => {
       subject: subjectFilter !== 'all' ? subjectFilter : undefined,
       teacherId: selectedTeacherId,
       submissionType: submissionFormatFilter !== 'all' ? submissionFormatFilter : undefined,
-    });
+    }, { silent: fromNotificationLink });
   }, [
     user,
     page,
@@ -326,11 +336,16 @@ const StudentDashboard = () => {
     selectedTeacherId,
     submissionFormatFilter,
     loadStudentAssignments,
+    searchParams,
   ]);
 
   useEffect(() => {
+    if (!user || searchParams.get('assignment')) {
+      return;
+    }
+
     loadAttentionAssignments();
-  }, [loadAttentionAssignments]);
+  }, [user, searchParams, loadAttentionAssignments]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -352,27 +367,42 @@ const StudentDashboard = () => {
   useEffect(() => {
     const rawId = searchParams.get('assignment');
     if (!rawId) {
-      return;
+      return undefined;
     }
+
     const focus = searchParams.get('focus') || 'details';
     const id = Number(rawId);
     if (!Number.isFinite(id) || id <= 0) {
       setSearchParams({}, { replace: true });
-      return;
+      return undefined;
     }
 
-    handleResetFilters();
+    const linkKey = `${id}:${focus}`;
+    if (deepLinkInFlightRef.current === linkKey) {
+      return undefined;
+    }
+    deepLinkInFlightRef.current = linkKey;
+    assignmentDeepLinkRef.current = linkKey;
 
-    let cancelled = false;
+    suppressListLoadingRef.current = true;
+    setAssignmentDeepLinkLoading(true);
+
+    const requestId = ++deepLinkRequestIdRef.current;
 
     (async () => {
       try {
         const { data } = await api.get(`/assignments/${id}`);
-        if (cancelled) {
+        if (deepLinkRequestIdRef.current !== requestId) {
           return;
         }
+
         const assignment = normalizeStudentAssignment(data);
+        suppressListLoadingRef.current = false;
+        setAssignmentDeepLinkLoading(false);
+        deepLinkInFlightRef.current = null;
+        assignmentDeepLinkRef.current = null;
         setSearchParams({}, { replace: true });
+
         if (focus === 'results') {
           handleViewResults(assignment);
         } else if (focus === 'submit') {
@@ -381,20 +411,25 @@ const StudentDashboard = () => {
           handleViewDetails(assignment);
         }
       } catch {
-        if (!cancelled) {
-          showError('Задание не найдено или недоступно');
-          setSearchParams({}, { replace: true });
+        if (deepLinkRequestIdRef.current !== requestId) {
+          return;
         }
+        suppressListLoadingRef.current = false;
+        setAssignmentDeepLinkLoading(false);
+        deepLinkInFlightRef.current = null;
+        assignmentDeepLinkRef.current = null;
+        setSearchParams({}, { replace: true });
+        showError('Задание не найдено или недоступно');
       }
     })();
 
     return () => {
-      cancelled = true;
+      deepLinkRequestIdRef.current += 1;
+      deepLinkInFlightRef.current = null;
     };
   }, [
     searchParams,
     setSearchParams,
-    handleResetFilters,
     handleViewResults,
     handleSubmitWork,
     handleViewDetails,
@@ -517,28 +552,18 @@ const StudentDashboard = () => {
 
   const handleDownloadAssignmentMaterial = useCallback(async (assignment, material) => {
     if (!assignment?.id || !material?.id) {
-      showError('Материал для скачивания не найден');
+      showError('Материал не найден');
       return;
     }
 
     try {
-      const response = await api.get(`/assignments/${assignment.id}/materials/${material.id}/download`, {
-        responseType: 'blob',
-      });
-
-      const blob = response.data;
-      const objectUrl = URL.createObjectURL(blob);
-      const fileName = material.fileName || material.file_name || 'assignment-material';
-
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(objectUrl);
+      await downloadAssignmentMaterial(api, assignment.id, material);
     } catch (error) {
-      showError('Не удалось скачать материал задания. Попробуйте еще раз.');
+      if (error instanceof DownloadCancelledError || error?.name === 'AbortError') {
+        return;
+      }
+      showError(getApiErrorMessage(error, 'Не удалось сохранить материал. Попробуйте ещё раз.'));
+      throw error;
     }
   }, [showError]);
 
@@ -619,6 +644,22 @@ const StudentDashboard = () => {
           onNext={() => setPage((prev) => prev + 1)}
         />
       </PageShell>
+
+      <Modal
+        isOpen={assignmentDeepLinkLoading}
+        onClose={() => {
+          deepLinkRequestIdRef.current += 1;
+          deepLinkInFlightRef.current = null;
+          suppressListLoadingRef.current = false;
+          setAssignmentDeepLinkLoading(false);
+          assignmentDeepLinkRef.current = null;
+          setSearchParams({}, { replace: true });
+        }}
+        title="Задание"
+        size="medium"
+      >
+        <LoadingState message="Загрузка задания..." />
+      </Modal>
 
       <SubmissionModal
         assignment={selectedAssignment}

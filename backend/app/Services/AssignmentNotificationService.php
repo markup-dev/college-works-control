@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SendAssignmentNotificationsJob;
 use App\Models\Assignment;
 use App\Models\User;
 use App\Notifications\AssignmentAnnouncedNotification;
@@ -10,8 +11,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Рассылка событий по заданиям студентам целевых групп: сначала запись в БД (центр уведомлений), почта — отложенно после ответа HTTP.
- * Каналы в уведомлениях передаются явно (database / mail), чтобы не дублировать запись при combined via().
+ * Рассылка событий по заданиям студентам целевых групп.
+ * Отправка вынесена в очередь, чтобы не блокировать сохранение задания преподавателем.
  */
 class AssignmentNotificationService
 {
@@ -39,81 +40,32 @@ class AssignmentNotificationService
 
     public function notifyNewAssignment(Assignment $assignment): void
     {
-        $assignment->loadMissing(['subject:id,name']);
-        $students = $this->studentsForAssignment($assignment);
-        foreach ($students as $student) {
-            try {
-                // UI обновляется сразу из таблицы notifications (канал только database).
-                $student->notify(new AssignmentAnnouncedNotification($assignment, ['database']));
-            } catch (\Throwable $e) {
-                report($e);
-            }
-        }
-
-        $assignmentId = (int) $assignment->getKey();
-        $mailStudentIds = $students
-            ->filter(fn (User $s) => $s->wantsEmailNotifications())
-            ->pluck('id')
-            ->all();
-        if ($mailStudentIds !== []) {
-            // После ответа клиенту: свежая модель и только email-канал.
-            dispatch(function () use ($assignmentId, $mailStudentIds) {
-                $fresh = Assignment::query()->find($assignmentId);
-                if (! $fresh) {
-                    return;
-                }
-                foreach (User::query()->whereIn('id', $mailStudentIds)->cursor() as $student) {
-                    if (! $student->wantsEmailNotifications()) {
-                        continue;
-                    }
-                    try {
-                        // Отдельный вызов только с mail — письмо не пишет дубликат в БД.
-                        $student->notify(new AssignmentAnnouncedNotification($fresh, ['mail']));
-                    } catch (\Throwable $e) {
-                        report($e);
-                    }
-                }
-            })->afterResponse();
-        }
+        $this->dispatchAfterResponse(
+            (int) $assignment->getKey(),
+            AssignmentAnnouncedNotification::class,
+        );
     }
 
     public function notifyAssignmentUpdated(Assignment $assignment): void
     {
-        $assignment->loadMissing(['subject:id,name']);
-        $students = $this->studentsForAssignment($assignment);
-        foreach ($students as $student) {
-            try {
-                // Аналогично новому заданию: сначала запись для колокольчика.
-                $student->notify(new AssignmentUpdatedNotification($assignment, ['database']));
-            } catch (\Throwable $e) {
-                report($e);
-            }
+        $this->dispatchAfterResponse(
+            (int) $assignment->getKey(),
+            AssignmentUpdatedNotification::class,
+        );
+    }
+
+    /**
+     * @param  class-string<AssignmentAnnouncedNotification|AssignmentUpdatedNotification>  $notificationClass
+     */
+    private function dispatchAfterResponse(int $assignmentId, string $notificationClass): void
+    {
+        if ($assignmentId <= 0) {
+            return;
         }
 
-        $assignmentId = (int) $assignment->getKey();
-        $mailStudentIds = $students
-            ->filter(fn (User $s) => $s->wantsEmailNotifications())
-            ->pluck('id')
-            ->all();
-        if ($mailStudentIds !== []) {
-            // После ответа клиенту: свежая модель и только email-канал.
-            dispatch(function () use ($assignmentId, $mailStudentIds) {
-                $fresh = Assignment::query()->find($assignmentId);
-                if (! $fresh) {
-                    return;
-                }
-                foreach (User::query()->whereIn('id', $mailStudentIds)->cursor() as $student) {
-                    if (! $student->wantsEmailNotifications()) {
-                        continue;
-                    }
-                    try {
-                        // Письмо без повторной database-записи.
-                        $student->notify(new AssignmentUpdatedNotification($fresh, ['mail']));
-                    } catch (\Throwable $e) {
-                        report($e);
-                    }
-                }
-            })->afterResponse();
-        }
+        dispatch(function () use ($assignmentId, $notificationClass) {
+            (new SendAssignmentNotificationsJob($assignmentId, $notificationClass))
+                ->handle(app(self::class));
+        })->afterResponse();
     }
 }

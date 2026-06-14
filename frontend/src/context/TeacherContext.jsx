@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
 import api from '../services/api';
+import { useNotification } from './NotificationContext';
 import { getApiErrorMessage } from '../utils/adminApiErrors';
 import { DEFAULT_ALLOWED_FORMATS, getAllowedFormatsFromAssignment, normalizeGroupName, PAGINATION_DEFAULTS } from '../utils';
 import { resolveAssignmentSubjectId, resolveAssignmentSubjectName } from '../utils/filterHelpers';
@@ -96,6 +97,7 @@ export const useTeacher = () => {
 };
 
 export const TeacherProvider = ({ children }) => {
+  const { showError: showNotificationError } = useNotification();
   const [allTeacherAssignments, setAllTeacherAssignments] = useState([]);
   const [allSubmissions, setAllSubmissions] = useState([]);
   const [assignmentsMeta, setAssignmentsMeta] = useState({});
@@ -122,7 +124,8 @@ export const TeacherProvider = ({ children }) => {
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const loadTeacherAssignments = useCallback(async (queryOverrides = {}) => {
+  const loadTeacherAssignments = useCallback(async (queryOverrides = {}, options = {}) => {
+    const silent = Boolean(options.silent);
     const currentQuery = assignmentsQueryRef.current;
     const nextQuery = {
       page: 1,
@@ -146,7 +149,9 @@ export const TeacherProvider = ({ children }) => {
           : undefined,
     };
 
-    setLoading(true);
+    if (!silent) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const assignmentsRes = await api.get('/assignments', { params });
@@ -161,9 +166,13 @@ export const TeacherProvider = ({ children }) => {
         setAssignmentsQuery(nextQuery);
       }
     } catch (err) {
-      setError('Ошибка загрузки данных преподавателя');
+      if (!silent) {
+        setError('Ошибка загрузки данных преподавателя');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -271,38 +280,6 @@ export const TeacherProvider = ({ children }) => {
     }
   }, [loadTeacherAssignments, loadTeacherMeta, loadTeacherSubmissions]);
 
-  const gradeSubmission = useCallback(async (submissionId, score, comment, criterionScores = []) => {
-    setLoading(true);
-    try {
-      await api.put(`/submissions/${submissionId}/grade`, {
-        score: parseInt(score, 10),
-        comment,
-        criterionScores,
-      });
-
-      await loadTeacherData();
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: getApiErrorMessage(err, 'Ошибка при оценке работы') };
-    } finally {
-      setLoading(false);
-    }
-  }, [loadTeacherData]);
-
-  const returnSubmission = useCallback(async (submissionId, comment) => {
-    setLoading(true);
-    try {
-      await api.put(`/submissions/${submissionId}/return`, { comment });
-
-      await loadTeacherData();
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: getApiErrorMessage(err, 'Ошибка при возврате работы') };
-    } finally {
-      setLoading(false);
-    }
-  }, [loadTeacherData]);
-
   const uploadAssignmentMaterials = useCallback(async (assignmentId, materialFiles = [], removedMaterialIds = []) => {
     const files = Array.isArray(materialFiles) ? materialFiles.filter(Boolean) : [];
     const removeIds = Array.isArray(removedMaterialIds) ? removedMaterialIds.filter(Boolean) : [];
@@ -320,9 +297,143 @@ export const TeacherProvider = ({ children }) => {
     });
   }, []);
 
+  const refreshAfterAssignmentMutation = useCallback(async () => {
+    await Promise.all([
+      loadTeacherMeta({ silent: true }),
+      loadTeacherAssignments({ ...assignmentsQueryRef.current }, { silent: true }),
+    ]);
+  }, [loadTeacherAssignments, loadTeacherMeta]);
+
+  const replaceAssignmentInList = useCallback((assignment) => {
+    if (!assignment || typeof assignment !== 'object') {
+      return;
+    }
+
+    const normalized = normalizeAssignment(assignment);
+    const assignmentId = Number(normalized.id);
+    if (!Number.isFinite(assignmentId) || assignmentId <= 0) {
+      return;
+    }
+
+    setAllTeacherAssignments((prev) => {
+      const index = prev.findIndex((item) => Number(item.id) === assignmentId);
+      if (index === -1) {
+        return [normalized, ...prev];
+      }
+      const next = [...prev];
+      next[index] = normalized;
+      return next;
+    });
+
+    const title = String(normalized.title || '').trim();
+    if (!title) {
+      return;
+    }
+
+    setMetaAssignments((prev) => {
+      const existing = prev.find((item) => Number(item.id) === assignmentId);
+      const status = String(normalized.status || existing?.status || 'active');
+      if (existing) {
+        return prev.map((item) => (
+          Number(item.id) === assignmentId
+            ? { ...item, title, status }
+            : item
+        ));
+      }
+      return [{ id: assignmentId, title, status }, ...prev];
+    });
+  }, []);
+
+  const patchSubmissionInList = useCallback((submission) => {
+    if (!submission || typeof submission !== 'object') {
+      return;
+    }
+
+    const normalized = normalizeSubmission(submission);
+    const submissionId = Number(normalized.id);
+    if (!Number.isFinite(submissionId) || submissionId <= 0) {
+      return;
+    }
+
+    setAllSubmissions((prev) => {
+      const index = prev.findIndex((item) => Number(item.id) === submissionId);
+      if (index === -1) {
+        return [normalized, ...prev];
+      }
+      const next = [...prev];
+      next[index] = normalized;
+      return next;
+    });
+  }, []);
+
+  const gradeSubmission = useCallback(async (submissionId, score, comment, criterionScores = []) => {
+    try {
+      const response = await api.put(`/submissions/${submissionId}/grade`, {
+        score: parseInt(score, 10),
+        comment,
+        criterionScores,
+      });
+
+      if (response.data?.submission) {
+        patchSubmissionInList(response.data.submission);
+      }
+
+      void loadTeacherSubmissions({ ...submissionsQueryRef.current }, { trackLoading: false });
+      void loadTeacherAssignments({ ...assignmentsQueryRef.current }, { silent: true });
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: getApiErrorMessage(err, 'Ошибка при оценке работы') };
+    }
+  }, [loadTeacherAssignments, loadTeacherSubmissions, patchSubmissionInList]);
+
+  const returnSubmission = useCallback(async (submissionId, comment) => {
+    try {
+      const response = await api.put(`/submissions/${submissionId}/return`, { comment });
+
+      if (response.data?.submission) {
+        patchSubmissionInList(response.data.submission);
+      }
+
+      void loadTeacherSubmissions({ ...submissionsQueryRef.current }, { trackLoading: false });
+      void loadTeacherAssignments({ ...assignmentsQueryRef.current }, { silent: true });
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: getApiErrorMessage(err, 'Ошибка при возврате работы') };
+    }
+  }, [loadTeacherAssignments, loadTeacherSubmissions, patchSubmissionInList]);
+
+  const prependCreatedAssignment = useCallback((assignment) => {
+    replaceAssignmentInList(assignment);
+  }, [replaceAssignmentInList]);
+
+  const publishAssignmentFromBank = useCallback(async ({ templateId, deadline, studentGroups }) => {
+    try {
+      const response = await api.post(`/assignment-bank/${templateId}/publish`, {
+        deadline,
+        studentGroups,
+      });
+
+      if (response.data?.assignment && typeof response.data.assignment === 'object') {
+        prependCreatedAssignment(response.data.assignment);
+      } else {
+        Promise.resolve(refreshAfterAssignmentMutation()).catch(() => {});
+      }
+
+      return {
+        success: true,
+        assignmentId: getCreatedAssignmentIdFromResponse(response),
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: getApiErrorMessage(err, 'Не удалось выдать задание из банка'),
+      };
+    }
+  }, [prependCreatedAssignment, refreshAfterAssignmentMutation]);
+
   const createAssignment = useCallback(async (assignmentData) => {
-    setLoading(true);
-    let createdAssignmentId = null;
     try {
       const {
         materialFiles = [],
@@ -343,7 +454,7 @@ export const TeacherProvider = ({ children }) => {
         maxFileSize: payload.maxFileSize || null,
       });
 
-      createdAssignmentId = getCreatedAssignmentIdFromResponse(response);
+      const createdAssignmentId = getCreatedAssignmentIdFromResponse(response);
       if (!createdAssignmentId) {
         return {
           success: false,
@@ -351,40 +462,35 @@ export const TeacherProvider = ({ children }) => {
         };
       }
 
-      try {
-        await uploadAssignmentMaterials(createdAssignmentId, materialFiles, removedMaterialIds);
-      } catch (matErr) {
-        try {
-          await api.delete(`/assignments/${createdAssignmentId}`);
-        } catch {
-          // ignore rollback errors
-        }
-        return {
-          success: false,
-          error: getApiErrorMessage(matErr, 'Ошибка при загрузке материалов к заданию'),
-        };
+      if (response.data?.assignment && typeof response.data.assignment === 'object') {
+        prependCreatedAssignment(response.data.assignment);
+      } else {
+        Promise.resolve(refreshAfterAssignmentMutation()).catch(() => {});
       }
 
-      Promise.resolve(loadTeacherData()).catch(() => {});
-      return { success: true };
+      const files = Array.isArray(materialFiles) ? materialFiles.filter(Boolean) : [];
+      const removeIds = Array.isArray(removedMaterialIds) ? removedMaterialIds.filter(Boolean) : [];
+      if (files.length > 0 || removeIds.length > 0) {
+        void uploadAssignmentMaterials(createdAssignmentId, files, removeIds).catch((matErr) => {
+          showNotificationError(
+            getApiErrorMessage(matErr, 'Задание создано, но материалы не загрузились'),
+          );
+        });
+      }
+
+      return { success: true, assignmentId: createdAssignmentId };
     } catch (err) {
-      if (createdAssignmentId) {
-        try {
-          await api.delete(`/assignments/${createdAssignmentId}`);
-        } catch {
-          // Ignore rollback errors and return source error.
-        }
-      }
-
       const message = getApiErrorMessage(err, 'Ошибка при создании задания');
       return { success: false, error: message };
-    } finally {
-      setLoading(false);
     }
-  }, [loadTeacherData, uploadAssignmentMaterials]);
+  }, [
+    prependCreatedAssignment,
+    refreshAfterAssignmentMutation,
+    showNotificationError,
+    uploadAssignmentMaterials,
+  ]);
 
   const updateAssignment = useCallback(async (assignmentId, updates) => {
-    setLoading(true);
     try {
       const {
         materialFiles = [],
@@ -392,34 +498,61 @@ export const TeacherProvider = ({ children }) => {
         ...payload
       } = updates || {};
 
-      await api.put(`/assignments/${assignmentId}`, {
+      const response = await api.put(`/assignments/${assignmentId}`, {
         ...payload,
         subjectId: payload.subjectId,
       });
-      await uploadAssignmentMaterials(assignmentId, materialFiles, removedMaterialIds);
 
-      Promise.resolve(loadTeacherData()).catch(() => {});
+      if (response.data?.assignment && typeof response.data.assignment === 'object') {
+        replaceAssignmentInList(response.data.assignment);
+      } else {
+        void refreshAfterAssignmentMutation();
+      }
+
+      const files = Array.isArray(materialFiles) ? materialFiles.filter(Boolean) : [];
+      const removeIds = Array.isArray(removedMaterialIds) ? removedMaterialIds.filter(Boolean) : [];
+      if (files.length > 0 || removeIds.length > 0) {
+        void uploadAssignmentMaterials(assignmentId, files, removeIds)
+          .then(() => api.get(`/assignments/${assignmentId}`))
+          .then((materialsRes) => {
+            if (materialsRes?.data) {
+              replaceAssignmentInList(materialsRes.data);
+            }
+          })
+          .catch((matErr) => {
+            showNotificationError(
+              getApiErrorMessage(matErr, 'Задание сохранено, но материалы не загрузились'),
+            );
+          });
+      }
+
       return { success: true };
     } catch (err) {
       return { success: false, error: getApiErrorMessage(err, 'Ошибка при обновлении задания') };
-    } finally {
-      setLoading(false);
     }
-  }, [loadTeacherData, uploadAssignmentMaterials]);
+  }, [
+    refreshAfterAssignmentMutation,
+    replaceAssignmentInList,
+    showNotificationError,
+    uploadAssignmentMaterials,
+  ]);
 
   const deleteAssignment = useCallback(async (assignmentId) => {
-    setLoading(true);
     try {
       await api.delete(`/assignments/${assignmentId}`);
 
-      await loadTeacherData();
+      setAllTeacherAssignments((prev) => (
+        prev.filter((item) => Number(item.id) !== Number(assignmentId))
+      ));
+      setMetaAssignments((prev) => (
+        prev.filter((item) => Number(item.id) !== Number(assignmentId))
+      ));
+
       return { success: true };
     } catch (err) {
       return { success: false, error: getApiErrorMessage(err, 'Ошибка при удалении задания') };
-    } finally {
-      setLoading(false);
     }
-  }, [loadTeacherData]);
+  }, []);
 
   const assignmentsWithSubmissions = useMemo(() => {
     return allTeacherAssignments.map(assignment => {
@@ -535,6 +668,7 @@ export const TeacherProvider = ({ children }) => {
     gradeSubmission,
     returnSubmission,
     createAssignment,
+    publishAssignmentFromBank,
     updateAssignment,
     deleteAssignment,
   };

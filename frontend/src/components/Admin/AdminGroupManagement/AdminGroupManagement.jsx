@@ -19,6 +19,8 @@ import { ADMIN_CARD_GRID_PAGE_SIZE } from '../../../config/adminPagination';
 import usePaginationClamp from '../../../hooks/usePaginationClamp';
 import { parsePaginationMeta } from '../../../utils/pagination';
 import AdminGroupsImportModal from '../AdminGroupsImportModal/AdminGroupsImportModal';
+import SearchableSelect from '../../UI/SearchableSelect/SearchableSelect';
+import { toSpecialtySelectOptions } from '../../../utils/selectOptions';
 import './AdminGroupManagement.scss';
 
 const groupStatusPresentation = (row) => {
@@ -83,8 +85,6 @@ const AdminGroupManagement = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createSpecialty, setCreateSpecialty] = useState('');
-  const [createAdmissionYear, setCreateAdmissionYear] = useState(String(new Date().getFullYear()));
-  const [createCurrentCourse, setCreateCurrentCourse] = useState('1');
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -201,19 +201,19 @@ const AdminGroupManagement = () => {
     [search, status, specialty],
   );
 
-  const specialtyFilterSelect = useMemo(
-    () => [
-      { value: '', label: 'Все специальности' },
-      ...specialtyOptions.map((s) => ({ value: String(s.id), label: `${s.name}${s.code ? ` (${s.code})` : ''}` })),
-    ],
+  const specialtyFilterOptions = useMemo(
+    () => toSpecialtySelectOptions(specialtyOptions),
+    [specialtyOptions],
+  );
+
+  const specialtyCreateOptions = useMemo(
+    () => toSpecialtySelectOptions(specialtyOptions),
     [specialtyOptions],
   );
 
   const openCreate = () => {
     setCreateName('');
     setCreateSpecialty('');
-    setCreateAdmissionYear(String(new Date().getFullYear()));
-    setCreateCurrentCourse('1');
     setCreateOpen(true);
   };
 
@@ -223,8 +223,6 @@ const AdminGroupManagement = () => {
       await api.post('/admin/groups', {
         name: createName.trim(),
         specialtyId: Number(createSpecialty),
-        admissionYear: Number(createAdmissionYear),
-        currentCourse: Number(createCurrentCourse),
       });
       showSuccess('Группа создана. Она закрыта — добавьте студентов, чтобы открыть.');
       setCreateOpen(false);
@@ -341,18 +339,14 @@ const AdminGroupManagement = () => {
           <label className="filter-popover__label" htmlFor="admin-group-specialty-filter">
             Специальность
           </label>
-          <select
-            id="admin-group-specialty-filter"
-            className="filter-select"
+          <SearchableSelect
             value={specialty}
-            onChange={(e) => applySpecialtyFilter(e.target.value)}
-          >
-            {specialtyFilterSelect.map((o) => (
-              <option key={o.value || 'all'} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            onChange={applySpecialtyFilter}
+            options={specialtyFilterOptions}
+            placeholder="Все специальности"
+            searchPlaceholder="Найти специальность…"
+            ariaLabel="Фильтр по специальности"
+          />
         </div>
         <div className="filter-popover__field">
           <label className="filter-popover__label" htmlFor="admin-group-status-filter">
@@ -553,45 +547,17 @@ const AdminGroupManagement = () => {
             <label className="admin-group-modal__label">
               Специальность <span className="admin-group-modal__required">*</span>
             </label>
-            <select
-              className="admin-group-modal__input"
+            <SearchableSelect
               value={createSpecialty}
-              onChange={(e) => setCreateSpecialty(e.target.value)}
-            >
-              <option value="">Выберите специальность</option>
-              {specialtyOptions.map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="admin-group-modal__field">
-            <label className="admin-group-modal__label">Год начала обучения</label>
-            <input
-              className="admin-group-modal__input"
-              type="number"
-              min="2000"
-              max="2100"
-              value={createAdmissionYear}
-              onChange={(e) => setCreateAdmissionYear(e.target.value)}
-              placeholder="2025"
-            />
-          </div>
-          <div className="admin-group-modal__field">
-            <label className="admin-group-modal__label">Текущий курс</label>
-            <input
-              className="admin-group-modal__input"
-              type="number"
-              min="1"
-              max="6"
-              value={createCurrentCourse}
-              onChange={(e) => setCreateCurrentCourse(e.target.value)}
-              placeholder="1"
+              onChange={setCreateSpecialty}
+              options={specialtyCreateOptions}
+              placeholder="Выберите специальность"
+              searchPlaceholder="Найти специальность…"
+              ariaLabel="Специальность группы"
             />
           </div>
           <p className="admin-group-modal__hint">
-            Новая группа создаётся закрытой. Открыть её можно после добавления хотя бы одного студента.
+            Новая группа создаётся закрытой — открыть её можно после добавления хотя бы одного студента.
           </p>
         </ModalSection>
       </Modal>
@@ -603,7 +569,13 @@ const AdminGroupManagement = () => {
         size="medium"
         contentClassName="admin-group-modal__body"
         footer={(
-          <Button type="button" variant="danger" loading={closeSubmitting} onClick={() => void submitClose()}>
+          <Button
+            type="button"
+            variant="danger"
+            loading={closeSubmitting}
+            disabled={closeSubmitting || closeConfirmName.trim() !== (closeTarget?.name ?? '')}
+            onClick={() => void submitClose()}
+          >
             Закрыть группу
           </Button>
         )}

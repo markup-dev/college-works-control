@@ -5,8 +5,10 @@ import { useNotification } from '../../../context/NotificationContext';
 import { getApiErrorMessage } from '../../../utils/adminApiErrors';
 import { formatDateLong } from '../../../utils/dateHelpers';
 import { sanitizeSubjectCodeInput, SUBJECT_CODE_MAX_LENGTH } from '../../../utils/validation';
+import { toTeacherSelectOptions } from '../../../utils/selectOptions';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
 import Button from '../../UI/Button/Button';
+import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import EmptyState from '../../UI/EmptyState/EmptyState';
 import EntityCard from '../../UI/EntityCard/EntityCard';
 import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
@@ -20,6 +22,7 @@ import { ADMIN_CARD_GRID_PAGE_SIZE } from '../../../config/adminPagination';
 import usePaginationClamp from '../../../hooks/usePaginationClamp';
 import { parsePaginationMeta } from '../../../utils/pagination';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
+import SearchableSelect from '../../UI/SearchableSelect/SearchableSelect';
 import TeacherRequestModeration from '../TeacherRequestModeration/TeacherRequestModeration';
 import AdminSubjectsImportModal from '../AdminSubjectsImportModal/AdminSubjectsImportModal';
 import './AdminSubjectManagement.scss';
@@ -81,6 +84,11 @@ const AdminSubjectManagement = () => {
   const [viewId, setViewId] = useState(null);
   const [viewData, setViewData] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
+  const [loadsAccordionOpen, setLoadsAccordionOpen] = useState(false);
+  const [newTeacherId, setNewTeacherId] = useState('');
+  const [allowanceToRemove, setAllowanceToRemove] = useState(null);
+  const [allowanceAddSubmitting, setAllowanceAddSubmitting] = useState(false);
+  const [allowanceRemoveSubmitting, setAllowanceRemoveSubmitting] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deletePreview, setDeletePreview] = useState(null);
@@ -93,6 +101,16 @@ const AdminSubjectManagement = () => {
   const [addLoadTeachers, setAddLoadTeachers] = useState([]);
   const [addLoadGroups, setAddLoadGroups] = useState([]);
   const [addLoadSubmitting, setAddLoadSubmitting] = useState(false);
+
+  const addLoadCanSubmit = useMemo(
+    () => Boolean(addLoadTeacherId) && addLoadGroupIds.size > 0,
+    [addLoadTeacherId, addLoadGroupIds],
+  );
+
+  const deleteCanSubmit = useMemo(
+    () => Boolean(deleteTarget) && deleteConfirmCode.trim() === (deleteTarget?.code || ''),
+    [deleteTarget, deleteConfirmCode],
+  );
 
   useEffect(() => {
     const st = location.state;
@@ -154,6 +172,9 @@ const AdminSubjectManagement = () => {
   useEffect(() => {
     if (viewId == null) {
       setViewData(null);
+      setLoadsAccordionOpen(false);
+      setNewTeacherId('');
+      setAllowanceToRemove(null);
       return;
     }
     let cancelled = false;
@@ -175,6 +196,66 @@ const AdminSubjectManagement = () => {
       cancelled = true;
     };
   }, [viewId, showError]);
+
+  const reloadViewSubject = useCallback(async (subjectId) => {
+    if (subjectId == null) return null;
+    try {
+      const { data } = await api.get(`/admin/subjects/${subjectId}`);
+      setViewData(data);
+      return data;
+    } catch (e) {
+      showError(getApiErrorMessage(e, 'Не удалось обновить данные дисциплины'));
+      return null;
+    }
+  }, [showError]);
+
+  const activeTeacherAllowances = useMemo(
+    () => (Array.isArray(viewData?.teacherAllowances) ? viewData.teacherAllowances : []),
+    [viewData?.teacherAllowances],
+  );
+
+  const availableTeacherOptions = useMemo(
+    () => toTeacherSelectOptions(Array.isArray(viewData?.availableTeachers) ? viewData.availableTeachers : []),
+    [viewData?.availableTeachers],
+  );
+
+  const subjectAllowancesBlocked = viewData?.subject?.status === 'inactive';
+
+  const addTeacherAllowance = async () => {
+    if (!viewData?.subject?.id || !newTeacherId || subjectAllowancesBlocked) return;
+    setAllowanceAddSubmitting(true);
+    try {
+      await api.post(`/admin/subjects/${viewData.subject.id}/teacher-allowances`, {
+        teacherId: Number(newTeacherId),
+      });
+      showSuccess('Допуск к дисциплине добавлен');
+      setNewTeacherId('');
+      await reloadViewSubject(viewData.subject.id);
+      void fetchSubjects();
+    } catch (e) {
+      showError(getApiErrorMessage(e, 'Не удалось добавить допуск'));
+    } finally {
+      setAllowanceAddSubmitting(false);
+    }
+  };
+
+  const submitRemoveTeacherAllowance = async () => {
+    if (!allowanceToRemove) return;
+    setAllowanceRemoveSubmitting(true);
+    try {
+      await api.delete(`/admin/teacher-disciplines/${allowanceToRemove.id}`);
+      showSuccess('Допуск к дисциплине отключён');
+      setAllowanceToRemove(null);
+      if (viewData?.subject?.id) {
+        await reloadViewSubject(viewData.subject.id);
+      }
+      void fetchSubjects();
+    } catch (e) {
+      showError(getApiErrorMessage(e, 'Не удалось убрать допуск'));
+    } finally {
+      setAllowanceRemoveSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     if (!addLoadOpen || !viewId || !viewData?.subject?.id) return;
@@ -545,7 +626,7 @@ const AdminSubjectManagement = () => {
                     </div>
                     <div className="admin-subject-card__fields">
                       <div className="admin-subject-card__row admin-subject-card__row--labeled">
-                        <span className="admin-subject-card__label">Преподавателей</span>
+                        <span className="admin-subject-card__label">С допуском</span>
                         <span className="admin-subject-card__value">{t}</span>
                       </div>
                       <div className="admin-subject-card__row admin-subject-card__row--labeled">
@@ -734,8 +815,8 @@ const AdminSubjectManagement = () => {
               <ModalSection title="Показатели" variant="soft">
                 <div className="admin-subject-view__stats-grid">
                   <div className="admin-subject-view__stat-card">
-                    <span>Преподавателей</span>
-                    <strong>{viewData.stats.teachersCount}</strong>
+                    <span>С допуском</span>
+                    <strong>{viewData.stats.allowancesCount ?? viewData.stats.teachersCount ?? activeTeacherAllowances.length}</strong>
                   </div>
                   <div className="admin-subject-view__stat-card">
                     <span>Групп</span>
@@ -760,39 +841,115 @@ const AdminSubjectManagement = () => {
                 </div>
               </ModalSection>
             )}
-            <ModalSection title={`Назначения (${viewData.teachingLoads?.length ?? 0})`}>
-              {!viewData.teachingLoads?.length && (
-                <EmptyState
-                  title="Назначений пока нет"
-                  message="Добавьте преподавателя и группу через кнопку «Добавить назначение»."
-                />
+            <ModalSection title="Допуск к дисциплине" variant="soft">
+              {subjectAllowancesBlocked && (
+                <p className="admin-subject-view__allowances-hint admin-subject-view__allowances-hint--blocked">
+                  Дисциплина неактивна — новые допуски недоступны. Существующие допуски сохранены для истории назначений.
+                </p>
               )}
-              {viewData.teachingLoads?.length > 0 && (
-                <ul className="admin-subject-view__loads">
-                  {viewData.teachingLoads.map((row) => (
-                    <li key={row.teachingLoadId} className="admin-subject-view__load-card">
-                      <div className="admin-subject-view__load-top">
-                        <strong>
-                          {row.teacher
-                            ? shortName(row.teacher.lastName, row.teacher.firstName, row.teacher.middleName)
-                            : '—'}
-                        </strong>
-                      </div>
-                      <div className="admin-subject-view__load-fields">
-                        <div className="admin-subject-view__load-row">
-                          <span>Группа</span>
-                          <span>{row.group?.name || '—'}</span>
-                        </div>
-                        <div className="admin-subject-view__load-row">
-                          <span>Активных заданий</span>
-                          <span>{row.activeAssignmentsCount ?? 0}</span>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+              <div className="admin-subject-view__allowances-grid">
+                {activeTeacherAllowances.map((item) => {
+                  const teacher = item.teacher;
+                  const teacherLabel = teacher
+                    ? shortName(teacher.lastName, teacher.firstName, teacher.middleName)
+                    : '—';
+                  const loadsCount = item.loadsCount ?? 0;
+
+                  return (
+                    <div key={item.id} className="admin-subject-view__allowance-item">
+                      <strong>{teacherLabel}</strong>
+                      <span>{teacher?.department?.trim() || '—'}</span>
+                      <span className="admin-subject-view__allowance-meta">
+                        {loadsCount > 0 ? `Назначений: ${loadsCount}` : 'Без назначений'}
+                      </span>
+                      {!subjectAllowancesBlocked && (
+                        <Button type="button" size="small" variant="outline" onClick={() => setAllowanceToRemove(item)}>
+                          Убрать
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {activeTeacherAllowances.length === 0 && (
+                <p className="admin-subject-view__allowances-hint">Преподавателей с допуском пока нет</p>
+              )}
+              {!subjectAllowancesBlocked && (
+                <div className="admin-subject-view__inline-form">
+                  <SearchableSelect
+                    value={newTeacherId}
+                    onChange={setNewTeacherId}
+                    options={availableTeacherOptions}
+                    placeholder="Добавить преподавателя"
+                    searchPlaceholder="Найти преподавателя…"
+                    emptyMessage="Все активные преподаватели уже добавлены"
+                    ariaLabel="Преподаватель для допуска"
+                    disabled={allowanceAddSubmitting}
+                  />
+                  <Button
+                    type="button"
+                    size="small"
+                    variant="primary"
+                    loading={allowanceAddSubmitting}
+                    disabled={allowanceAddSubmitting || !newTeacherId}
+                    onClick={() => void addTeacherAllowance()}
+                  >
+                    Добавить
+                  </Button>
+                </div>
               )}
             </ModalSection>
+            <div className={`admin-subject-view__loads-accordion${loadsAccordionOpen ? ' is-open' : ''}`}>
+              <button
+                type="button"
+                className="admin-subject-view__loads-trigger"
+                aria-expanded={loadsAccordionOpen}
+                onClick={() => setLoadsAccordionOpen((open) => !open)}
+              >
+                <span className="admin-subject-view__loads-title">
+                  Назначения ({viewData.teachingLoads?.length ?? 0})
+                </span>
+              </button>
+              {loadsAccordionOpen && (
+                <div className="admin-subject-view__loads-panel">
+                  {!viewData.teachingLoads?.length ? (
+                    <EmptyState
+                      title="Назначений пока нет"
+                      message="Добавьте преподавателя и группу через кнопку «Добавить назначение»."
+                    />
+                  ) : (
+                    <ul className="admin-subject-view__loads">
+                      {viewData.teachingLoads.map((row) => {
+                        const loadKey = String(row.teachingLoadId ?? row.teaching_load_id);
+                        const teacherLabel = row.teacher
+                          ? shortName(row.teacher.lastName, row.teacher.firstName, row.teacher.middleName)
+                          : '—';
+                        const groupName = row.group?.name || '—';
+                        const activeCount = row.activeAssignmentsCount ?? row.active_assignments_count ?? 0;
+
+                        return (
+                          <li key={loadKey} className="admin-subject-view__load-card">
+                            <div className="admin-subject-view__load-top">
+                              <strong>{teacherLabel}</strong>
+                            </div>
+                            <div className="admin-subject-view__load-fields">
+                              <div className="admin-subject-view__load-row">
+                                <span>Группа</span>
+                                <span>{groupName}</span>
+                              </div>
+                              <div className="admin-subject-view__load-row">
+                                <span>Активных заданий</span>
+                                <span>{activeCount}</span>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
 
             <ModalDangerZone
               title="Статус и удаление"
@@ -831,7 +988,13 @@ const AdminSubjectManagement = () => {
         contentClassName="admin-subject-form admin-subject-add-load"
         footer={(
           <>
-            <Button type="button" variant="primary" loading={addLoadSubmitting} onClick={() => void submitAddLoad()}>
+            <Button
+              type="button"
+              variant="primary"
+              loading={addLoadSubmitting}
+              disabled={addLoadSubmitting || !addLoadCanSubmit}
+              onClick={() => void submitAddLoad()}
+            >
               Создать
             </Button>
           </>
@@ -896,7 +1059,13 @@ const AdminSubjectManagement = () => {
         contentClassName="admin-subject-form"
         footer={(
           <>
-            <Button type="button" variant="danger" loading={deleteSubmitting} onClick={() => void submitDelete()}>
+            <Button
+              type="button"
+              variant="danger"
+              loading={deleteSubmitting}
+              disabled={deleteSubmitting || !deleteCanSubmit}
+              onClick={() => void submitDelete()}
+            >
               Удалить
             </Button>
           </>
@@ -905,7 +1074,7 @@ const AdminSubjectManagement = () => {
         <ModalSection title="Подтверждение удаления" variant="danger">
           {deletePreview?.stats && (
             <p className="admin-subject-form__warn">
-              Связано: преподавателей {deletePreview.stats.teachersCount}, групп {deletePreview.stats.groupsCount},
+              Связано: с допуском {deletePreview.stats.allowancesCount ?? deletePreview.stats.teachersCount}, групп {deletePreview.stats.groupsCount},
               заданий {deletePreview.stats.assignmentsCount}, сданных работ {deletePreview.stats.submissionsCount}.
               Назначения будут удалены; задания останутся без привязки к дисциплине.
             </p>
@@ -926,6 +1095,25 @@ const AdminSubjectManagement = () => {
         isOpen={importOpen}
         onClose={() => setImportOpen(false)}
         onImported={handleSubjectsImported}
+      />
+
+      <ConfirmModal
+        isOpen={Boolean(allowanceToRemove)}
+        onClose={() => !allowanceRemoveSubmitting && setAllowanceToRemove(null)}
+        onConfirm={submitRemoveTeacherAllowance}
+        title="Убрать допуск к дисциплине?"
+        message={allowanceToRemove
+          ? `Преподаватель ${allowanceToRemove.teacher
+            ? shortName(
+              allowanceToRemove.teacher.lastName,
+              allowanceToRemove.teacher.firstName,
+              allowanceToRemove.teacher.middleName,
+            )
+            : '—'} потеряет допуск к дисциплине «${viewData?.subject?.name || 'Дисциплина'}». Существующие назначения и задания сохранятся.`
+          : ''}
+        confirmText="Убрать"
+        danger
+        loading={allowanceRemoveSubmitting}
       />
     </div>
   );

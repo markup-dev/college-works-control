@@ -14,6 +14,12 @@ import Pagination from '../../UI/Pagination/Pagination';
 import { ADMIN_LIST_PAGE_SIZE } from '../../../config/adminPagination';
 import usePaginationClamp from '../../../hooks/usePaginationClamp';
 import { parsePaginationMeta } from '../../../utils/pagination';
+import {
+  LogDetailsText,
+  getSystemLogActionLabel,
+  getSystemLogRoleLabel,
+} from '../../../utils/systemLogPresentation';
+import '../../../components/Admin/LogDetailsText/LogDetailsText.scss';
 import './AdminLogManagement.scss';
 
 const AdminLogManagement = () => {
@@ -147,11 +153,13 @@ const AdminLogManagement = () => {
               <EntityCard key={row.id} as="li" className="admin-log-management__card" interactive={false}>
                 <div className="admin-log-management__card-top">
                   <span className="admin-log-management__card-time">{formatDateTimeWithSeconds(row.timestamp)}</span>
-                  <span className="admin-log-management__badge">{row.userRole ?? '—'}</span>
+                  <span className="admin-log-management__badge">{getSystemLogRoleLabel(row.userRole)}</span>
                 </div>
                 <p className="admin-log-management__card-user">{row.user}</p>
-                <p className="admin-log-management__card-action">{row.action}</p>
-                {row.details ? <p className="admin-log-management__card-details">{row.details}</p> : null}
+                <p className="admin-log-management__card-action">{getSystemLogActionLabel(row.action)}</p>
+                {row.details ? (
+                  <LogDetailsText details={row.details} className="admin-log-management__card-details" />
+                ) : null}
               </EntityCard>
             ))}
           </ol>

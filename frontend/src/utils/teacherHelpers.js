@@ -17,6 +17,27 @@ export const getSubmissionStatusInfo = (status) => {
   return statusMap[status] || { label: status, variant: 'default', icon: '' };
 };
 
+/** Доп. бейдж «Пересдача» — только пока повторная сдача ждёт проверки, не после оценки. */
+export const shouldShowRetakeBadge = (entity) => {
+  if (!entity || typeof entity !== 'object') {
+    return false;
+  }
+
+  const isResubmission = Boolean(entity.isResubmission ?? entity.is_resubmission);
+  const status = String(entity.status || '');
+
+  return isResubmission && status === 'submitted';
+};
+
+/** Бейдж «Пересдача» у студента — только когда нужно сдать повторно. */
+export const shouldShowStudentRetakeBadge = (assignment) => {
+  if (!assignment || typeof assignment !== 'object') {
+    return false;
+  }
+
+  return String(assignment.status || '') === 'returned' && !assignment.is_completed;
+};
+
 export const formatFileSize = (bytes) => {
   if (!bytes || bytes === 0) return '0 Bytes';
   

@@ -141,6 +141,7 @@ const AssignmentModal = ({
   const [formData, setFormData] = useState(() => buildEmptyFormData());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGroupsDropdownOpen, setIsGroupsDropdownOpen] = useState(false);
+  const [groupPickerDraft, setGroupPickerDraft] = useState([]);
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const wasOpenRef = useRef(false);
   const groupsDropdownRef = useRef(null);
@@ -277,9 +278,26 @@ const AssignmentModal = ({
     setFormData(createInitialFormData());
   }, [isOpen, createInitialFormData]);
 
+  const closeGroupsDropdown = useCallback(() => {
+    setIsGroupsDropdownOpen(false);
+    setGroupSearchQuery('');
+  }, []);
+
+  const openGroupsDropdown = useCallback(() => {
+    setGroupPickerDraft(normalizeGroupSelection(formData.studentGroups));
+    setIsGroupsDropdownOpen(true);
+  }, [formData.studentGroups]);
+
+  const toggleGroupsDropdown = useCallback(() => {
+    if (isGroupsDropdownOpen) {
+      closeGroupsDropdown();
+      return;
+    }
+    openGroupsDropdown();
+  }, [closeGroupsDropdown, isGroupsDropdownOpen, openGroupsDropdown]);
+
   useEffect(() => {
     if (!isGroupsDropdownOpen) {
-      setGroupSearchQuery('');
       return undefined;
     }
 
@@ -289,7 +307,7 @@ const AssignmentModal = ({
 
     const handleOutsideClick = (event) => {
       if (!groupsDropdownRef.current?.contains(event.target)) {
-        setIsGroupsDropdownOpen(false);
+        closeGroupsDropdown();
       }
     };
 
@@ -298,7 +316,7 @@ const AssignmentModal = ({
       window.clearTimeout(focusTimer);
       document.removeEventListener('mousedown', handleOutsideClick);
     };
-  }, [isGroupsDropdownOpen]);
+  }, [closeGroupsDropdown, isGroupsDropdownOpen]);
 
   useEffect(() => {
     const selectedFormats = normalizeAllowedFormats(formData.allowedFormats);
@@ -473,31 +491,35 @@ const AssignmentModal = ({
     }));
   };
 
+  const draftSelectedGroups = normalizeGroupSelection(groupPickerDraft);
+
   const handleToggleGroup = (groupName) => {
-    setFormData((prev) => {
-      const currentGroups = normalizeGroupSelection(prev.studentGroups);
+    setGroupPickerDraft((prev) => {
+      const currentGroups = normalizeGroupSelection(prev);
       const isSelected = currentGroups.includes(groupName);
-      const nextGroups = isSelected
+      return isSelected
         ? currentGroups.filter((group) => group !== groupName)
         : [...currentGroups, groupName];
-
-      return {
-        ...prev,
-        studentGroups: nextGroups,
-      };
     });
   };
 
   const handleSelectAllGroups = () => {
     if (groupSearchQuery.trim()) {
-      handleInputChange('studentGroups', [...new Set([...selectedGroups, ...filteredGroupOptions])]);
+      setGroupPickerDraft((prev) => (
+        [...new Set([...normalizeGroupSelection(prev), ...filteredGroupOptions])]
+      ));
       return;
     }
-    handleInputChange('studentGroups', [...groupOptions]);
+    setGroupPickerDraft([...groupOptions]);
   };
 
   const handleClearGroups = () => {
-    handleInputChange('studentGroups', []);
+    setGroupPickerDraft([]);
+  };
+
+  const handleConfirmGroupsSelection = () => {
+    handleInputChange('studentGroups', draftSelectedGroups);
+    closeGroupsDropdown();
   };
 
   const addCriterion = () => {
@@ -731,7 +753,7 @@ const AssignmentModal = ({
                         <button
                           type="button"
                           className={`group-dropdown__trigger ${isGroupsDropdownOpen ? 'is-open' : ''}`}
-                          onClick={() => setIsGroupsDropdownOpen((prev) => !prev)}
+                          onClick={toggleGroupsDropdown}
                         >
                           <span className="group-dropdown__trigger-label">{selectedGroupsSummary}</span>
                           <span className="group-dropdown__trigger-arrow" aria-hidden="true">▾</span>
@@ -760,7 +782,7 @@ const AssignmentModal = ({
                                 <p className="group-dropdown__empty">Группы не найдены</p>
                               ) : (
                                 filteredGroupOptions.map((group) => {
-                                const checked = selectedGroups.includes(group);
+                                const checked = draftSelectedGroups.includes(group);
                                 return (
                                   <label key={group} className={`group-checkbox-item ${checked ? 'group-checkbox-item--checked' : ''}`}>
                                     <input
@@ -774,13 +796,24 @@ const AssignmentModal = ({
                               })
                               )}
                             </div>
+                            <div className="group-dropdown__confirm">
+                              <Button
+                                type="button"
+                                variant="primary"
+                                size="small"
+                                fullWidth
+                                onClick={handleConfirmGroupsSelection}
+                              >
+                                Подтвердить
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </div>
                     ) : (
                       <div className="group-checkbox-empty">Нет назначенных групп</div>
                     )}
-                    <small className="teacher-assignment-modal__hint">Откройте список и отметьте нужные группы.</small>
+                    <small className="teacher-assignment-modal__hint">Отметьте группы и нажмите «Подтвердить».</small>
                   </FormGroup>
                   
                   <FormGroup label="Срок сдачи:" required>

@@ -12,16 +12,8 @@ import Modal from '../../UI/Modal/Modal';
 import ModalSection from '../../UI/Modal/ModalSection';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
 import SearchableSelect from '../../UI/SearchableSelect/SearchableSelect';
+import { toSubjectSelectOptions } from '../../../utils/selectOptions';
 import './AdminSpecialtiesManagement.scss';
-
-const formatSubjectLabel = (name, code) => (code ? `${name} (${code})` : name);
-
-const toSubjectSelectOptions = (items) => items.map((subject) => ({
-  value: String(subject.id),
-  label: formatSubjectLabel(subject.name, subject.code),
-  meta: subject.code || undefined,
-  searchText: `${subject.name} ${subject.code || ''}`,
-}));
 
 const emptyForm = {
   code: '',
@@ -246,7 +238,15 @@ const AdminSpecialtiesManagement = () => {
         size="large"
         contentClassName="admin-specialties-management__modal"
         footer={(
-          <Button type="button" variant="primary" loading={saving} onClick={() => void saveSpecialty()}>Сохранить</Button>
+          <Button
+            type="button"
+            variant="primary"
+            loading={saving}
+            disabled={saving || !form.code.trim() || !form.name.trim()}
+            onClick={() => void saveSpecialty()}
+          >
+            Сохранить
+          </Button>
         )}
       >
         <ModalSection title="Основные данные">

@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Admin\Concerns\LogsAdminActions;
 use App\Http\Controllers\Controller;
+use App\Models\Subject;
 use App\Models\TeacherSubject;
 use App\Models\TeacherSubjectRequest;
 use App\Models\TeachingLoad;
 use App\Models\TeachingLoadRequest;
 use App\Services\AcademicProgramService;
 use App\Services\AdminActionNotificationService;
+use App\Support\AdminLogMessages;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -67,10 +69,32 @@ class TeacherDisciplineController extends Controller
         $this->log(
             $request,
             'store_teacher_discipline',
-            "Изменён допуск преподавателя {$item->teacher?->full_name}: {$item->subject?->name}, статус {$item->status}"
+            'Изменён допуск: '.AdminLogMessages::teachingLoadTriple(
+                $item->teacher?->full_name,
+                $item->subject?->name,
+                AdminLogMessages::teacherSubjectStatus((string) $item->status),
+            ),
         );
 
         return response()->json(['success' => true, 'teacher_subject' => $item]);
+    }
+
+    public function storeSubjectTeacherAllowance(Request $request, Subject $subject, AcademicProgramService $programs)
+    {
+        if ($subject->status !== 'active') {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'subject_id' => 'Нельзя выдать допуск по неактивной дисциплине.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'teacher_id' => ['required', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'teacher'))],
+            'status' => ['nullable', 'in:active,inactive'],
+        ]);
+
+        $request->merge(['subject_id' => $subject->id]);
+
+        return $this->storeTeacherSubject($request, (int) $validated['teacher_id'], $programs);
     }
 
     public function deleteTeacherSubject(Request $request, TeacherSubject $teacherSubject)
@@ -89,7 +113,16 @@ class TeacherDisciplineController extends Controller
                 ],
             );
         }
-        $this->log($request, 'disable_teacher_discipline', "Отключен допуск преподавателя {$teacherSubject->teacher_id} к дисциплине {$teacherSubject->subject_id}");
+        $teacherSubject->loadMissing(['teacher', 'subject']);
+        $this->log(
+            $request,
+            'disable_teacher_discipline',
+            'Отключён допуск: '.AdminLogMessages::teachingLoadTriple(
+                $teacherSubject->teacher?->full_name,
+                $teacherSubject->subject?->name,
+                null,
+            ),
+        );
 
         return response()->json(['success' => true]);
     }
@@ -163,7 +196,12 @@ class TeacherDisciplineController extends Controller
         $this->log(
             $request,
             'resolve_discipline_request',
-            "Заявка на дисциплину {$fresh?->subject?->name} от {$fresh?->teacher?->full_name}: {$fresh?->status}"
+            sprintf(
+                'Заявка на дисциплину «%s» от %s: %s',
+                $fresh?->subject?->name ?? '—',
+                $fresh?->teacher?->full_name ?? '—',
+                AdminLogMessages::requestStatus((string) ($fresh?->status ?? '')),
+            ),
         );
 
         return response()->json(['success' => true, 'request' => $fresh]);
@@ -241,7 +279,13 @@ class TeacherDisciplineController extends Controller
         $this->log(
             $request,
             'resolve_teaching_load_request',
-            "Заявка на назначение {$fresh?->subject?->name} / {$fresh?->group?->name} от {$fresh?->teacher?->full_name}: {$fresh?->status}"
+            sprintf(
+                'Заявка на назначение «%s» · %s от %s: %s',
+                $fresh?->subject?->name ?? '—',
+                $fresh?->group?->name ?? '—',
+                $fresh?->teacher?->full_name ?? '—',
+                AdminLogMessages::requestStatus((string) ($fresh?->status ?? '')),
+            ),
         );
 
         return response()->json(['success' => true, 'request' => $fresh]);

@@ -2,7 +2,7 @@ import React from 'react';
 import Button from '../../UI/Button/Button';
 import Modal from '../../UI/Modal/Modal';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
-import { formatDate, formatFileSize } from '../../../utils';
+import { formatDate, formatFileSize, shouldShowRetakeBadge } from '../../../utils';
 import './SubmissionDetailsModal.scss';
 
 const SubmissionDetailsModal = ({ 
@@ -90,7 +90,7 @@ const SubmissionDetailsModal = ({
                 Сдано: {formatDate(submission.submissionDate)}
               </span>
             )}
-            {submission.isResubmission && (
+            {shouldShowRetakeBadge(submission) && (
               <StatusBadge tone="default">
                 Пересдача
               </StatusBadge>
@@ -156,7 +156,7 @@ const SubmissionDetailsModal = ({
                   <StatusBadge tone={statusInfo.variant}>
                     {statusInfo.label}
                   </StatusBadge>
-                  {submission.isResubmission && (
+                  {shouldShowRetakeBadge(submission) && (
                     <StatusBadge tone="default">
                       Пересдача
                     </StatusBadge>

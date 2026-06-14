@@ -16,6 +16,8 @@ import ModalDangerZone from '../../UI/Modal/ModalDangerZone';
 import ModalSection from '../../UI/Modal/ModalSection';
 import TextArea from '../../UI/TextArea/TextArea';
 import DashboardFilterToolbar from '../../Shared/DashboardFilterToolbar';
+import SearchableSelect from '../../UI/SearchableSelect/SearchableSelect';
+import { toReassignTeacherSelectOptions } from '../../../utils/selectOptions';
 import Pagination from '../../UI/Pagination/Pagination';
 import { ADMIN_CARD_GRID_PAGE_SIZE } from '../../../config/adminPagination';
 import usePaginationClamp from '../../../hooks/usePaginationClamp';
@@ -566,6 +568,7 @@ const AdminAssignmentManagement = () => {
   const [eligibleTeachers, setEligibleTeachers] = useState([]);
   const [reassignTeacherId, setReassignTeacherId] = useState('');
   const [reassignSubmitting, setReassignSubmitting] = useState(false);
+  const [quickLoadTeacherId, setQuickLoadTeacherId] = useState(null);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteConfirmTitle, setDeleteConfirmTitle] = useState('');
@@ -671,33 +674,69 @@ const AdminAssignmentManagement = () => {
     };
   }, [detailId, showError]);
 
+  const loadEligibleTeachers = useCallback(async (preserveSelection = false) => {
+    if (!reassignRow?.id) {
+      setEligibleTeachers([]);
+      if (!preserveSelection) {
+        setReassignTeacherId('');
+      }
+      return;
+    }
+
+    try {
+      const { data } = await api.get(`/admin/assignments/${reassignRow.id}/eligible-teachers`);
+      const list = Array.isArray(data?.data) ? data.data : [];
+      const currentTeacherId = reassignRow?.teacher?.id ?? reassignRow?.teacherId ?? reassignRow?.teacher_id;
+      setEligibleTeachers(list.filter((teacher) => Number(teacher.id) !== Number(currentTeacherId)));
+      if (!preserveSelection) {
+        setReassignTeacherId('');
+      }
+    } catch (e) {
+      setEligibleTeachers([]);
+      showError(getApiErrorMessage(e, 'Не удалось загрузить список преподавателей'));
+    }
+  }, [reassignRow, showError]);
+
   useEffect(() => {
     if (!reassignRow?.id) {
       setEligibleTeachers([]);
       setReassignTeacherId('');
+      setQuickLoadTeacherId(null);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await api.get(`/admin/assignments/${reassignRow.id}/eligible-teachers`);
-        const list = Array.isArray(data?.data) ? data.data : [];
-        if (!cancelled) {
-          const currentTeacherId = reassignRow?.teacher?.id ?? reassignRow?.teacherId ?? reassignRow?.teacher_id;
-          setEligibleTeachers(list.filter((teacher) => Number(teacher.id) !== Number(currentTeacherId)));
-          setReassignTeacherId('');
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setEligibleTeachers([]);
-          showError(getApiErrorMessage(e, 'Не удалось загрузить список преподавателей'));
-        }
+    void loadEligibleTeachers();
+  }, [reassignRow?.id, loadEligibleTeachers]);
+
+  const reassignSubjectId = useMemo(() => {
+    const subject = reassignRow?.subject;
+    return Number(subject?.id ?? reassignRow?.subjectId ?? reassignRow?.subject_id ?? 0) || null;
+  }, [reassignRow]);
+
+  const reassignGroupLabels = useMemo(() => {
+    const groups = Array.isArray(reassignRow?.groups) ? reassignRow.groups : [];
+    return groups.reduce((acc, group) => {
+      const id = Number(group?.id ?? 0);
+      if (id > 0) {
+        acc[id] = group?.name || `Группа ${id}`;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [reassignRow, showError]);
+      return acc;
+    }, {});
+  }, [reassignRow]);
+
+  const reassignReadyTeachers = useMemo(
+    () => eligibleTeachers.filter((teacher) => teacher.canReassign !== false),
+    [eligibleTeachers],
+  );
+
+  const reassignMissingLoadTeachers = useMemo(
+    () => eligibleTeachers.filter((teacher) => teacher.canReassign === false),
+    [eligibleTeachers],
+  );
+
+  const reassignTeacherOptions = useMemo(
+    () => toReassignTeacherSelectOptions(reassignReadyTeachers),
+    [reassignReadyTeachers],
+  );
 
   const resetFilters = useCallback(() => {
     setSearch('');
@@ -760,6 +799,41 @@ const AdminAssignmentManagement = () => {
       showError(getApiErrorMessage(e, 'Не удалось сохранить'));
     } finally {
       setEditSubmitting(false);
+    }
+  };
+
+  const submitQuickTeachingLoad = async (teacher) => {
+    const teacherId = Number(teacher?.id ?? 0);
+    const groupIds = (teacher?.missingGroupIds ?? teacher?.missing_group_ids ?? [])
+      .map((id) => Number(id))
+      .filter((id) => id > 0);
+
+    if (!teacherId || !reassignSubjectId || groupIds.length === 0) {
+      showError('Не удалось определить группы для назначения');
+      return;
+    }
+
+    setQuickLoadTeacherId(teacherId);
+    try {
+      const { data } = await api.post('/admin/teaching-loads/batch', {
+        teacherId,
+        subjectId: reassignSubjectId,
+        groupIds,
+        status: 'active',
+      });
+      const createdCount = Array.isArray(data?.created) ? data.created.length : 0;
+      if (createdCount === 0) {
+        showError('Назначение уже существует или не удалось его создать');
+        await loadEligibleTeachers(true);
+        return;
+      }
+      showSuccess('Назначение добавлено — можно передать задание');
+      setReassignTeacherId(String(teacherId));
+      await loadEligibleTeachers(true);
+    } catch (e) {
+      showError(getApiErrorMessage(e, 'Не удалось добавить назначение'));
+    } finally {
+      setQuickLoadTeacherId(null);
     }
   };
 
@@ -1161,7 +1235,13 @@ const AdminAssignmentManagement = () => {
         contentClassName="admin-assignment-form"
         footer={(
           <>
-            <Button type="button" variant="primary" loading={editSubmitting} onClick={() => void submitEdit()}>
+            <Button
+              type="button"
+              variant="primary"
+              loading={editSubmitting}
+              disabled={editSubmitting || !editTitle.trim()}
+              onClick={() => void submitEdit()}
+            >
               Сохранить
             </Button>
           </>
@@ -1209,13 +1289,20 @@ const AdminAssignmentManagement = () => {
 
       <Modal
         isOpen={!!reassignRow}
-        onClose={() => !reassignSubmitting && setReassignRow(null)}
+        onClose={() => !reassignSubmitting && quickLoadTeacherId == null && setReassignRow(null)}
         title="Сменить преподавателя"
-        size="medium"
-        contentClassName="admin-assignment-form"
+        size="large"
+        className="admin-assignment-reassign-modal"
+        contentClassName="admin-assignment-form admin-assignment-reassign-modal__content"
         footer={(
           <>
-            <Button type="button" variant="primary" loading={reassignSubmitting} disabled={!reassignTeacherId} onClick={() => void submitReassign()}>
+            <Button
+              type="button"
+              variant="primary"
+              loading={reassignSubmitting}
+              disabled={!reassignTeacherId || quickLoadTeacherId != null}
+              onClick={() => void submitReassign()}
+            >
               Сменить
             </Button>
           </>
@@ -1223,21 +1310,70 @@ const AdminAssignmentManagement = () => {
       >
         <ModalSection title="Новый преподаватель">
           <p className="admin-assignment-form__note">
-            Сначала показаны преподаватели с подходящей нагрузкой. Если таких нет, можно выбрать активного преподавателя вручную.
+            Выберите преподавателя, у которого уже есть учебное назначение на все группы этого задания.
+            Назначение текущего преподавателя не снимается — у нового создаётся отдельная строка.
           </p>
           <label className="admin-assignment-form__label" htmlFor="aam-reassign-t">
-            Новый преподаватель
+            Преподаватель с назначением
           </label>
-          <select id="aam-reassign-t" className="admin-assignment-form__select" value={reassignTeacherId} onChange={(e) => setReassignTeacherId(e.target.value)}>
-            <option value="">Выберите</option>
-            {eligibleTeachers.map((t) => (
-              <option key={t.id} value={String(t.id)}>
-                {`${t.shortName ?? t.fullName ?? t.label ?? 'Преподаватель'}${t.matchLabel ? ` — ${t.matchLabel}` : ''}`}
-              </option>
-            ))}
-          </select>
-          {eligibleTeachers.length === 0 && (
-            <p className="admin-assignment-form__note">Подходящих преподавателей пока нет.</p>
+          <SearchableSelect
+            value={reassignTeacherId}
+            onChange={setReassignTeacherId}
+            options={reassignTeacherOptions}
+            placeholder="Выберите преподавателя"
+            searchPlaceholder="Найти преподавателя…"
+            emptyMessage="Пока нет подходящих преподавателей"
+            disabled={quickLoadTeacherId != null}
+            ariaLabel="Новый преподаватель"
+          />
+          {reassignReadyTeachers.length === 0 && reassignMissingLoadTeachers.length === 0 && (
+            <p className="admin-assignment-form__hint">
+              Нет преподавателей с допуском к дисциплине этого задания.
+            </p>
+          )}
+          {reassignReadyTeachers.length === 0 && reassignMissingLoadTeachers.length > 0 && (
+            <p className="admin-assignment-form__hint">
+              Сначала добавьте назначение нужному преподавателю — кнопкой ниже или в разделе «Назначения».
+            </p>
+          )}
+          {reassignMissingLoadTeachers.length > 0 && (
+            <div className="admin-assignment-form__warning">
+              <p className="admin-assignment-form__warning-title">
+                Есть допуск к дисциплине, но нет назначения на группы задания
+              </p>
+              <ul className="admin-assignment-form__warning-list">
+                {reassignMissingLoadTeachers.map((teacher) => {
+                  const teacherId = Number(teacher.id);
+                  const missingGroupIds = (teacher.missingGroupIds ?? teacher.missing_group_ids ?? [])
+                    .map((id) => Number(id))
+                    .filter((id) => id > 0);
+                  const missingGroupNames = missingGroupIds
+                    .map((id) => reassignGroupLabels[id] || `группа ${id}`)
+                    .join(', ');
+
+                  return (
+                    <li key={teacher.id} className="admin-assignment-form__warning-item">
+                      <div className="admin-assignment-form__warning-copy">
+                        <strong>{teacher.shortName ?? teacher.short_name ?? 'Преподаватель'}</strong>
+                        {missingGroupNames ? (
+                          <span>{missingGroupNames}</span>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        size="small"
+                        variant="outline"
+                        loading={quickLoadTeacherId === teacherId}
+                        disabled={quickLoadTeacherId != null && quickLoadTeacherId !== teacherId}
+                        onClick={() => void submitQuickTeachingLoad(teacher)}
+                      >
+                        Добавить назначение
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </ModalSection>
       </Modal>
@@ -1250,7 +1386,13 @@ const AdminAssignmentManagement = () => {
         contentClassName="admin-assignment-form"
         footer={(
           <>
-            <Button type="button" variant="danger" loading={deleteSubmitting} onClick={() => void submitDelete()}>
+            <Button
+              type="button"
+              variant="danger"
+              loading={deleteSubmitting}
+              disabled={deleteSubmitting || deleteConfirmTitle.trim() !== (deleteTarget?.title ?? '')}
+              onClick={() => void submitDelete()}
+            >
               Удалить
             </Button>
           </>

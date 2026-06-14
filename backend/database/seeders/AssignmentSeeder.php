@@ -7,6 +7,7 @@ use App\Models\Group;
 use App\Models\Subject;
 use App\Models\TeachingLoad;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
 /** Демо-задания, связи с группами, teaching_loads и критерии — для сценариев преподавателя и студента. */
@@ -296,6 +297,10 @@ class AssignmentSeeder extends Seeder
 
     private function seedAssignment(array $payload): void
     {
+        $daysBeforeDeadline = max(1, (int) ($payload['created_days_before_deadline'] ?? 7));
+        $deadline = Carbon::parse($payload['deadline'])->startOfDay();
+        $createdAt = $deadline->copy()->subDays($daysBeforeDeadline)->setTime(10, 30, 0);
+
         $assignment = Assignment::updateOrCreate([
             'title' => $payload['title'],
             'subject_id' => $payload['subject_id'],
@@ -307,6 +312,11 @@ class AssignmentSeeder extends Seeder
             'submission_type' => $payload['submission_type'],
             'max_file_size' => $payload['max_file_size'] ?? null,
         ]);
+
+        $assignment->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt->copy()->addDays(min(2, $daysBeforeDeadline - 1)),
+        ])->saveQuietly();
 
         $assignment->groups()->sync($payload['group_ids'] ?? []);
         $assignment->criteriaItems()->delete();

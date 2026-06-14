@@ -11,9 +11,9 @@ use App\Models\Subject;
 use App\Models\TeacherSubject;
 use App\Models\TeachingLoad;
 use App\Models\User;
-use App\Services\AcademicProgramService;
 use App\Services\AdminActionNotificationService;
 use App\Services\AssignmentNotificationService;
+use App\Services\Assignments\AssignmentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -25,6 +25,10 @@ use Illuminate\Validation\ValidationException;
 class AdminAssignmentController extends Controller
 {
     use LogsAdminActions;
+
+    public function __construct(
+        private readonly AssignmentService $assignments,
+    ) {}
 
     private const ASSIGNMENTS_PER_PAGE = 18;
     private const FILTER_OPTIONS_LIMIT = 20;
@@ -108,7 +112,17 @@ class AdminAssignmentController extends Controller
         };
 
         $paginator = $query->paginate($perPage)->withQueryString();
-        $items = collect($paginator->items())->map(fn (Assignment $a) => $this->buildAdminAssignmentListItem($a))->values()->all();
+        $pageAssignments = collect($paginator->items());
+        $metricsByAssignment = $this->assignments->batchCompletionMetrics($pageAssignments);
+        $avgScoresByAssignment = $this->assignments->batchAverageGradedScores($pageAssignments);
+        $items = $pageAssignments
+            ->map(fn (Assignment $a) => $this->buildAdminAssignmentListItem(
+                $a,
+                $metricsByAssignment[(int) $a->id] ?? null,
+                $avgScoresByAssignment[(int) $a->id] ?? null,
+            ))
+            ->values()
+            ->all();
 
         return response()->json([
             'data' => $items,
@@ -285,7 +299,7 @@ class AdminAssignmentController extends Controller
         ]);
     }
 
-    public function updateAdminAssignmentTeacher(Request $request, Assignment $assignment, AcademicProgramService $programs)
+    public function updateAdminAssignmentTeacher(Request $request, Assignment $assignment)
     {
         $this->assertAssignmentEditable($assignment);
 
@@ -294,10 +308,7 @@ class AdminAssignmentController extends Controller
         ]);
 
         $newId = (int) $validated['teacher_id'];
-        $assignment->loadMissing('groups');
-        foreach ($assignment->groups as $group) {
-            $programs->assertTeachingLoadAllowed($newId, (int) $assignment->subject_id, (int) $group->id);
-        }
+        $this->assertTeacherCoversAssignmentGroups($assignment, $newId);
 
         $oldTeacher = User::query()->find($assignment->teacher_id);
         $assignment->update(['teacher_id' => $newId]);
@@ -331,8 +342,7 @@ class AdminAssignmentController extends Controller
                 ],
             );
         }
-
-        $this->log($request, 'reassign_assignment_teacher', "Смена преподавателя у задания «{$fresh->title}» (id {$fresh->id})");
+        $this->log($request, 'reassign_assignment_teacher', "Задание «{$fresh->title}» передано другому преподавателю");
 
         return response()->json([
             'success' => true,
@@ -358,6 +368,14 @@ class AdminAssignmentController extends Controller
             ->pluck('teacher_id')
             ->all();
 
+        $coveredGroupIdsByTeacher = TeachingLoad::query()
+            ->where('subject_id', $subjectId)
+            ->whereIn('group_id', $groupIds)
+            ->where('status', 'active')
+            ->get(['teacher_id', 'group_id'])
+            ->groupBy('teacher_id')
+            ->map(fn ($loads) => $loads->pluck('group_id')->map(fn ($id) => (int) $id)->unique()->values());
+
         $eligibleTeachers = User::query()
             ->where('role', 'teacher')
             ->where('is_active', true)
@@ -369,12 +387,25 @@ class AdminAssignmentController extends Controller
         $currentTeacherId = (int) $assignment->teacher_id;
         $eligiblePayload = $eligibleTeachers
             ->filter(fn (User $u) => (int) $u->id !== $currentTeacherId)
-            ->map(fn (User $u) => [
-                'id' => $u->id,
-                'short_name' => $u->full_name,
-                'match_type' => 'teacher_subject',
-                'match_label' => 'Есть допуск к дисциплине',
-            ]);
+            ->map(function (User $u) use ($coveredGroupIdsByTeacher, $groupIds) {
+                $covered = $coveredGroupIdsByTeacher->get($u->id, collect());
+                $coversAll = collect($groupIds)->every(fn ($groupId) => $covered->contains((int) $groupId));
+                $missingGroupIds = collect($groupIds)
+                    ->filter(fn ($groupId) => ! $covered->contains((int) $groupId))
+                    ->values()
+                    ->all();
+
+                return [
+                    'id' => $u->id,
+                    'short_name' => $u->full_name,
+                    'can_reassign' => $coversAll,
+                    'match_type' => $coversAll ? 'teaching_load' : 'teacher_subject',
+                    'match_label' => $coversAll
+                        ? 'Назначение на все группы'
+                        : null,
+                    'missing_group_ids' => $missingGroupIds,
+                ];
+            });
 
         $data = $eligiblePayload
             ->values()
@@ -402,26 +433,26 @@ class AdminAssignmentController extends Controller
         return response()->json(['success' => true]);
     }
 
-    private function buildAdminAssignmentListItem(Assignment $assignment): array
+    private function buildAdminAssignmentListItem(Assignment $assignment, ?array $metrics = null, ?float $avgScore = null): array
     {
-        $assignment->loadMissing(['groups.students' => fn ($q) => $q->where('role', 'student')->select('users.id', 'users.group_id', 'users.role')]);
+        $metrics ??= $this->assignments->batchCompletionMetrics(collect([$assignment]))[(int) $assignment->id] ?? [
+            'total_students' => 0,
+            'submitted_students' => 0,
+            'graded_students' => 0,
+            'pending_students' => 0,
+            'returned_students' => 0,
+            'completion_rate' => 0,
+        ];
 
-        $metrics = $assignment->calculateCompletionMetrics();
         $total = (int) ($metrics['total_students'] ?? 0);
         $submitted = (int) ($metrics['submitted_students'] ?? 0);
         $graded = (int) ($metrics['graded_students'] ?? 0);
         $pending = (int) ($metrics['pending_students'] ?? 0);
         $notSubmitted = max(0, $total - $submitted);
 
-        $latestByStudent = Submission::query()
-            ->where('assignment_id', $assignment->id)
-            ->orderByDesc('submitted_at')
-            ->orderByDesc('id')
-            ->get(['id', 'assignment_id', 'student_id', 'status', 'score', 'submitted_at'])
-            ->unique('student_id');
-
-        $scores = $latestByStudent->where('status', 'graded')->pluck('score')->filter(fn ($s) => $s !== null);
-        $avgScore = $scores->isEmpty() ? null : round((float) $scores->avg(), 1);
+        if ($avgScore === null) {
+            $avgScore = $this->assignments->batchAverageGradedScores(collect([$assignment]))[(int) $assignment->id] ?? null;
+        }
 
         $deadline = $assignment->deadline;
         $displayOverdue = $assignment->status === 'active' && $deadline && $deadline->lt(now()->startOfDay());
@@ -612,7 +643,7 @@ class AdminAssignmentController extends Controller
                 ->exists();
             if (! $ok) {
                 throw ValidationException::withMessages([
-                    'teacher_id' => 'Преподаватель должен быть назначен на этот дисциплина по всем группам задания.',
+                    'teacher_id' => 'Сначала добавьте учебное назначение для преподавателя по всем группам задания в разделе «Назначения», затем передайте задание.',
                 ]);
             }
         }

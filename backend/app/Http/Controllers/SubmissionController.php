@@ -362,8 +362,8 @@ class SubmissionController extends Controller
             return response()->json(['message' => 'Файл не найден.'], 404);
         }
 
-        return Storage::disk('public')->download(
-            $submission->file_path,
+        return response()->download(
+            Storage::disk('public')->path($submission->file_path),
             $submission->file_name ?: basename($submission->file_path)
         );
     }

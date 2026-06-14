@@ -90,15 +90,13 @@ const Notifications = () => {
         }))
       );
       setUnreadTotal(
-        rawItems.filter((row) => !(row.readAt ?? row.read_at ?? null)).length
+        Number(data.meta?.unreadTotal ?? data.meta?.unread_total ?? 0)
       );
       setMeta({
         currentPage: data.meta?.currentPage ?? data.meta?.current_page ?? 1,
         lastPage: data.meta?.lastPage ?? data.meta?.last_page ?? 1,
         total: data.meta?.total ?? 0,
       });
-      refreshUnreadGlobally();
-      void refreshUnreadCount();
     } catch (err) {
       showError(getApiErrorMessage(err, 'Не удалось загрузить уведомления'));
       setItems([]);
@@ -107,7 +105,7 @@ const Notifications = () => {
         setLoading(false);
       }
     }
-  }, [showError, refreshUnreadCount, refreshUnreadGlobally]);
+  }, [showError]);
 
   useEffect(() => {
     load(page);
@@ -240,7 +238,9 @@ const Notifications = () => {
               const body = notificationText(d.body, '');
               const teacherName = user?.role === 'student'
                 ? notificationText(d.teacherName ?? d.teacher_name, '')
-                : '';
+                : user?.role === 'admin'
+                  ? notificationText(d.teacherName ?? d.teacher_name, '')
+                  : '';
               const unread = !n.readAt;
               const navigable = Boolean(user?.role && getNotificationNavigatePath(user.role, d));
               return (

@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../../services/api';
 import { formatDateRelative, formatDateTime } from '../../../utils/dateHelpers';
+import { toSubjectSelectOptions } from '../../../utils/selectOptions';
 import Button from '../../UI/Button/Button';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import Modal from '../../UI/Modal/Modal';
 import ModalDangerZone from '../../UI/Modal/ModalDangerZone';
 import ModalSection from '../../UI/Modal/ModalSection';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
+import SearchableSelect from '../../UI/SearchableSelect/SearchableSelect';
 import './AdminUserViewModal.scss';
 
 const roleLabel = (role) => {
@@ -101,6 +103,17 @@ const AdminUserViewModal = ({
       cancelled = true;
     };
   }, [isOpen, row?.id, row?.role]);
+
+  const availableDisciplineOptions = useMemo(() => {
+    const activeIds = new Set(
+      teacherDisciplines
+        .filter((item) => item.status === 'active')
+        .map((item) => Number(item.subjectId ?? item.subject?.id)),
+    );
+    return toSubjectSelectOptions(
+      disciplineOptions.filter((subject) => !activeIds.has(Number(subject.id))),
+    );
+  }, [disciplineOptions, teacherDisciplines]);
 
   const addTeacherDiscipline = async () => {
     if (!row?.id || !newDisciplineId) return;
@@ -284,14 +297,15 @@ const AdminUserViewModal = ({
                 )}
                 {!teacherBlocked && (
                   <div className="admin-user-view-modal__inline-form">
-                    <select value={newDisciplineId} onChange={(e) => setNewDisciplineId(e.target.value)}>
-                      <option value="">Добавить дисциплину</option>
-                      {disciplineOptions.map((subject) => (
-                        <option key={subject.id} value={String(subject.id)}>
-                          {subject.code ? `${subject.name} (${subject.code})` : subject.name}
-                        </option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={newDisciplineId}
+                      onChange={setNewDisciplineId}
+                      options={availableDisciplineOptions}
+                      placeholder="Добавить дисциплину"
+                      searchPlaceholder="Найти дисциплину…"
+                      emptyMessage="Все дисциплины уже добавлены"
+                      ariaLabel="Дисциплина для допуска"
+                    />
                     <Button type="button" size="small" variant="primary" disabled={!newDisciplineId} onClick={() => void addTeacherDiscipline()}>
                       Добавить
                     </Button>

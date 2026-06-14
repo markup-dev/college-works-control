@@ -7,8 +7,11 @@ use App\Models\AssignmentMaterial;
 use App\Models\User;
 use App\Services\AssignmentNotificationService;
 use App\Services\Assignments\AssignmentService;
+use App\Services\Assignments\AssignmentTemplateService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -109,17 +112,15 @@ class AssignmentController extends Controller
             return response()->json(['message' => 'Выберите дисциплину из назначенной учебной нагрузки.'], 422);
         }
 
-        $groupIds = collect($groupNames)
-            ->map(fn ($name) => $this->assignments->normalizeGroupName((string) $name))
-            ->filter()
-            ->unique()
-            ->map(function ($groupName) use ($request, $subjectId) {
-                return $this->assignments->resolveGroupIdByName($groupName, $request->user()->id, $subjectId);
-            })
-            ->values()
-            ->all();
+        $groupIds = $this->assignments->resolveGroupIdsByNames(
+            collect($groupNames)
+                ->map(fn ($name) => (string) $name)
+                ->all(),
+            (int) $request->user()->id,
+            $subjectId,
+        );
 
-        if (empty($groupIds)) {
+        if ($groupIds === []) {
             return response()->json(['message' => 'Выберите хотя бы одну группу из назначенной учебной нагрузки.'], 422);
         }
 
@@ -138,26 +139,25 @@ class AssignmentController extends Controller
         $this->assignments->syncCriteria($assignment, is_array($criteria) ? $criteria : []);
         $this->assignments->syncAllowedFormats($assignment, is_array($allowedFormats) ? $allowedFormats : []);
 
-        $assignment->load([
-            'teacher:id,login,last_name,first_name,middle_name,grade_scale',
-            'subject:id,name',
-            'groups:id,name',
-            'criteriaItems:id,assignment_id,position,text,max_points',
-            'allowedFormatItems:id,assignment_id,format',
-            'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
-        ]);
-
         try {
             app(AssignmentNotificationService::class)->notifyNewAssignment($assignment);
         } catch (\Throwable $e) {
             report($e);
         }
 
+        $assignment->load([
+            'teacher:id,login,last_name,first_name,middle_name,grade_scale',
+            'subject:id,name',
+            'groups:id,name',
+            'criteriaItems:id,assignment_id,position,text,max_points',
+            'allowedFormatItems:id,assignment_id,format',
+        ]);
+
         return response()
             ->json([
                 'success' => true,
                 'assignment_id' => $assignment->id,
-                'assignment' => $assignment,
+                'assignment' => $this->assignments->mapCreatedAssignmentResponse($assignment),
             ], 201)
             ->header('X-Created-Assignment-Id', (string) $assignment->id);
     }
@@ -250,26 +250,45 @@ class AssignmentController extends Controller
         );
 
         $newGroupIds = null;
+        $groupsChanged = false;
         $subjectId = (int) ($validated['subject_id'] ?? $assignment->subject_id);
         if (! $this->assignments->teacherCanTeachSubject($request->user()->id, $subjectId)) {
             return response()->json(['message' => 'Выберите дисциплину из назначенной учебной нагрузки.'], 422);
         }
 
         if ($request->has('student_groups')) {
-            $newGroupIds = collect($request->input('student_groups', []))
-                ->map(fn ($name) => $this->assignments->normalizeGroupName((string) $name))
-                ->filter()
-                ->unique()
-                ->map(function ($groupName) use ($assignment, $subjectId) {
-                    return $this->assignments->resolveGroupIdByName($groupName, $assignment->teacher_id, $subjectId);
-                })
-                ->values()
-                ->all();
+            $resolvedGroupIds = $this->assignments->resolveGroupIdsByNames(
+                collect($request->input('student_groups', []))
+                    ->map(fn ($name) => (string) $name)
+                    ->all(),
+                (int) $assignment->teacher_id,
+                $subjectId,
+            );
 
-            if (empty($newGroupIds)) {
+            if ($resolvedGroupIds === []) {
                 return response()->json(['message' => 'Выберите хотя бы одну группу из назначенной учебной нагрузки.'], 422);
             }
+
+            $currentGroupIds = $assignment->groups()
+                ->pluck('groups.id')
+                ->map(fn ($id) => (int) $id)
+                ->sort()
+                ->values()
+                ->all();
+            $sortedResolved = collect($resolvedGroupIds)->sort()->values()->all();
+
+            if ($sortedResolved !== $currentGroupIds) {
+                $newGroupIds = $resolvedGroupIds;
+                $groupsChanged = true;
+            }
         }
+
+        $deadlineChanged = isset($validated['deadline'])
+            && optional($assignment->deadline)->toDateString() !== Carbon::parse($validated['deadline'])->toDateString();
+        $titleChanged = isset($validated['title']) && $assignment->title !== $validated['title'];
+        $descriptionChanged = array_key_exists('description', $validated)
+            && (string) ($assignment->description ?? '') !== (string) ($validated['description'] ?? '');
+        $statusChanged = isset($validated['status']) && $assignment->status !== $validated['status'];
 
         $newCriteria = $request->has('criteria')
             ? $this->assignments->normalizeCriteriaInput(is_array($request->input('criteria', [])) ? $request->input('criteria', []) : [])
@@ -289,7 +308,18 @@ class AssignmentController extends Controller
             $this->assignments->syncAllowedFormats($assignment, $newAllowedFormats);
         }
 
-        $fresh = $assignment->fresh()->load([
+        $shouldNotifyUpdate = $assignment->status !== 'archived'
+            && ($groupsChanged || $deadlineChanged || $titleChanged || $descriptionChanged || $statusChanged);
+
+        if ($shouldNotifyUpdate) {
+            try {
+                app(AssignmentNotificationService::class)->notifyAssignmentUpdated($assignment);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        $assignment->load([
             'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subject:id,name',
             'groups:id,name',
@@ -297,27 +327,15 @@ class AssignmentController extends Controller
             'allowedFormatItems:id,assignment_id,format',
             'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
         ]);
-
-        $shouldNotifyUpdate = $fresh->status !== 'archived'
-            && (
-                is_array($newGroupIds)
-                || isset($validated['deadline'])
-                || isset($validated['title'])
-                || isset($validated['description'])
-                || isset($validated['status'])
-            );
-
-        if ($shouldNotifyUpdate) {
-            try {
-                app(AssignmentNotificationService::class)->notifyAssignmentUpdated($fresh);
-            } catch (\Throwable $e) {
-                report($e);
-            }
-        }
+        $assignment->loadCount([
+            'submissions',
+            'submissions as pending_count' => fn ($q) => $q->where('status', 'submitted'),
+        ]);
 
         return response()->json([
             'success' => true,
-            'assignment' => $fresh,
+            'assignment_id' => $assignment->id,
+            'assignment' => $this->assignments->mapCreatedAssignmentResponse($assignment),
         ]);
     }
 
@@ -330,13 +348,20 @@ class AssignmentController extends Controller
         }
 
         $assignment->loadMissing('materialItems');
-        foreach ($assignment->materialItems as $material) {
-            if (! empty($material->file_path) && Storage::disk('public')->exists($material->file_path)) {
-                Storage::disk('public')->delete($material->file_path);
-            }
-        }
+        $materialPaths = $assignment->materialItems
+            ->pluck('file_path')
+            ->map(fn ($path) => (string) $path)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
 
         $assignment->delete();
+
+        $templateService = app(AssignmentTemplateService::class);
+        foreach ($materialPaths as $path) {
+            $templateService->deletePublicFileIfUnreferenced($path);
+        }
 
         return response()->json(['success' => true]);
     }
@@ -378,10 +403,11 @@ class AssignmentController extends Controller
                 ->get();
 
             foreach ($materialsToDelete as $material) {
-                if (! empty($material->file_path) && Storage::disk('public')->exists($material->file_path)) {
-                    Storage::disk('public')->delete($material->file_path);
-                }
+                $path = (string) ($material->file_path ?? '');
                 $material->delete();
+                if ($path !== '') {
+                    app(AssignmentTemplateService::class)->deletePublicFileIfUnreferenced($path);
+                }
             }
         }
 
@@ -398,24 +424,65 @@ class AssignmentController extends Controller
 
         return response()->json([
             'success' => true,
-            'assignment' => $assignment->fresh()->load([
-                'teacher:id,login,last_name,first_name,middle_name,grade_scale',
-                'subject:id,name',
-                'groups:id,name',
-                'criteriaItems:id,assignment_id,position,text,max_points',
-                'allowedFormatItems:id,assignment_id,format',
-                'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
-            ]),
+            'assignment_id' => $assignment->id,
         ]);
+    }
+
+    public function materialDownloadUrl(Request $request, Assignment $assignment, AssignmentMaterial $material)
+    {
+        $deny = $this->denyMaterialDownload($request->user(), $assignment, $material);
+        if ($deny) {
+            return $deny;
+        }
+
+        $user = $request->user();
+        $fileName = $material->file_name ?: basename((string) $material->file_path);
+
+        return response()->json([
+            'url' => URL::temporarySignedRoute(
+                'assignments.material.download',
+                now()->addMinutes(2),
+                [
+                    'assignment' => $assignment->id,
+                    'material' => $material->id,
+                    'user' => $user->id,
+                ],
+                absolute: true,
+            ),
+            'file_name' => $fileName,
+        ]);
+    }
+
+    public function downloadMaterialSigned(Request $request, Assignment $assignment, AssignmentMaterial $material, User $user)
+    {
+        $deny = $this->denyMaterialDownload($user, $assignment, $material);
+        if ($deny) {
+            return $deny;
+        }
+
+        return $this->materialFileDownloadResponse($material);
     }
 
     public function downloadMaterial(Request $request, Assignment $assignment, AssignmentMaterial $material)
     {
+        $deny = $this->denyMaterialDownload($request->user(), $assignment, $material);
+        if ($deny) {
+            return $deny;
+        }
+
+        return $this->materialFileDownloadResponse($material);
+    }
+
+    private function denyMaterialDownload(?User $user, Assignment $assignment, AssignmentMaterial $material)
+    {
+        if (! $user) {
+            return response()->json(['message' => 'Требуется авторизация.'], 401);
+        }
+
         if ((int) $material->assignment_id !== (int) $assignment->id) {
             return response()->json(['message' => 'Материал не принадлежит заданию.'], 404);
         }
 
-        $user = $request->user();
         $isStudentInGroup = $user->role === 'student'
             && $user->group_id
             && $assignment->groups()->where('groups.id', $user->group_id)->exists();
@@ -432,6 +499,11 @@ class AssignmentController extends Controller
             return response()->json(['message' => 'Файл не найден.'], 404);
         }
 
+        return null;
+    }
+
+    private function materialFileDownloadResponse(AssignmentMaterial $material)
+    {
         return Storage::disk('public')->download(
             $material->file_path,
             $material->file_name ?: basename($material->file_path)

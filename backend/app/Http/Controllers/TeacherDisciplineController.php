@@ -9,6 +9,7 @@ use App\Models\Subject;
 use App\Models\TeacherSubjectRequest;
 use App\Models\TeachingLoadRequest;
 use App\Services\AcademicProgramService;
+use App\Services\TeacherRequestNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -131,7 +132,10 @@ class TeacherDisciplineController extends Controller
             'status' => 'pending',
         ]);
 
-        return response()->json(['success' => true, 'request' => $row->load('subject')], 201);
+        $row->load(['subject', 'teacher']);
+        app(TeacherRequestNotificationService::class)->notifyAdminsOfDisciplineRequest($row);
+
+        return response()->json(['success' => true, 'request' => $row], 201);
     }
 
     public function requestTeachingLoad(Request $request, AcademicProgramService $programs)
@@ -170,6 +174,9 @@ class TeacherDisciplineController extends Controller
             'status' => 'pending',
         ]);
 
-        return response()->json(['success' => true, 'request' => $row->load(['subject', 'group'])], 201);
+        $row->load(['subject', 'group', 'teacher']);
+        app(TeacherRequestNotificationService::class)->notifyAdminsOfTeachingLoadRequest($row);
+
+        return response()->json(['success' => true, 'request' => $row], 201);
     }
 }

@@ -5,6 +5,8 @@ namespace App\Services\Submissions;
 use App\Models\Assignment;
 use App\Models\Submission;
 use App\Models\User;
+use App\Services\Assignments\AssignmentService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -40,6 +42,8 @@ class SubmissionService
             'student:id,login,group_id,last_name,first_name,middle_name',
             'student.studentGroup:id,name',
         ]);
+
+        $this->scopeLatestSubmissionPerStudentAssignment($query, $user);
 
         if (! empty($validated['status'])) {
             $query->where('submissions.status', $validated['status']);
@@ -217,6 +221,25 @@ class SubmissionService
         return $query->get()->map($mapSubmission)->values()->all();
     }
 
+    /**
+     * В списках показываем только последнюю сдачу студента по заданию (актуальный статус после пересдачи).
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<Submission>  $query
+     */
+    private function scopeLatestSubmissionPerStudentAssignment($query, User $user): void
+    {
+        $latestIds = DB::table('submissions as s')
+            ->when($user->role === 'teacher', function ($builder) use ($user) {
+                $builder->join('assignments as a', 'a.id', '=', 's.assignment_id')
+                    ->where('a.teacher_id', $user->id);
+            })
+            ->when($user->role === 'student', fn ($builder) => $builder->where('s.student_id', $user->id))
+            ->selectRaw('MAX(s.id) as id')
+            ->groupBy('s.assignment_id', 's.student_id');
+
+        $query->whereIn('submissions.id', $latestIds);
+    }
+
     public function formatFileSize(int $bytes): string
     {
         if ($bytes >= 1048576) {
@@ -231,7 +254,27 @@ class SubmissionService
         if (! $assignment) {
             return;
         }
-        $assignment->syncCompletionStatus();
+
+        $metrics = app(AssignmentService::class)
+            ->batchCompletionMetrics(collect([$assignment]))[(int) $assignment->id] ?? [
+                'total_students' => 0,
+                'submitted_students' => 0,
+                'graded_students' => 0,
+            ];
+
+        $totalStudents = (int) ($metrics['total_students'] ?? 0);
+        $submittedStudents = (int) ($metrics['submitted_students'] ?? 0);
+        $gradedStudents = (int) ($metrics['graded_students'] ?? 0);
+
+        $nextStatus = (
+            $totalStudents > 0
+            && $submittedStudents === $totalStudents
+            && $gradedStudents === $totalStudents
+        ) ? 'archived' : 'active';
+
+        if ($assignment->status !== $nextStatus) {
+            $assignment->update(['status' => $nextStatus]);
+        }
     }
 
     /** @return list<string> */

@@ -264,6 +264,8 @@
   background: #fff;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .group-dropdown__actions {
@@ -341,12 +343,21 @@
 }
 
 .group-dropdown__list {
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: 220px;
   overflow-y: auto;
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.4rem;
   padding: 0.55rem 0.6rem;
+}
+
+.group-dropdown__confirm {
+  padding: 0.55rem 0.6rem;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+  flex-shrink: 0;
 }
 
 .group-checkbox-item {

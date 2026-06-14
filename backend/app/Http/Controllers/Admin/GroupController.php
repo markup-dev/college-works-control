@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Admin\AdminCsvImportService;
 use App\Services\AcademicProgramService;
 use App\Services\AdminActionNotificationService;
+use App\Support\AdminLogMessages;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -345,7 +346,11 @@ class GroupController extends Controller
             ->distinct()
             ->count('teacher_id');
 
-        $this->log($request, 'update_group', "Группа {$freshGroup->name}: статус {$freshGroup->status}");
+        $this->log(
+            $request,
+            'update_group',
+            "Группа {$freshGroup->name}: статус ".AdminLogMessages::groupStatus((string) $freshGroup->status),
+        );
 
         if ($before !== $freshGroup->only(array_keys($before))) {
             app(AdminActionNotificationService::class)->notifyGroupChanged(
@@ -366,9 +371,7 @@ class GroupController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:50', 'regex:/^[А-ЯЁA-Z0-9-]+$/iu'],
             'specialty_id' => ['required', 'integer', 'exists:specialties,id'],
-            'admission_year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'graduation_year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
-            'current_course' => ['nullable', 'integer', 'min:1', 'max:6'],
             'status' => ['nullable', 'in:active,inactive,graduated'],
         ], [
             'name.required' => 'Введите название группы.',
@@ -379,7 +382,7 @@ class GroupController extends Controller
 
         $name = trim((string) $validated['name']);
         $specialty = Specialty::findOrFail((int) $validated['specialty_id']);
-        $admissionYear = (int) $validated['admission_year'];
+        $admissionYear = (int) now()->year;
         $studyYears = (int) $specialty->study_years;
         $graduationYear = (int) ($validated['graduation_year'] ?? ($admissionYear + $studyYears));
 
@@ -400,7 +403,7 @@ class GroupController extends Controller
             'admission_year' => $admissionYear,
             'graduation_year' => $graduationYear,
             'study_years' => $studyYears,
-            'current_course' => (int) ($validated['current_course'] ?? 1),
+            'current_course' => 1,
             'status' => 'inactive',
         ]);
         $this->programs->copySpecialtyProgramToGroup($group);

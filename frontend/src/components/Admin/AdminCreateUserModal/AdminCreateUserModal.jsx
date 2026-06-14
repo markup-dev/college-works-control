@@ -10,6 +10,8 @@ import {
 import Button from '../../UI/Button/Button';
 import Modal from '../../UI/Modal/Modal';
 import ModalSection from '../../UI/Modal/ModalSection';
+import SearchableSelect from '../../UI/SearchableSelect/SearchableSelect';
+import { toGroupSelectOptions } from '../../../utils/selectOptions';
 import './AdminCreateUserModal.scss';
 
 const ROLE_OPTIONS = [
@@ -66,6 +68,8 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
     if (departmentRequired && !form.department.trim()) return false;
     return true;
   }, [form.lastName, form.firstName, form.email, form.groupId, form.department, groupRequired, departmentRequired]);
+
+  const groupSelectOptions = useMemo(() => toGroupSelectOptions(groups), [groups]);
 
   const setField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -286,20 +290,14 @@ const AdminCreateUserModal = ({ isOpen, onClose, groups = [], onCreated }) => {
                     <label className="admin-create-user-modal__label" htmlFor="admin-create-group">
                       Группа <span className="admin-create-user-modal__required">*</span>
                     </label>
-                    <select
-                      id="admin-create-group"
-                      className="admin-create-user-modal__select"
+                    <SearchableSelect
                       value={form.groupId}
-                      onChange={(e) => setField('groupId', e.target.value)}
-                      required
-                    >
-                      <option value="">Выберите группу</option>
-                      {groups.map((g) => (
-                        <option key={g.id} value={String(g.id)}>
-                          {g.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(value) => setField('groupId', value)}
+                      options={groupSelectOptions}
+                      placeholder="Выберите группу"
+                      searchPlaceholder="Найти группу…"
+                      ariaLabel="Группа студента"
+                    />
                   </div>
                 ) : form.role === 'teacher' ? (
                   <div className="admin-create-user-modal__field">

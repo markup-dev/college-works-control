@@ -171,15 +171,29 @@ const Messages = () => {
     }
   }, [showError]);
 
+  const syncActivePartnerIds = useCallback((list = []) => {
+    const ids = list.map((c) => c.otherUser?.id).filter(Boolean);
+    setActivePartnerIds(new Set(ids));
+  }, []);
+
+  const loadConversations = useCallback(async (scope, options = {}) => {
+    const { data } = await api.get('/conversations', { params: { scope } });
+    const list = data.data ?? [];
+    if (options.updatePartners !== false && scope === 'active') {
+      syncActivePartnerIds(list);
+    }
+    return list;
+  }, [syncActivePartnerIds]);
+
   const loadActivePartnerIds = useCallback(async () => {
     try {
-      const { data } = await api.get('/conversations', { params: { scope: 'active' } });
-      const ids = (data.data ?? []).map((c) => c.otherUser?.id).filter(Boolean);
-      setActivePartnerIds(new Set(ids));
+      const list = await loadConversations('active', { updatePartners: true });
+      return list;
     } catch (err) {
       showError(getApiErrorMessage(err, 'Не удалось загрузить диалоги'));
+      return [];
     }
-  }, [showError]);
+  }, [loadConversations, showError]);
 
   const loadMessages = useCallback(
     async (conversationId, options = {}) => {
@@ -225,13 +239,12 @@ const Messages = () => {
       setLoadingList(true);
       await loadPartners();
       if (cancelled) return;
-      await loadActivePartnerIds();
-      if (!cancelled) setLoadingList(false);
+      setLoadingList(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [loadPartners, loadActivePartnerIds]);
+  }, [loadPartners]);
 
   useEffect(() => {
     if (loadingList) return undefined;
@@ -240,10 +253,9 @@ const Messages = () => {
     (async () => {
       try {
         const scope = listTab === 'archive' ? 'archived' : 'active';
-        const { data } = await api.get('/conversations', { params: { scope } });
+        const list = await loadConversations(scope, { updatePartners: scope === 'active' });
         if (!cancelled) {
-          setConversations(data.data ?? []);
-          window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
+          setConversations(list);
         }
       } catch (err) {
         if (!cancelled) showError(getApiErrorMessage(err, 'Не удалось загрузить диалоги'));
@@ -254,7 +266,7 @@ const Messages = () => {
     return () => {
       cancelled = true;
     };
-  }, [listTab, loadingList, showError]);
+  }, [listTab, loadingList, loadConversations, showError]);
 
   const focusStudentIdFromRoute = location.state?.focusStudentId;
 
@@ -367,19 +379,23 @@ const Messages = () => {
     if (!activeConversationId) return undefined;
     const id = setInterval(() => {
       loadMessages(activeConversationId, { silent: true });
-      (async () => {
-        try {
-          const scope = listTab === 'archive' ? 'archived' : 'active';
-          const { data } = await api.get('/conversations', { params: { scope } });
-          setConversations(data.data ?? []);
-        } catch {
-          /* ignore poll errors */
-        }
-        loadActivePartnerIds();
-      })();
     }, 12000);
     return () => clearInterval(id);
-  }, [activeConversationId, loadMessages, listTab, loadActivePartnerIds]);
+  }, [activeConversationId, loadMessages]);
+
+  useEffect(() => {
+    if (!activeConversationId) return undefined;
+    const id = setInterval(() => {
+      const scope = listTab === 'archive' ? 'archived' : 'active';
+      void loadConversations(scope, { updatePartners: scope === 'active' })
+        .then((list) => {
+          setConversations(list);
+          window.dispatchEvent(new CustomEvent('app:messages-unread-refresh'));
+        })
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(id);
+  }, [activeConversationId, listTab, loadConversations]);
 
   const selectPartnerDraft = (partner) => {
     setDraftRecipient({ id: partner.id, fullName: partner.fullName });

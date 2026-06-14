@@ -21,6 +21,10 @@ return new class extends Migration
                 ['notifiable_type', 'notifiable_id', 'created_at'],
                 'notifications_notifiable_created_at_index'
             );
+            $table->index(
+                ['notifiable_type', 'notifiable_id', 'read_at'],
+                'notifications_notifiable_read_idx'
+            );
         });
     }
 

@@ -108,60 +108,57 @@ class ConversationController extends Controller
         ]);
     }
 
+    public function unreadTotal(Request $request)
+    {
+        $user = $request->user();
+        $conversationIds = $this->scopedConversationQuery($user, 'active')
+            ->whereHas('messages')
+            ->pluck('id');
+
+        if ($conversationIds->isEmpty()) {
+            return response()->json(['count' => 0]);
+        }
+
+        $count = Message::query()
+            ->whereIn('conversation_id', $conversationIds)
+            ->where('sender_id', '!=', $user->id)
+            ->whereNull('read_at')
+            ->count();
+
+        return response()->json(['count' => $count]);
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
-        // Активные беседы — без своей стороны архива; archived — только помеченные текущим пользователем.
         $scope = $request->query('scope', 'active');
         if (! in_array($scope, ['active', 'archived'], true)) {
             $scope = 'active';
         }
 
-        $conversations = Conversation::query()
-            ->where(function ($q) use ($user, $scope) {
-                if ($scope === 'active') {
-                    $q->where(function ($q2) use ($user) {
-                        $q2->where('user_one_id', $user->id)
-                            ->whereNull('user_one_archived_at');
-                    })->orWhere(function ($q2) use ($user) {
-                        $q2->where('user_two_id', $user->id)
-                            ->whereNull('user_two_archived_at');
-                    });
-                } else {
-                    $q->where(function ($q2) use ($user) {
-                        $q2->where('user_one_id', $user->id)
-                            ->whereNotNull('user_one_archived_at');
-                    })->orWhere(function ($q2) use ($user) {
-                        $q2->where('user_two_id', $user->id)
-                            ->whereNotNull('user_two_archived_at');
-                    });
-                }
-            })
+        $conversations = $this->scopedConversationQuery($user, $scope)
             ->whereHas('messages')
             ->with(['userOne', 'userTwo'])
             ->get();
 
-        $payload = $conversations->map(function (Conversation $c) use ($user) {
+        $conversationIds = $conversations->pluck('id')->map(fn ($id) => (int) $id)->filter()->values();
+        $unreadByConversation = $this->unreadCountsByConversation($conversationIds, (int) $user->id);
+        $lastMessagesByConversation = $this->lastMessagesByConversation($conversationIds);
+
+        $payload = $conversations->map(function (Conversation $c) use ($user, $unreadByConversation, $lastMessagesByConversation) {
+            $conversationId = (int) $c->id;
             $other = $c->otherParticipant($user);
-            $unread = Message::query()
-                ->where('conversation_id', $c->id)
-                ->where('sender_id', '!=', $user->id)
-                ->whereNull('read_at')
-                ->count();
-            $last = Message::query()
-                ->where('conversation_id', $c->id)
-                ->orderByDesc('id')
-                ->first();
+            $last = $lastMessagesByConversation->get($conversationId);
 
             return [
-                'id' => $c->id,
+                'id' => $conversationId,
                 'other_user' => $other ? $this->formatUserBrief($other) : null,
                 'last_message' => $last ? [
                     'body' => Str::limit($last->body, 160),
-                    'sender_id' => $last->sender_id,
+                    'sender_id' => (int) $last->sender_id,
                     'created_at' => $last->created_at->toIso8601String(),
                 ] : null,
-                'unread_count' => $unread,
+                'unread_count' => (int) ($unreadByConversation[$conversationId] ?? 0),
                 '_sort' => $last ? $last->created_at->timestamp : 0,
             ];
         })
@@ -214,12 +211,7 @@ class ConversationController extends Controller
             ]);
 
             $conversation->touch();
-            // Первое сообщение снимает архив с нашей стороны, чтобы диалог снова попал в активные.
-            if ((int) $conversation->user_one_id === (int) $me->id) {
-                $conversation->forceFill(['user_one_archived_at' => null])->save();
-            } else {
-                $conversation->forceFill(['user_two_archived_at' => null])->save();
-            }
+            $this->restoreConversationFromArchive($conversation);
 
             return [$conversation, $message];
         });
@@ -287,12 +279,7 @@ class ConversationController extends Controller
         ]);
 
         $conversation->touch();
-        // Новое сообщение возвращает диалог из архива на стороне отправителя.
-        if ((int) $conversation->user_one_id === (int) $user->id) {
-            $conversation->forceFill(['user_one_archived_at' => null])->save();
-        } else {
-            $conversation->forceFill(['user_two_archived_at' => null])->save();
-        }
+        $this->restoreConversationFromArchive($conversation);
 
         $message->load('sender:id,first_name,last_name,middle_name,role');
 
@@ -331,6 +318,84 @@ class ConversationController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Любое новое сообщение возвращает диалог в активные у обоих участников
+     * (в т.ч. если получатель ранее отправил переписку в архив).
+     */
+    /** @return \Illuminate\Database\Eloquent\Builder<Conversation> */
+    private function scopedConversationQuery(User $user, string $scope)
+    {
+        return Conversation::query()->where(function ($q) use ($user, $scope) {
+            if ($scope === 'active') {
+                $q->where(function ($q2) use ($user) {
+                    $q2->where('user_one_id', $user->id)
+                        ->whereNull('user_one_archived_at');
+                })->orWhere(function ($q2) use ($user) {
+                    $q2->where('user_two_id', $user->id)
+                        ->whereNull('user_two_archived_at');
+                });
+            } else {
+                $q->where(function ($q2) use ($user) {
+                    $q2->where('user_one_id', $user->id)
+                        ->whereNotNull('user_one_archived_at');
+                })->orWhere(function ($q2) use ($user) {
+                    $q2->where('user_two_id', $user->id)
+                        ->whereNotNull('user_two_archived_at');
+                });
+            }
+        });
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, int>  $conversationIds
+     * @return array<int, int>
+     */
+    private function unreadCountsByConversation($conversationIds, int $userId): array
+    {
+        if ($conversationIds->isEmpty()) {
+            return [];
+        }
+
+        return Message::query()
+            ->selectRaw('conversation_id, COUNT(*) as unread_count')
+            ->whereIn('conversation_id', $conversationIds)
+            ->where('sender_id', '!=', $userId)
+            ->whereNull('read_at')
+            ->groupBy('conversation_id')
+            ->pluck('unread_count', 'conversation_id')
+            ->map(fn ($count) => (int) $count)
+            ->all();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, int>  $conversationIds
+     * @return \Illuminate\Support\Collection<int, Message>
+     */
+    private function lastMessagesByConversation($conversationIds)
+    {
+        if ($conversationIds->isEmpty()) {
+            return collect();
+        }
+
+        $latestMessageIds = Message::query()
+            ->selectRaw('MAX(id) as id')
+            ->whereIn('conversation_id', $conversationIds)
+            ->groupBy('conversation_id');
+
+        return Message::query()
+            ->joinSub($latestMessageIds, 'latest', fn ($join) => $join->on('messages.id', '=', 'latest.id'))
+            ->get(['messages.id', 'messages.conversation_id', 'messages.sender_id', 'messages.body', 'messages.created_at'])
+            ->keyBy('conversation_id');
+    }
+
+    private function restoreConversationFromArchive(Conversation $conversation): void
+    {
+        $conversation->forceFill([
+            'user_one_archived_at' => null,
+            'user_two_archived_at' => null,
+        ])->save();
     }
 
     private function formatMessagePayload(Message $m): array

@@ -14,10 +14,13 @@ import Modal from '../../components/UI/Modal/Modal';
 import ModalSection from '../../components/UI/Modal/ModalSection';
 import StatusBadge from '../../components/UI/StatusBadge/StatusBadge';
 import DashboardFilterToolbar from '../../components/Shared/DashboardFilterToolbar';
+import SearchableSelect from '../../components/UI/SearchableSelect/SearchableSelect';
+import { toGroupSelectOptions, toSpecialtySelectOptions } from '../../utils/selectOptions';
 import {
   buildAdminHomeworkHref,
   buildAdminTeachingAssignmentsHref,
   buildAdminUsersHref,
+  buildStudentUserSearch,
   openAdminSubject,
   openAdminUser,
 } from '../../utils/adminEntityLinks';
@@ -127,6 +130,35 @@ const teacherSortKey = (teacher) => (
   [teacher?.lastName, teacher?.firstName, teacher?.middleName].filter(Boolean).join(' ')
 );
 
+const studentSearchHaystack = (student) => (
+  [student?.lastName, student?.firstName, student?.middleName].filter(Boolean).join(' ').toLowerCase()
+);
+
+const subjectBlockSearchHaystack = (block) => (
+  `${block?.subject?.name || ''} ${block?.subject?.code || ''}`.trim().toLowerCase()
+);
+
+const filterTeachingGroupsBySearch = (groups, query) => {
+  const q = query.trim().toLowerCase();
+  if (!q) return groups;
+
+  return groups
+    .map((group) => {
+      const teacherMatches = teacherSortKey(group.teacher).toLowerCase().includes(q);
+      const items = teacherMatches
+        ? group.items
+        : group.items.filter((block) => subjectBlockSearchHaystack(block).includes(q));
+      if (items.length === 0) return null;
+
+      return {
+        ...group,
+        items,
+        totalAssignments: items.reduce((sum, item) => sum + (item.activeAssignmentsCount ?? 0), 0),
+      };
+    })
+    .filter(Boolean);
+};
+
 const groupSubjectBlocksByTeacher = (blocks) => {
   const map = new Map();
   (Array.isArray(blocks) ? blocks : []).forEach((block) => {
@@ -172,6 +204,8 @@ const AdminGroupDetail = () => {
   const [programCourse, setProgramCourse] = useState('');
   const [programStatus, setProgramStatus] = useState('');
   const [programSearch, setProgramSearch] = useState('');
+  const [studentSearch, setStudentSearch] = useState('');
+  const [teachingSearch, setTeachingSearch] = useState('');
   const [expandedProgramCourses, setExpandedProgramCourses] = useState(() => new Set());
   const [expandedTeachers, setExpandedTeachers] = useState(() => new Set());
   const [closeConfirmName, setCloseConfirmName] = useState('');
@@ -200,6 +234,41 @@ const AdminGroupDetail = () => {
     admissionYear: '',
     currentCourse: '1',
   });
+
+  const canSaveGroup = useMemo(
+    () => Boolean(editForm.name.trim()) && Boolean(editForm.specialtyId) && Boolean(editForm.currentCourse),
+    [editForm],
+  );
+
+  const canCloseGroup = useMemo(
+    () => Boolean(data?.group) && closeConfirmName.trim() === (data?.group?.name ?? ''),
+    [data?.group, closeConfirmName],
+  );
+
+  const specialtySelectOptions = useMemo(
+    () => toSpecialtySelectOptions(specialties),
+    [specialties],
+  );
+
+  const transferGroupOptions = useMemo(
+    () => transferGroups.map((item) => {
+      const [option] = toGroupSelectOptions([item]);
+      if (item.status !== 'active') {
+        return {
+          ...option,
+          label: `${item.name} (закрыта)`,
+          searchText: `${option.searchText} закрыта`.trim(),
+        };
+      }
+      return option;
+    }),
+    [transferGroups],
+  );
+
+  const addGroupFilterOptions = useMemo(() => [
+    { value: 'none', label: 'Без группы', searchText: 'без группы' },
+    ...toGroupSelectOptions(addFilterGroups),
+  ], [addFilterGroups]);
 
   const loadGroup = useCallback(async () => {
     setLoading(true);
@@ -268,11 +337,27 @@ const AdminGroupDetail = () => {
     [data?.subjectBlocks],
   );
 
+  const students = useMemo(
+    () => (Array.isArray(data?.students) ? data.students : []),
+    [data?.students],
+  );
+
+  const filteredStudents = useMemo(() => {
+    const q = studentSearch.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter((student) => studentSearchHaystack(student).includes(q));
+  }, [studentSearch, students]);
+
+  const filteredTeachingByTeacher = useMemo(
+    () => filterTeachingGroupsBySearch(teachingByTeacher, teachingSearch),
+    [teachingByTeacher, teachingSearch],
+  );
+
   const teachingSummary = useMemo(() => ({
-    loads: teachingByTeacher.reduce((sum, group) => sum + group.items.length, 0),
-    teachers: teachingByTeacher.length,
-    assignments: teachingByTeacher.reduce((sum, group) => sum + group.totalAssignments, 0),
-  }), [teachingByTeacher]);
+    loads: filteredTeachingByTeacher.reduce((sum, group) => sum + group.items.length, 0),
+    teachers: filteredTeachingByTeacher.length,
+    assignments: filteredTeachingByTeacher.reduce((sum, group) => sum + group.totalAssignments, 0),
+  }), [filteredTeachingByTeacher]);
 
   const courses = useMemo(() => {
     const maxCourse = Math.max(Number(group?.studyYears || 1), ...curriculum.map((item) => Number(item.course || 1)));
@@ -320,6 +405,14 @@ const AdminGroupDetail = () => {
       return next;
     });
   };
+
+  useEffect(() => {
+    const q = teachingSearch.trim();
+    if (!q) return;
+    setExpandedTeachers(new Set(
+      filterTeachingGroupsBySearch(teachingByTeacher, q).map((group) => group.key),
+    ));
+  }, [teachingSearch, teachingByTeacher]);
 
   const toggleTeacher = (teacherKey) => {
     setExpandedTeachers((prev) => {
@@ -610,12 +703,14 @@ const AdminGroupDetail = () => {
             </label>
             <label>
               Специальность
-              <select value={editForm.specialtyId} onChange={(event) => setEditForm((prev) => ({ ...prev, specialtyId: event.target.value }))}>
-                <option value="">Выберите специальность</option>
-                {specialties.map((specialty) => (
-                  <option key={specialty.id} value={String(specialty.id)}>{specialty.name}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={editForm.specialtyId}
+                onChange={(value) => setEditForm((prev) => ({ ...prev, specialtyId: value }))}
+                options={specialtySelectOptions}
+                placeholder="Выберите специальность"
+                searchPlaceholder="Найти специальность…"
+                ariaLabel="Специальность группы"
+              />
             </label>
             <label>
               Год начала
@@ -641,7 +736,13 @@ const AdminGroupDetail = () => {
             </label>
           </div>
           <div className="admin-entity-detail__form-actions">
-            <Button type="button" variant="primary" loading={saving} onClick={() => void saveGroup()}>
+            <Button
+              type="button"
+              variant="primary"
+              loading={saving}
+              disabled={saving || !canSaveGroup}
+              onClick={() => void saveGroup()}
+            >
               Сохранить изменения
             </Button>
           </div>
@@ -656,7 +757,12 @@ const AdminGroupDetail = () => {
                   onChange={(event) => setCloseConfirmName(event.target.value)}
                   placeholder={`Введите ${group.name}`}
                 />
-                <Button type="button" variant="danger" onClick={() => void closeGroup()}>
+                <Button
+                  type="button"
+                  variant="danger"
+                  disabled={!canCloseGroup}
+                  onClick={() => void closeGroup()}
+                >
                   Закрыть группу
                 </Button>
               </div>
@@ -856,6 +962,15 @@ const AdminGroupDetail = () => {
 
       {!editOpen && activeTab === 'students' && (
         <ModalSection title={`Студенты (${group.studentsCount ?? 0})`}>
+          <DashboardFilterToolbar
+            className="admin-entity-detail__filter-toolbar"
+            searchValue={studentSearch}
+            onSearchChange={setStudentSearch}
+            searchPlaceholder="Поиск по ФИО…"
+            onReset={() => setStudentSearch('')}
+            resetDisabled={!studentSearch.trim()}
+            showFilterPanel={false}
+          />
           <div className="admin-entity-detail__form-actions admin-entity-detail__form-actions--top">
             <Button type="button" variant="primary" onClick={openAddStudentsModal}>
               Добавить студентов
@@ -869,14 +984,16 @@ const AdminGroupDetail = () => {
             </Button>
           </div>
 
-          {(!data.students || data.students.length === 0) ? (
+          {students.length === 0 ? (
             <EmptyState
               title="Студентов пока нет"
               message="Добавьте существующих студентов из других групп или без группы."
             />
+          ) : filteredStudents.length === 0 ? (
+            <EmptyState title="Студенты не найдены" message="Измените запрос поиска." />
           ) : (
             <div className="admin-entity-detail__students-grid">
-              {data.students.map((student) => {
+              {filteredStudents.map((student) => {
                 const score = studentScorePresentation(student.avgScore);
                 const overdue = student.overdueAssignments ?? 0;
                 return (
@@ -885,11 +1002,19 @@ const AdminGroupDetail = () => {
                     className="admin-entity-detail__student-card admin-entity-detail__student-card--clickable"
                     role="button"
                     tabIndex={0}
-                    onClick={() => openAdminUser(navigate, student.id, { role: 'student', groupId: group.id })}
+                    onClick={() => openAdminUser(navigate, student.id, {
+                      role: 'student',
+                      groupId: group.id,
+                      search: buildStudentUserSearch(student),
+                    })}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        openAdminUser(navigate, student.id, { role: 'student', groupId: group.id });
+                        openAdminUser(navigate, student.id, {
+                          role: 'student',
+                          groupId: group.id,
+                          search: buildStudentUserSearch(student),
+                        });
                       }
                     }}
                   >
@@ -956,6 +1081,15 @@ const AdminGroupDetail = () => {
 
       {!editOpen && activeTab === 'teaching' && (
         <ModalSection title="Преподаватели и дисциплины">
+          <DashboardFilterToolbar
+            className="admin-entity-detail__filter-toolbar"
+            searchValue={teachingSearch}
+            onSearchChange={setTeachingSearch}
+            searchPlaceholder="Поиск по преподавателю или дисциплине…"
+            onReset={() => setTeachingSearch('')}
+            resetDisabled={!teachingSearch.trim()}
+            showFilterPanel={false}
+          />
           <div className="admin-entity-detail__form-actions admin-entity-detail__form-actions--top">
             <Button
               type="button"
@@ -989,9 +1123,11 @@ const AdminGroupDetail = () => {
 
           {teachingByTeacher.length === 0 ? (
             <EmptyState title="Назначений пока нет" message="Назначьте преподавателей в разделе «Назначения»." />
+          ) : filteredTeachingByTeacher.length === 0 ? (
+            <EmptyState title="Ничего не найдено" message="Измените запрос поиска." />
           ) : (
             <div className="admin-entity-detail__teaching-accordion">
-              {teachingByTeacher.map((teacherGroup) => {
+              {filteredTeachingByTeacher.map((teacherGroup) => {
                 const isOpen = expandedTeachers.has(teacherGroup.key);
                 const teacher = teacherGroup.teacher;
 
@@ -1129,20 +1265,14 @@ const AdminGroupDetail = () => {
             <label className="filter-popover__label" htmlFor="add-student-group-filter">
               Группа
             </label>
-            <select
-              id="add-student-group-filter"
-              className="filter-popover__select"
+            <SearchableSelect
               value={addGroupFilter}
-              onChange={(event) => setAddGroupFilter(event.target.value)}
-            >
-              <option value="">Все группы</option>
-              <option value="none">Без группы</option>
-              {addFilterGroups.map((item) => (
-                <option key={item.id} value={String(item.id)}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+              onChange={setAddGroupFilter}
+              options={addGroupFilterOptions}
+              placeholder="Все группы"
+              searchPlaceholder="Найти группу…"
+              ariaLabel="Фильтр по группе студента"
+            />
           </div>
         </DashboardFilterToolbar>
         {addCandidatesLoading ? (
@@ -1196,18 +1326,14 @@ const AdminGroupDetail = () => {
         ) : (
           <label className="admin-entity-detail__modal-field">
             Целевая группа
-            <select
+            <SearchableSelect
               value={transferTargetGroupId}
-              onChange={(event) => setTransferTargetGroupId(event.target.value)}
-            >
-              <option value="">Выберите группу</option>
-              {transferGroups.map((item) => (
-                <option key={item.id} value={String(item.id)}>
-                  {item.name}
-                  {item.status !== 'active' ? ' (закрыта)' : ''}
-                </option>
-              ))}
-            </select>
+              onChange={setTransferTargetGroupId}
+              options={transferGroupOptions}
+              placeholder="Выберите группу"
+              searchPlaceholder="Найти группу…"
+              ariaLabel="Целевая группа для перевода"
+            />
           </label>
         )}
       </Modal>

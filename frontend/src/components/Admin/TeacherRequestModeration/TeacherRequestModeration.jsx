@@ -146,6 +146,10 @@ const TeacherRequestModeration = ({
     );
   };
 
+  if (loading || requests.length === 0) {
+    return null;
+  }
+
   return (
     <section className={`teacher-request-moderation ${className}`.trim()}>
       <div className="teacher-request-moderation__head">
@@ -156,12 +160,7 @@ const TeacherRequestModeration = ({
         <span className="teacher-request-moderation__count">{requests.length}</span>
       </div>
 
-      {loading && <p className="teacher-request-moderation__empty">Загрузка заявок...</p>}
-      {!loading && requests.length === 0 && (
-        <p className="teacher-request-moderation__empty">{emptyMessage}</p>
-      )}
-
-      {!loading && requests.map((request) => (
+      {requests.map((request) => (
         <article
           key={request.id}
           className="teacher-request-moderation__request"

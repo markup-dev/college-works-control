@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Assignment;
 use App\Models\Group;
-use App\Models\Message;
 use App\Models\Subject;
 use App\Models\Submission;
 use App\Models\SystemLog;
@@ -40,19 +39,49 @@ class DashboardController extends Controller
             ->count();
 
         $activityStart = now()->subDays(6)->startOfDay();
+        $activityEnd = now()->endOfDay();
         $activityWeek = [
             'labels' => [],
             'logins' => [],
             'submissions' => [],
-            'messages' => [],
+            'assignments_created' => [],
+            'submissions_graded' => [],
         ];
+
+        $loginCounts = SystemLog::query()
+            ->where('action', 'login')
+            ->whereBetween('created_at', [$activityStart, $activityEnd])
+            ->selectRaw('DATE(created_at) as day, COUNT(*) as total')
+            ->groupBy('day')
+            ->pluck('total', 'day');
+
+        $submissionCounts = Submission::query()
+            ->whereBetween('submitted_at', [$activityStart, $activityEnd])
+            ->selectRaw('DATE(submitted_at) as day, COUNT(*) as total')
+            ->groupBy('day')
+            ->pluck('total', 'day');
+
+        $assignmentCounts = Assignment::query()
+            ->whereBetween('created_at', [$activityStart, $activityEnd])
+            ->selectRaw('DATE(created_at) as day, COUNT(*) as total')
+            ->groupBy('day')
+            ->pluck('total', 'day');
+
+        $gradedCounts = Submission::query()
+            ->where('status', 'graded')
+            ->whereBetween('updated_at', [$activityStart, $activityEnd])
+            ->selectRaw('DATE(updated_at) as day, COUNT(*) as total')
+            ->groupBy('day')
+            ->pluck('total', 'day');
+
         for ($i = 0; $i < 7; $i++) {
             $day = $activityStart->copy()->addDays($i);
             $d = $day->format('Y-m-d');
             $activityWeek['labels'][] = Str::ucfirst($day->locale('ru')->isoFormat('dd'));
-            $activityWeek['logins'][] = SystemLog::whereDate('created_at', $d)->where('action', 'login')->count();
-            $activityWeek['submissions'][] = Submission::whereDate('submitted_at', $d)->count();
-            $activityWeek['messages'][] = Message::whereDate('created_at', $d)->count();
+            $activityWeek['logins'][] = (int) ($loginCounts[$d] ?? 0);
+            $activityWeek['submissions'][] = (int) ($submissionCounts[$d] ?? 0);
+            $activityWeek['assignments_created'][] = (int) ($assignmentCounts[$d] ?? 0);
+            $activityWeek['submissions_graded'][] = (int) ($gradedCounts[$d] ?? 0);
         }
 
         return response()->json([

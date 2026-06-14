@@ -117,7 +117,11 @@ body.modal-open {
   overflow-y: auto;
   flex: 1;
   min-width: 0;
+  min-height: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 
   > * {
     min-width: 0;
@@ -170,7 +174,9 @@ body.modal-open {
   }
 
   .modal__content {
+    padding: 1.35rem 1.5rem;
     background: #f8fafc;
+    gap: 1.1rem;
   }
 
   .modal__footer {

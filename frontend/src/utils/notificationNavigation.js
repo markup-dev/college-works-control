@@ -5,7 +5,18 @@ export function getNotificationNavigatePath(role, data) {
   if (!data || typeof data !== 'object') {
     return null;
   }
+
   const kind = data.kind;
+
+  if (role === 'admin') {
+    if (kind === 'teacher_discipline_request') {
+      return '/admin/subjects';
+    }
+    if (kind === 'teacher_teaching_load_request') {
+      return '/admin/assignments';
+    }
+  }
+
   const assignmentId = data.assignmentId ?? data.assignment_id;
   const submissionId = data.submissionId ?? data.submission_id;
   if (assignmentId === undefined || assignmentId === null || assignmentId === '') {

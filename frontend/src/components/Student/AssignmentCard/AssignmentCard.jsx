@@ -2,7 +2,7 @@ import React from 'react';
 import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
 import StatusBadge from '../../UI/StatusBadge/StatusBadge';
-import { getAssignmentStatusInfo, getDaysUntilDeadline, formatDate } from '../../../utils';
+import { getAssignmentStatusInfo, getDaysUntilDeadline, formatDate, shouldShowStudentRetakeBadge } from '../../../utils';
 import iconDeadline from '../../../assets/assignment/assignment-deadline.svg';
 import iconSubmissionFormat from '../../../assets/assignment/assignment-submission-format.svg';
 import iconSubmitted from '../../../assets/assignment/assignment-submitted.svg';
@@ -25,7 +25,7 @@ const AssignmentCard = ({
   const isOverdue = daysUntilDeadline < 0 && assignment.status === 'not_submitted';
   const canSubmitRetake = assignment.canSubmitRetake ?? (assignment.status === 'returned');
   const retakeUsed = Boolean(assignment.retakeUsed);
-  const isRetakeAssignment = assignment.status === 'returned' || canSubmitRetake || retakeUsed;
+  const showRetakeBadge = shouldShowStudentRetakeBadge(assignment);
   const gradeLabel = assignment.gradeLabel || assignment.grade_label || null;
 
   const renderActions = () => {
@@ -158,9 +158,9 @@ const AssignmentCard = ({
           <StatusBadge tone={statusInfo.variant}>
             {statusInfo.label}
           </StatusBadge>
-          {isRetakeAssignment && (
-            <StatusBadge tone={retakeUsed ? 'neutral' : 'retake'}>
-              {retakeUsed ? 'Пересдача использована' : 'Пересдача'}
+          {showRetakeBadge && (
+            <StatusBadge tone="retake">
+              Пересдача
             </StatusBadge>
           )}
         </div>

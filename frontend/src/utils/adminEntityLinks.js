@@ -1,10 +1,16 @@
-export const buildAdminUsersHref = ({ role, groupId } = {}) => {
+export const buildAdminUsersHref = ({ role, groupId, userId, search } = {}) => {
   const q = new URLSearchParams();
   if (role) q.set('role', role);
   if (groupId) q.set('group_id', String(groupId));
+  if (search?.trim()) q.set('search', search.trim());
+  if (userId) q.set('user_id', String(userId));
   const s = q.toString();
   return s ? `/admin/users?${s}` : '/admin/users';
 };
+
+export const buildStudentUserSearch = (student) => (
+  [student?.lastName, student?.firstName, student?.middleName].filter(Boolean).join(' ').trim()
+);
 
 export const buildAdminHomeworkHref = ({ groupId, teacherId, subjectId, status } = {}) => {
   const q = new URLSearchParams();
@@ -37,7 +43,7 @@ export const openAdminSubject = (navigate, subjectId) => {
   navigate('/admin/subjects', { state: { viewSubjectId: subjectId } });
 };
 
-export const openAdminUser = (navigate, userId, { role, groupId } = {}) => {
+export const openAdminUser = (navigate, userId, { role, groupId, search } = {}) => {
   if (!userId) return;
-  navigate(buildAdminUsersHref({ role, groupId }), { state: { viewUserId: userId } });
+  navigate(buildAdminUsersHref({ role, groupId, userId, search }));
 };

@@ -10,6 +10,7 @@ use App\Models\TeacherSubject;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -137,7 +138,6 @@ class AssignmentService
                     ->select(['id', 'assignment_id', 'student_id', 'status', 'score', 'teacher_comment', 'criterion_scores', 'submitted_at', 'is_resubmission']),
                 'criteriaItems:id,assignment_id,position,text,max_points',
                 'allowedFormatItems:id,assignment_id,format',
-                'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
             ])
                 ->whereHas('groups', fn ($q) => $q->where('groups.id', $user->group_id))
                 ->withCount([
@@ -191,54 +191,35 @@ class AssignmentService
 
             $query->orderBy('deadline');
 
-            $assignments = $query->get();
-
-            $transformed = $assignments->map(
-                fn ($assignment) => $this->transformStudentAssignmentPayload($assignment, $user)
-            );
-
-            $counts = $this->buildStudentStatusCounts($transformed);
+            $counts = $this->buildStudentStatusCountsFromDb($user);
 
             if (! empty($validated['status'])) {
-                $status = $validated['status'];
-                $transformed = $transformed->filter(function ($assignment) use ($status) {
-                    $assignmentStatus = (string) ($assignment['status'] ?? '');
-
-                    if ($status === 'not_submitted') {
-                        return $this->isStudentActionRequiredStatus($assignmentStatus);
-                    }
-
-                    if ($status === 'urgent') {
-                        return $this->isStudentActionRequiredStatus($assignmentStatus)
-                            && ! empty($assignment['deadline'])
-                            && now()->diffInDays($assignment['deadline'], false) <= 3;
-                    }
-
-                    return $assignmentStatus === $status;
-                })->values();
+                $this->applyStudentListStatusFilter($query, $user, (string) $validated['status']);
             }
 
-            $transformed = $this->sortStudentAssignmentsByDefault($transformed);
-
             if ($shouldPaginate) {
-                $total = $transformed->count();
-                $lastPage = max(1, (int) ceil($total / $perPage));
-                $page = min(max(1, $requestedPage), $lastPage);
-                $items = $transformed->forPage($page, $perPage)->values()->all();
+                $paginated = $query->paginate($perPage, ['*'], 'page', $requestedPage);
+                $items = collect($paginated->items())
+                    ->map(fn ($assignment) => $this->transformStudentAssignmentPayload($assignment, $user))
+                    ->values()
+                    ->all();
 
                 return [
                     'data' => $items,
                     'meta' => [
-                        'current_page' => $page,
-                        'last_page' => $lastPage,
-                        'per_page' => $perPage,
-                        'total' => $total,
+                        'current_page' => $paginated->currentPage(),
+                        'last_page' => $paginated->lastPage(),
+                        'per_page' => $paginated->perPage(),
+                        'total' => $paginated->total(),
                         'counts' => $counts,
                     ],
                 ];
             }
 
-            return $transformed->values()->all();
+            $transformed = $query->get()
+                ->map(fn ($assignment) => $this->transformStudentAssignmentPayload($assignment, $user));
+
+            return $this->sortStudentAssignmentsByDefault($transformed)->values()->all();
         }
 
         if ($user->role === 'teacher') {
@@ -251,9 +232,6 @@ class AssignmentService
             'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subject:id,name',
             'groups:id,name',
-            'criteriaItems:id,assignment_id,position,text,max_points',
-            'allowedFormatItems:id,assignment_id,format',
-            'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
         ])
             ->withCount([
                 'submissions',
@@ -359,23 +337,16 @@ class AssignmentService
                 break;
         }
 
-        $mapAssignment = function ($assignment) {
-            $assignment->syncCompletionStatus();
-            $data = $assignment->toArray();
-            unset($data['teacher']);
-            $data['teacher'] = $assignment->teacher?->full_name ?? 'Не указан';
-            $data['is_completed'] = $assignment->status === 'archived';
-            $data = [
-                ...$data,
-                ...$assignment->calculateCompletionMetrics(),
-            ];
-
-            return $data;
-        };
-
         if ($shouldPaginate) {
             $paginated = $query->paginate($perPage, ['*'], 'page', $requestedPage);
-            $paginated->getCollection()->transform($mapAssignment);
+            $collection = $paginated->getCollection();
+            $metricsByAssignment = $this->batchCompletionMetrics($collection);
+            $collection->transform(function ($assignment) use ($metricsByAssignment) {
+                return $this->mapAssignmentForIndex(
+                    $assignment,
+                    $metricsByAssignment[(int) $assignment->id] ?? null,
+                );
+            });
 
             return [
                 'data' => $paginated->items(),
@@ -388,7 +359,171 @@ class AssignmentService
             ];
         }
 
-        return $query->get()->map($mapAssignment)->values()->all();
+        $assignments = $query->get();
+        $metricsByAssignment = $this->batchCompletionMetrics($assignments);
+
+        return $assignments
+            ->map(fn ($assignment) => $this->mapAssignmentForIndex(
+                $assignment,
+                $metricsByAssignment[(int) $assignment->id] ?? null,
+            ))
+            ->values()
+            ->all();
+    }
+
+    /** @return array<string, mixed> */
+    public function mapCreatedAssignmentResponse(Assignment $assignment): array
+    {
+        $metrics = $this->batchCompletionMetrics(collect([$assignment]));
+
+        return $this->mapAssignmentForIndex(
+            $assignment,
+            $metrics[(int) $assignment->id] ?? null,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapAssignmentForIndex(Assignment $assignment, ?array $metrics = null): array
+    {
+        $data = $assignment->toArray();
+        unset($data['teacher']);
+        $data['teacher'] = $assignment->teacher?->full_name ?? 'Не указан';
+        $data['is_completed'] = $assignment->status === 'archived';
+
+        return [
+            ...$data,
+            ...($metrics ?? $assignment->calculateCompletionMetrics()),
+        ];
+    }
+
+    /**
+     * Агрегированные метрики сдачи для списка заданий — без N+1 запросов и без записи в БД.
+     *
+     * @param  Collection<int, Assignment>|iterable<Assignment>  $assignments
+     * @return array<int, array<string, int>>
+     */
+    public function batchCompletionMetrics(iterable $assignments): array
+    {
+        $assignmentIds = collect($assignments)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($assignmentIds->isEmpty()) {
+            return [];
+        }
+
+        $defaultMetrics = [
+            'total_students' => 0,
+            'submitted_students' => 0,
+            'graded_students' => 0,
+            'pending_students' => 0,
+            'returned_students' => 0,
+            'completion_rate' => 0,
+        ];
+
+        $metricsByAssignment = $assignmentIds
+            ->mapWithKeys(fn ($id) => [$id => $defaultMetrics])
+            ->all();
+
+        $targetStudents = DB::table('assignment_group as ag')
+            ->join('users as u', function ($join) {
+                $join->on('u.group_id', '=', 'ag.group_id')
+                    ->where('u.role', '=', 'student')
+                    ->where('u.is_active', '=', true);
+            })
+            ->whereIn('ag.assignment_id', $assignmentIds)
+            ->select(['ag.assignment_id', 'u.id as student_id'])
+            ->get();
+
+        foreach ($targetStudents->groupBy('assignment_id') as $assignmentId => $rows) {
+            $metricsByAssignment[(int) $assignmentId]['total_students'] = $rows
+                ->pluck('student_id')
+                ->unique()
+                ->count();
+        }
+
+        $latestSubmissionIds = DB::table('submissions')
+            ->selectRaw('MAX(id) as id')
+            ->whereIn('assignment_id', $assignmentIds)
+            ->groupBy('assignment_id', 'student_id');
+
+        $latestSubmissions = DB::table('submissions as s')
+            ->joinSub($latestSubmissionIds, 'latest', fn ($join) => $join->on('s.id', '=', 'latest.id'))
+            ->select(['s.assignment_id', 's.student_id', 's.status'])
+            ->get();
+
+        $targetKeys = $targetStudents
+            ->map(fn ($row) => ((int) $row->assignment_id).':'.((int) $row->student_id))
+            ->flip();
+
+        foreach ($latestSubmissions as $submission) {
+            $assignmentId = (int) $submission->assignment_id;
+            $studentId = (int) $submission->student_id;
+            $targetKey = $assignmentId.':'.$studentId;
+
+            if (! isset($targetKeys[$targetKey], $metricsByAssignment[$assignmentId])) {
+                continue;
+            }
+
+            $metricsByAssignment[$assignmentId]['submitted_students']++;
+
+            match ($submission->status) {
+                'graded' => $metricsByAssignment[$assignmentId]['graded_students']++,
+                'submitted' => $metricsByAssignment[$assignmentId]['pending_students']++,
+                'returned' => $metricsByAssignment[$assignmentId]['returned_students']++,
+                default => null,
+            };
+        }
+
+        foreach ($metricsByAssignment as $assignmentId => &$metrics) {
+            $totalStudents = (int) $metrics['total_students'];
+            $submittedStudents = (int) $metrics['submitted_students'];
+            $metrics['completion_rate'] = $totalStudents > 0
+                ? (int) round(($submittedStudents / $totalStudents) * 100)
+                : 0;
+        }
+        unset($metrics);
+
+        return $metricsByAssignment;
+    }
+
+    /**
+     * @param  Collection<int, Assignment>|iterable<Assignment>  $assignments
+     * @return array<int, float|null>
+     */
+    public function batchAverageGradedScores(iterable $assignments): array
+    {
+        $assignmentIds = collect($assignments)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($assignmentIds->isEmpty()) {
+            return [];
+        }
+
+        $latestSubmissionIds = DB::table('submissions')
+            ->selectRaw('MAX(id) as id')
+            ->whereIn('assignment_id', $assignmentIds)
+            ->groupBy('assignment_id', 'student_id');
+
+        return DB::table('submissions as s')
+            ->joinSub($latestSubmissionIds, 'latest', fn ($join) => $join->on('s.id', '=', 'latest.id'))
+            ->whereIn('s.assignment_id', $assignmentIds)
+            ->where('s.status', 'graded')
+            ->whereNotNull('s.score')
+            ->groupBy('s.assignment_id')
+            ->selectRaw('s.assignment_id, AVG(s.score) as avg_score')
+            ->pluck('avg_score', 'assignment_id')
+            ->map(fn ($avg) => round((float) $avg, 1))
+            ->all();
     }
 
     public function formatFileSize(int $bytes): string
@@ -485,10 +620,6 @@ class AssignmentService
     /** @return array<string, mixed> */
     public function transformStudentAssignmentPayload(Assignment $assignment, User $student): array
     {
-        if ($assignment->status === 'archived') {
-            $assignment->syncCompletionStatus();
-        }
-
         $studentSubmissions = $assignment->relationLoaded('submissions')
             ? $assignment->submissions
             : $assignment->submissions()
@@ -571,6 +702,102 @@ class AssignmentService
 
             return strcasecmp((string) ($a['title'] ?? ''), (string) ($b['title'] ?? ''));
         })->values();
+    }
+
+    /** @param  Builder<Assignment>  $query */
+    private function applyStudentListStatusFilter(Builder $query, User $student, string $status): void
+    {
+        $studentId = (int) $student->id;
+
+        if ($status === 'urgent') {
+            $today = now()->startOfDay();
+            $urgentDeadline = $today->copy()->addDays(3)->toDateString();
+            $query->whereNotNull('deadline')
+                ->whereDate('deadline', '<=', $urgentDeadline)
+                ->where(function (Builder $builder) use ($studentId) {
+                    $builder->whereDoesntHave(
+                        'submissions',
+                        fn (Builder $submissionQuery) => $submissionQuery->where('student_id', $studentId),
+                    )->orWhereIn('assignments.id', $this->latestStudentSubmissionAssignmentIds($studentId, ['returned']));
+                });
+
+            return;
+        }
+
+        if ($status === 'not_submitted') {
+            $query->where(function (Builder $builder) use ($studentId) {
+                $builder->whereDoesntHave(
+                    'submissions',
+                    fn (Builder $submissionQuery) => $submissionQuery->where('student_id', $studentId),
+                )->orWhereIn('assignments.id', $this->latestStudentSubmissionAssignmentIds($studentId, ['returned']));
+            });
+
+            return;
+        }
+
+        if (in_array($status, ['submitted', 'graded', 'returned'], true)) {
+            $query->whereIn('assignments.id', $this->latestStudentSubmissionAssignmentIds($studentId, [$status]));
+        }
+    }
+
+    /**
+     * @param  list<string>  $statuses
+     * @return list<int>
+     */
+    private function latestStudentSubmissionAssignmentIds(int $studentId, array $statuses): array
+    {
+        $latestSubmissionIds = DB::table('submissions')
+            ->selectRaw('MAX(id) as id')
+            ->where('student_id', $studentId)
+            ->groupBy('assignment_id');
+
+        return DB::table('submissions as s')
+            ->joinSub($latestSubmissionIds, 'latest', fn ($join) => $join->on('s.id', '=', 'latest.id'))
+            ->whereIn('s.status', $statuses)
+            ->pluck('s.assignment_id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /** @return array<string, int> */
+    private function buildStudentStatusCountsFromDb(User $student): array
+    {
+        if (! $student->group_id) {
+            return [
+                'all' => 0,
+                'not_submitted' => 0,
+                'submitted' => 0,
+                'graded' => 0,
+                'returned' => 0,
+                'urgent' => 0,
+            ];
+        }
+
+        $base = Assignment::query()
+            ->whereHas('groups', fn (Builder $groupQuery) => $groupQuery->where('groups.id', $student->group_id));
+
+        $all = (clone $base)->count();
+        $submitted = (clone $base)->whereIn('assignments.id', $this->latestStudentSubmissionAssignmentIds((int) $student->id, ['submitted']))->count();
+        $graded = (clone $base)->whereIn('assignments.id', $this->latestStudentSubmissionAssignmentIds((int) $student->id, ['graded']))->count();
+        $returned = (clone $base)->whereIn('assignments.id', $this->latestStudentSubmissionAssignmentIds((int) $student->id, ['returned']))->count();
+
+        $notSubmittedQuery = clone $base;
+        $this->applyStudentListStatusFilter($notSubmittedQuery, $student, 'not_submitted');
+        $notSubmitted = $notSubmittedQuery->count();
+
+        $urgentQuery = clone $base;
+        $this->applyStudentListStatusFilter($urgentQuery, $student, 'urgent');
+        $urgent = $urgentQuery->count();
+
+        return [
+            'all' => $all,
+            'not_submitted' => $notSubmitted,
+            'submitted' => $submitted,
+            'graded' => $graded,
+            'returned' => $returned,
+            'urgent' => $urgent,
+        ];
     }
 
     /** @param  Collection<int, array<string, mixed>>  $assignments */
@@ -662,30 +889,51 @@ class AssignmentService
 
     public function resolveGroupIdByName(string $groupName, int $teacherId, int $subjectId): int
     {
-        $exactGroup = Group::where('name', $groupName)
+        $resolved = $this->resolveGroupIdsByNames([$groupName], $teacherId, $subjectId);
+
+        return (int) $resolved[0];
+    }
+
+    /**
+     * @param  list<string>  $groupNames
+     * @return list<int>
+     */
+    public function resolveGroupIdsByNames(array $groupNames, int $teacherId, int $subjectId): array
+    {
+        $normalizedNames = collect($groupNames)
+            ->map(fn ($name) => $this->normalizeGroupName((string) $name))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($normalizedNames->isEmpty()) {
+            return [];
+        }
+
+        $groups = Group::query()
             ->whereHas('teachingLoads', fn ($loadQuery) => $loadQuery
                 ->where('teacher_id', $teacherId)
                 ->where('subject_id', $subjectId)
                 ->where('status', 'active'))
-            ->first();
-        if ($exactGroup) {
-            return (int) $exactGroup->id;
+            ->get(['id', 'name']);
+
+        $groupsByNormalizedName = $groups->keyBy(
+            fn (Group $group) => $this->normalizeGroupName((string) $group->name),
+        );
+
+        $ids = [];
+        foreach ($normalizedNames as $groupName) {
+            $group = $groupsByNormalizedName->get($groupName);
+            if (! $group) {
+                throw new \Illuminate\Http\Exceptions\HttpResponseException(response()->json([
+                    'message' => "Группа {$groupName} не назначена вам по выбранной дисциплине.",
+                ], 422));
+            }
+
+            $ids[] = (int) $group->id;
         }
 
-        $normalizedExistingGroup = Group::whereHas('teachingLoads', fn ($loadQuery) => $loadQuery
-                ->where('teacher_id', $teacherId)
-                ->where('subject_id', $subjectId)
-                ->where('status', 'active'))
-            ->get(['id', 'name'])
-            ->first(fn ($group) => $this->normalizeGroupName((string) $group->name) === $groupName);
-
-        if ($normalizedExistingGroup) {
-            return (int) $normalizedExistingGroup->id;
-        }
-
-        throw new \Illuminate\Http\Exceptions\HttpResponseException(response()->json([
-            'message' => "Группа {$groupName} не назначена вам по выбранной дисциплине.",
-        ], 422));
+        return array_values(array_unique($ids));
     }
 
     public function teacherCanTeachSubject(int $teacherId, int $subjectId): bool

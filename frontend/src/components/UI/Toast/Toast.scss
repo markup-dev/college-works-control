@@ -21,9 +21,12 @@
 
   &__message {
     flex: 1;
+    min-width: 0;
     font-size: 0.95rem;
     line-height: 1.5;
     color: #1f2937;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   &__close {

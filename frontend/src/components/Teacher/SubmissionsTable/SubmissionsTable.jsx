@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import Button from '../../UI/Button/Button';
-import { formatDate, formatSurnameWithInitials, getSubmissionStatusInfo } from '../../../utils';
+import { formatDate, formatSurnameWithInitials, getSubmissionStatusInfo, shouldShowRetakeBadge } from '../../../utils';
 import { getDeadlineReviewHint } from '../../../utils/submissionReviewQueue';
 import './SubmissionsTable.scss';
 
@@ -209,7 +209,7 @@ const SubmissionCard = ({
             <span className={`submission-card__pill submission-card__pill--${statusInfo.variant}`}>
               {statusInfo.label}
             </span>
-            {submission.isResubmission ? (
+            {shouldShowRetakeBadge(submission) ? (
               <span className="submission-card__pill submission-card__pill--resend">Пересдача</span>
             ) : null}
             {deadlineHint ? (

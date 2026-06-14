@@ -73,10 +73,8 @@ const Header = ({ user, onLogout, loggingOut = false }) => {
       return;
     }
     try {
-      const { data } = await api.get('/conversations', { params: { scope: 'active' } });
-      const list = data.data ?? [];
-      const total = list.reduce((sum, c) => sum + (Number(c.unreadCount) || 0), 0);
-      setMessagesUnreadTotal(total);
+      const { data } = await api.get('/conversations/unread-total');
+      setMessagesUnreadTotal(Number(data.count) || 0);
     } catch {
       /* сеть / 401 обрабатывает api */
     }
@@ -134,7 +132,7 @@ const Header = ({ user, onLogout, loggingOut = false }) => {
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('app:messages-unread-refresh', onUnreadRefresh);
     };
-  }, [user?.role, location.pathname, refreshMessagesUnread]);
+  }, [user?.role, refreshMessagesUnread]);
 
   useEffect(() => {
     if (!user?.role) {
@@ -154,7 +152,7 @@ const Header = ({ user, onLogout, loggingOut = false }) => {
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('app:notifications-unread-refresh', onNotifRefresh);
     };
-  }, [user?.role, location.pathname, refreshNotificationsUnread]);
+  }, [user?.role, refreshNotificationsUnread]);
 
   useEffect(() => {
     closeNav();

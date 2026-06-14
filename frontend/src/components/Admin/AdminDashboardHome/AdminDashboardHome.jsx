@@ -8,42 +8,51 @@ import EmptyState from '../../UI/EmptyState/EmptyState';
 import ErrorBanner from '../../UI/ErrorBanner/ErrorBanner';
 import InfoCard from '../../UI/InfoCard/InfoCard';
 import LoadingState from '../../UI/LoadingState/LoadingState';
+import {
+  LogDetailsText,
+  getSystemLogActionLabel,
+  getSystemLogTypeClass,
+} from '../../../utils/systemLogPresentation';
+import '../../Admin/LogDetailsText/LogDetailsText.scss';
 import './AdminDashboardHome.scss';
 
 const AdminWeekActivityChart = ({ activityWeek }) => {
   if (!activityWeek?.labels?.length) return null;
-  const { labels, submissions, messages, logins } = activityWeek;
+  const { labels, submissions, assignmentsCreated, submissionsGraded, logins } = activityWeek;
   const rows = [
     { key: 'logins', label: 'Входы в систему', values: logins || [] },
+    { key: 'assignments', label: 'Создано заданий', values: assignmentsCreated || [] },
     { key: 'sub', label: 'Сдано работ', values: submissions || [] },
-    { key: 'msg', label: 'Сообщений', values: messages || [] },
+    { key: 'graded', label: 'Проверено работ', values: submissionsGraded || [] },
   ];
-  const max = Math.max(1, ...rows.flatMap((r) => r.values));
 
   return (
     <div className="admin-dashboard-home__chart" aria-label="Активность за неделю">
       <div className="admin-dashboard-home__chart-bars-container">
-        {rows.map((row) => (
-          <div key={row.key} className="admin-dashboard-home__chart-row">
-            <div className="admin-dashboard-home__chart-row-header">
-              <span className="admin-dashboard-home__chart-row-label">{row.label}</span>
-            </div>
-            <div className="admin-dashboard-home__chart-bars">
-              {row.values.map((v, i) => (
-                <div
-                  key={`${row.key}-${i}`}
-                  className="admin-dashboard-home__chart-bar-wrap"
-                  title={`${labels[i]}: ${v}`}
-                >
+        {rows.map((row) => {
+          const rowMax = Math.max(1, ...row.values);
+          return (
+            <div key={row.key} className="admin-dashboard-home__chart-row">
+              <div className="admin-dashboard-home__chart-row-header">
+                <span className="admin-dashboard-home__chart-row-label">{row.label}</span>
+              </div>
+              <div className="admin-dashboard-home__chart-bars">
+                {row.values.map((v, i) => (
                   <div
-                    className={`admin-dashboard-home__chart-bar admin-dashboard-home__chart-bar--${row.key}`}
-                    style={{ height: `${Math.max(6, (v / max) * 100)}%` }}
-                  />
-                </div>
-              ))}
+                    key={`${row.key}-${i}`}
+                    className="admin-dashboard-home__chart-bar-wrap"
+                    title={`${labels[i]}: ${v}`}
+                  >
+                    <div
+                      className={`admin-dashboard-home__chart-bar admin-dashboard-home__chart-bar--${row.key}`}
+                      style={{ height: `${Math.max(6, (v / rowMax) * 100)}%` }}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div className="admin-dashboard-home__chart-axis">
           {labels.map((lb) => (
             <span key={lb} className="admin-dashboard-home__chart-day">
@@ -95,7 +104,8 @@ const AdminDashboardHome = () => {
         labels: stats.activityWeek.labels,
         logins: stats.activityWeek.logins,
         submissions: stats.activityWeek.submissions,
-        messages: stats.activityWeek.messages,
+        assignmentsCreated: stats.activityWeek.assignmentsCreated,
+        submissionsGraded: stats.activityWeek.submissionsGraded,
       }
     : null;
 
@@ -142,13 +152,6 @@ const AdminDashboardHome = () => {
     { title: 'Импорт групп', link: '/admin/groups', state: { openImportGroups: true }, variant: 'secondary' },
     { title: 'Импорт дисциплин', link: '/admin/subjects', state: { openImportSubjects: true }, variant: 'secondary' },
   ];
-
-  const getLogTypeClass = (action) => {
-    if (action.toLowerCase().includes('удал')) return 'log-delete';
-    if (action.toLowerCase().includes('созд')) return 'log-create';
-    if (action.toLowerCase().includes('измен')) return 'log-update';
-    return 'log-default';
-  };
 
   return (
     <div className="admin-dashboard-home">
@@ -244,14 +247,16 @@ const AdminDashboardHome = () => {
         )}
         <ul className="admin-dashboard-home__feed">
           {logs.map((item) => (
-            <li key={item.id} className={`admin-dashboard-home__feed-item ${getLogTypeClass(item.action)}`}>
+            <li key={item.id} className={`admin-dashboard-home__feed-item ${getSystemLogTypeClass(item.action)}`}>
               <div className="admin-dashboard-home__feed-content">
-                <div className="admin-dashboard-home__feed-action">{item.action}</div>
+                <div className="admin-dashboard-home__feed-action">{getSystemLogActionLabel(item.action)}</div>
                 <div className="admin-dashboard-home__feed-meta">
                   <span className="admin-dashboard-home__feed-user">{item.user}</span>
                   <span className="admin-dashboard-home__feed-time">{formatDateTime(item.timestamp)}</span>
                 </div>
-                {item.details && <div className="admin-dashboard-home__feed-details">{item.details}</div>}
+                {item.details ? (
+                  <LogDetailsText details={item.details} className="admin-dashboard-home__feed-details" />
+                ) : null}
               </div>
             </li>
           ))}

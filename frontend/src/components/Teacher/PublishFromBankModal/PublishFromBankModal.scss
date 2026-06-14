@@ -157,6 +157,13 @@
   max-height: none;
 }
 
+.publish-bank-modal .group-dropdown__confirm {
+  padding: 0.55rem 0.6rem;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+  flex-shrink: 0;
+}
+
 .publish-bank-modal .group-checkbox-item {
   display: inline-flex;
   align-items: center;

@@ -76,10 +76,20 @@ class AcademicProgramService
             return false;
         }
 
-        return GroupSubject::query()
+        $hasCurrentProgramSubject = GroupSubject::query()
             ->where('group_id', $groupId)
             ->where('subject_id', $subjectId)
             ->where('course', (int) $group->current_course)
+            ->where('status', 'active')
+            ->exists();
+
+        if ($hasCurrentProgramSubject) {
+            return true;
+        }
+
+        return TeachingLoad::query()
+            ->where('group_id', $groupId)
+            ->where('subject_id', $subjectId)
             ->where('status', 'active')
             ->exists();
     }

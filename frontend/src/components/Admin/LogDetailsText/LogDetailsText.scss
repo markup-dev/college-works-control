@@ -1,0 +1,37 @@
+.log-details {
+  &__prefix {
+    color: inherit;
+  }
+
+  &__chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  &__chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.14);
+    color: #1e3a8a;
+    font-size: 0.86em;
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: nowrap;
+  }
+
+  &__sep {
+    color: #94a3b8;
+    font-weight: 700;
+    user-select: none;
+  }
+
+  &__quote {
+    font-weight: 600;
+    color: #0f172a;
+  }
+}

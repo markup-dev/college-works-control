@@ -29,7 +29,10 @@ import {
   calculateSubmissionStats,
   buildNormalizedGroupOptions,
   buildSubmissionSubjectOptions,
+  buildSubmissionsNavFiltersFromAssignment,
   PAGINATION_DEFAULTS,
+  downloadAssignmentMaterial,
+  DownloadCancelledError,
 } from '../../utils';
 import api from '../../services/api';
 import useDebouncedValue from '../../hooks/useDebouncedValue';
@@ -92,6 +95,7 @@ const TeacherDashboard = () => {
     gradeSubmission,
     returnSubmission,
     createAssignment,
+    publishAssignmentFromBank,
     updateAssignment,
     deleteAssignment,
     loadTeacherData,
@@ -444,9 +448,8 @@ const TeacherDashboard = () => {
   useEffect(() => {
     if (user) {
       loadTeacherMeta();
-      loadAnalyticsSnapshot();
     }
-  }, [user, loadTeacherMeta, loadAnalyticsSnapshot]);
+  }, [user, loadTeacherMeta]);
 
   useEffect(() => {
     if (activeTab === 'analytics' && !analyticsLoaded) {
@@ -771,14 +774,25 @@ const TeacherDashboard = () => {
   };
 
   const handleEditBankTemplate = (template) => {
+    if (!template?.id) {
+      return;
+    }
     setEditingBankTemplate(template);
     setShowBankTemplateModal(true);
+    void api.get(`/assignment-bank/${template.id}`)
+      .then(({ data }) => {
+        if (data?.id) {
+          setEditingBankTemplate(data);
+        }
+      })
+      .catch(() => {});
   };
 
   const handleSaveBankTemplate = async (data) => {
     if (!editingBankTemplate?.id) return;
+    const templateId = editingBankTemplate.id;
     try {
-      await api.put(`/assignment-bank/${editingBankTemplate.id}`, {
+      await api.put(`/assignment-bank/${templateId}`, {
         title: data.title,
         subjectId: data.subjectId,
         description: data.description,
@@ -789,16 +803,20 @@ const TeacherDashboard = () => {
         })),
         allowedFormats: data.allowedFormats,
       });
-      await uploadBankTemplateMaterials(
-        editingBankTemplate.id,
-        data.materialFiles,
-        data.removedMaterialIds
-      );
       showSuccess('Заготовка сохранена');
       setShowBankTemplateModal(false);
       setEditingBankTemplate(null);
-      await loadBankTemplates();
-      await loadTeacherMeta({ silent: true });
+
+      const files = Array.isArray(data.materialFiles) ? data.materialFiles.filter(Boolean) : [];
+      const removeIds = Array.isArray(data.removedMaterialIds) ? data.removedMaterialIds.filter(Boolean) : [];
+      if (files.length > 0 || removeIds.length > 0) {
+        void uploadBankTemplateMaterials(templateId, files, removeIds)
+          .catch((err) => {
+            showError(getApiErrorMessage(err, 'Заготовка сохранена, но материалы не загрузились'));
+          });
+      }
+
+      void loadBankTemplates({ silent: true });
     } catch (err) {
       showError(getApiErrorMessage(err, 'Не удалось сохранить заготовку'));
     }
@@ -836,17 +854,18 @@ const TeacherDashboard = () => {
   const handleConfirmPublishFromBank = async ({ templateId, deadline, studentGroups }) => {
     setPublishBankSubmitting(true);
     try {
-      await api.post(`/assignment-bank/${templateId}/publish`, {
-        deadline,
-        studentGroups,
-      });
+      const result = await publishAssignmentFromBank({ templateId, deadline, studentGroups });
+      if (!result.success) {
+        showError(result.error || 'Не удалось выдать задание');
+        return;
+      }
+
       showSuccess('Задание выдано студентам');
       setShowPublishBankModal(false);
       setPublishBankTemplate(null);
-      await loadTeacherData();
-      await loadAnalyticsSnapshot();
+
       if (assignmentsBankMode) {
-        await loadBankTemplates();
+        void loadBankTemplates({ silent: true });
       }
     } catch (err) {
       showError(getApiErrorMessage(err, 'Не удалось выдать задание'));
@@ -1018,30 +1037,18 @@ const TeacherDashboard = () => {
 
   const handleDownloadAssignmentMaterial = async (assignment, material) => {
     if (!assignment?.id || !material?.id) {
-      showError('Материал для скачивания не найден');
+      showError('Материал не найден');
       return;
     }
 
     try {
-      const response = await api.get(`/assignments/${assignment.id}/materials/${material.id}/download`, {
-        responseType: 'blob',
-      });
-
-      const blob = response.data;
-      const objectUrl = URL.createObjectURL(blob);
-      const fileName = material.fileName || material.file_name || 'assignment-material';
-
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(objectUrl);
-
-      showInfo(`Начато скачивание файла: ${fileName}`);
+      await downloadAssignmentMaterial(api, assignment.id, material);
     } catch (error) {
-      showError('Не удалось скачать материал задания. Попробуйте еще раз.');
+      if (error instanceof DownloadCancelledError || error?.name === 'AbortError') {
+        return;
+      }
+      showError(getApiErrorMessage(error, 'Не удалось сохранить материал. Попробуйте ещё раз.'));
+      throw error;
     }
   };
 
@@ -1052,12 +1059,38 @@ const TeacherDashboard = () => {
     setShowDetailsModal(true);
   };
 
-  const handleViewSubmissions = (assignmentId, nextStatusFilter = DEFAULT_SUBMISSION_STATUS_FILTER) => {
-    const relatedAssignment = assignments.find((assignment) => Number(assignment.id) === Number(assignmentId));
-    const nextSubjectId = relatedAssignment?.subjectId || relatedAssignment?.subject_id;
-    setAssignmentFilter(nextSubjectId ? String(nextSubjectId) : 'all');
+  const handleViewSubmissions = (assignmentOrId, nextStatusFilter = DEFAULT_SUBMISSION_STATUS_FILTER) => {
+    const relatedAssignment = assignmentOrId && typeof assignmentOrId === 'object'
+      ? assignmentOrId
+      : assignments.find((assignment) => Number(assignment.id) === Number(assignmentOrId));
+
+    if (relatedAssignment) {
+      const preferredGroup = assignmentGroupFilter !== 'all'
+        ? assignmentGroupFilter
+        : groupFilter;
+      const preferredSubjectId = assignmentSubjectFilter !== 'all'
+        ? assignmentSubjectFilter
+        : assignmentFilter;
+      const {
+        searchTerm: nextSearch,
+        groupFilter: nextGroup,
+        assignmentFilter: nextAssignmentFilter,
+      } = buildSubmissionsNavFiltersFromAssignment(
+        relatedAssignment,
+        { preferredGroup, preferredSubjectId },
+      );
+      setSearchTerm(nextSearch);
+      setGroupFilter(nextGroup);
+      setAssignmentFilter(nextAssignmentFilter);
+    } else {
+      setSearchTerm('');
+      setGroupFilter('all');
+      setAssignmentFilter('all');
+    }
+
     setStatusFilter(nextStatusFilter);
     setSubmissionPage(1);
+    setDeadlineFilter('all');
     handleTabChange('submissions');
   };
 
@@ -1065,7 +1098,7 @@ const TeacherDashboard = () => {
     if (!assignment?.id) return;
     handleCloseAssignmentDetails();
     handleViewSubmissions(
-      assignment.id,
+      assignment,
       isCompletedAssignment(assignment) ? 'graded' : DEFAULT_SUBMISSION_STATUS_FILTER
     );
   };
@@ -1073,6 +1106,15 @@ const TeacherDashboard = () => {
   const handleViewAssignmentDetails = (assignment) => {
     setDetailsAssignment(assignment);
     setShowAssignmentDetails(true);
+    if (assignment?.id) {
+      void api.get(`/assignments/${assignment.id}`)
+        .then(({ data }) => {
+          setDetailsAssignment((prev) => (
+            Number(prev?.id) === Number(assignment.id) ? normalizeAssignment(data) : prev
+          ));
+        })
+        .catch(() => {});
+    }
   };
 
   const handleCloseAssignmentDetails = () => {
@@ -1086,6 +1128,15 @@ const TeacherDashboard = () => {
     setShowAssignmentDetails(false);
     setSelectedAssignment(assignment);
     setShowAssignmentModal(true);
+    if (assignment.id) {
+      void api.get(`/assignments/${assignment.id}`)
+        .then(({ data }) => {
+          setSelectedAssignment((prev) => (
+            Number(prev?.id) === Number(assignment.id) ? normalizeAssignment(data) : prev
+          ));
+        })
+        .catch(() => {});
+    }
   };
 
   const handleBackToDetailsFromEdit = (draftData) => {
@@ -1141,7 +1192,9 @@ const TeacherDashboard = () => {
         setAssignmentFormDraft(null);
         closeAssignmentModal();
         showSuccess(selectedAssignment ? 'Задание обновлено!' : 'Задание успешно создано!');
-        void loadAnalyticsSnapshot();
+        if (analyticsLoaded) {
+          void loadAnalyticsSnapshot();
+        }
       } else {
         showError(result.error || (selectedAssignment ? 'Ошибка при обновлении задания' : 'Ошибка при создании задания'));
       }
@@ -1788,7 +1841,7 @@ const AssignmentsSection = ({
           <AssignmentCard
             key={assignment.id}
             assignment={assignment}
-            onViewSubmissions={() => onViewSubmissions(assignment.id)}
+            onViewSubmissions={() => onViewSubmissions(assignment)}
             onViewDetails={() => onViewDetails && onViewDetails(assignment)}
             onDeleteAssignment={onDeleteAssignment ? () => onDeleteAssignment(assignment) : undefined}
           />
@@ -1912,7 +1965,7 @@ const CompletedAssignmentsSection = ({
           <AssignmentCard
             key={assignment.id}
             assignment={assignment}
-            onViewSubmissions={() => onViewSubmissions(assignment.id, 'graded')}
+            onViewSubmissions={() => onViewSubmissions(assignment, 'graded')}
             onViewDetails={() => onViewDetails && onViewDetails(assignment)}
             onDeleteAssignment={onDeleteAssignment ? () => onDeleteAssignment(assignment) : undefined}
           />

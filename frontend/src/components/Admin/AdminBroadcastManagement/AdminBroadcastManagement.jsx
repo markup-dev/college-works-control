@@ -288,7 +288,17 @@ const AdminBroadcastManagement = () => {
             Дублировать на email (если указан)
           </label>
 
-          <Button type="button" onClick={() => void handleSend()} loading={sendLoading}>
+          <Button
+            type="button"
+            onClick={() => void handleSend()}
+            loading={sendLoading}
+            disabled={
+              sendLoading
+              || subject.trim().length < 3
+              || body.trim().length < 3
+              || (audienceType === 'groups' && groupIds.length === 0)
+            }
+          >
             Отправить
           </Button>
         </div>

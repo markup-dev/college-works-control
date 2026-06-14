@@ -15,14 +15,10 @@
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: 0.75rem;
+    align-items: flex-start;
 
-    select {
+    .searchable-select {
       flex: 1 1 220px;
-      min-height: 38px;
-      padding: 0.5rem 0.65rem;
-      border: 1px solid #dbe3ee;
-      border-radius: 10px;
-      font: inherit;
     }
   }
 
