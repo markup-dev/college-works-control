@@ -184,7 +184,10 @@ const SearchableSelect = ({
             key={option.value}
             type="button"
             className={`searchable-select__option${String(option.value) === String(value) ? ' searchable-select__option--active' : ''}`}
-            onClick={() => selectOption(option)}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              selectOption(option);
+            }}
             role="option"
             aria-selected={String(option.value) === String(value)}
           >
@@ -222,7 +225,7 @@ const SearchableSelect = ({
 
       {open && !disabled && (
         usePortal && typeof document !== 'undefined'
-          ? createPortal(panelContent, document.body)
+          ? (panelStyle ? createPortal(panelContent, document.body) : null)
           : panelContent
       )}
     </div>

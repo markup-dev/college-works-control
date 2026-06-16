@@ -263,6 +263,14 @@
     border-radius: 12px;
     background: #ffffff;
     box-shadow: 0 16px 34px rgba(15, 23, 42, 0.14);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+
+    &--portal {
+      right: auto;
+      z-index: 6000;
+    }
   }
 
   &__search {
@@ -297,6 +305,12 @@
     gap: 0.25rem;
     margin-top: 0.45rem;
     padding-right: 0.15rem;
+
+    .assignment-filter-combobox__panel--portal & {
+      flex: 1;
+      min-height: 0;
+      max-height: none;
+    }
   }
 
   &__option {
@@ -467,7 +481,7 @@
   &__content {
     overflow: visible;
 
-    .searchable-select__panel {
+    .searchable-select__panel:not(.searchable-select__panel--portal) {
       position: relative;
       top: auto;
       left: auto;

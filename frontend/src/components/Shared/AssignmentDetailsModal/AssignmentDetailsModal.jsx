@@ -113,12 +113,13 @@ const AssignmentDetailsModal = ({
             )}
           </div>
           <div className="assignment-details-modal__badges">
-            <StatusBadge tone={statusInfo.variant}>
-              {statusInfo.label}
-            </StatusBadge>
-            {mode === 'student' && showRetakeBadge && (
+            {mode === 'student' && showRetakeBadge ? (
               <StatusBadge tone="retake">
                 Пересдача
+              </StatusBadge>
+            ) : (
+              <StatusBadge tone={statusInfo.variant}>
+                {statusInfo.label}
               </StatusBadge>
             )}
           </div>

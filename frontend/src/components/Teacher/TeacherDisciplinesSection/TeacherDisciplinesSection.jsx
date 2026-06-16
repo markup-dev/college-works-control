@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
 import { getApiErrorMessage } from '../../../utils/adminApiErrors';
+import { formatDateTimeShortMonth } from '../../../utils/dateHelpers';
 import {
   TEACHER_REQUEST_MESSAGES,
   groupsWithActiveSubjectOnCourse,
@@ -9,11 +10,19 @@ import {
   resolveDisciplinePickerEmptyMessage,
   resolveLoadGroupEmptyMessage,
 } from '../../../utils/teacherRequestMessages';
+import {
+  TEACHER_REQUEST_FILE_HINT,
+  TEACHER_REQUEST_MAX_FILES,
+  appendRequestDocuments,
+  requestDocumentsCount,
+} from '../../../utils/teacherRequestDocuments';
 import Button from '../../UI/Button/Button';
 import EmptyState from '../../UI/EmptyState/EmptyState';
 import FileDropzone from '../../UI/FileDropzone/FileDropzone';
 import LoadingState from '../../UI/LoadingState/LoadingState';
 import Modal from '../../UI/Modal/Modal';
+import ModalSection from '../../UI/Modal/ModalSection';
+import RequestDocumentsList from '../../Shared/RequestDocumentsList/RequestDocumentsList';
 import TextArea from '../../UI/TextArea/TextArea';
 import './TeacherDisciplinesSection.scss';
 
@@ -21,6 +30,46 @@ const requestStatusLabel = (status) => {
   if (status === 'approved') return 'Одобрена';
   if (status === 'rejected') return 'Отклонена';
   return 'На рассмотрении';
+};
+
+const requestKindLabel = (requestKind) => (
+  requestKind === 'load' ? 'Назначение на группу' : 'Допуск к дисциплине'
+);
+
+const requestHistoryTitle = (request) => {
+  if (request.requestKind === 'load') {
+    return `Назначение: ${request.subject?.name || '—'} · ${request.group?.name || '—'}`;
+  }
+  return `Дисциплина: ${request.subject?.name || '—'}`;
+};
+
+const mergeSelectedFiles = (current, incoming) => {
+  const merged = [...current, ...(incoming || [])];
+  return merged.slice(0, TEACHER_REQUEST_MAX_FILES);
+};
+
+const SelectedRequestFiles = ({ files, onRemove, disabled }) => {
+  if (!files.length) {
+    return null;
+  }
+
+  return (
+    <ul className="teacher-disciplines-section__selected-files">
+      {files.map((file, index) => (
+        <li key={`${file.name}-${file.lastModified}-${index}`}>
+          <span title={file.name}>{file.name}</span>
+          <button
+            type="button"
+            aria-label={`Убрать файл ${file.name}`}
+            disabled={disabled}
+            onClick={() => onRemove(index)}
+          >
+            ×
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 };
 
 const TeacherDisciplinesSection = () => {
@@ -41,14 +90,32 @@ const TeacherDisciplinesSection = () => {
   const [programSubjects, setProgramSubjects] = useState([]);
   const [programSubjectsLoading, setProgramSubjectsLoading] = useState(false);
   const [subjectComment, setSubjectComment] = useState('');
-  const [subjectFile, setSubjectFile] = useState(null);
+  const [subjectFiles, setSubjectFiles] = useState([]);
   const [loadSubjectId, setLoadSubjectId] = useState('');
   const [loadGroupId, setLoadGroupId] = useState('');
   const [loadComment, setLoadComment] = useState('');
-  const [loadFile, setLoadFile] = useState(null);
+  const [loadFiles, setLoadFiles] = useState([]);
   const [disciplineSubmitting, setDisciplineSubmitting] = useState(false);
   const [loadSubmitting, setLoadSubmitting] = useState(false);
+  const [selectedHistoryRequest, setSelectedHistoryRequest] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
+
+  const historyRequests = useMemo(() => {
+    const discipline = (data.disciplineRequests || []).map((request) => ({
+      ...request,
+      requestKind: 'discipline',
+    }));
+    const load = (data.teachingLoadRequests || []).map((request) => ({
+      ...request,
+      requestKind: 'load',
+    }));
+
+    return [...discipline, ...load].sort((left, right) => {
+      const leftTime = new Date(left.createdAt || 0).getTime();
+      const rightTime = new Date(right.createdAt || 0).getTime();
+      return rightTime - leftTime;
+    });
+  }, [data.disciplineRequests, data.teachingLoadRequests]);
 
   const loadsByGroup = useMemo(() => {
     const map = new Map();
@@ -272,14 +339,14 @@ const TeacherDisciplinesSection = () => {
     setProgramSubjects([]);
     setProgramSubjectsLoading(false);
     setSubjectComment('');
-    setSubjectFile(null);
+    setSubjectFiles([]);
   };
 
   const resetLoadForm = () => {
     setLoadSubjectId('');
     setLoadGroupId('');
     setLoadComment('');
-    setLoadFile(null);
+    setLoadFiles([]);
   };
 
   const closeDisciplineModal = () => {
@@ -308,7 +375,7 @@ const TeacherDisciplinesSection = () => {
       const form = new FormData();
       form.append('subject_id', subjectId);
       if (subjectComment.trim()) form.append('comment', subjectComment.trim());
-      if (subjectFile) form.append('document', subjectFile);
+      appendRequestDocuments(form, subjectFiles);
       await api.post('/teacher/discipline-requests', form);
       showSuccess('Заявка на дисциплину отправлена');
       setDisciplineModalOpen(false);
@@ -340,7 +407,7 @@ const TeacherDisciplinesSection = () => {
       form.append('subject_id', loadSubjectId);
       form.append('group_id', loadGroupId);
       if (loadComment.trim()) form.append('comment', loadComment.trim());
-      if (loadFile) form.append('document', loadFile);
+      appendRequestDocuments(form, loadFiles);
       await api.post('/teacher/teaching-load-requests', form);
       showSuccess('Заявка на назначение отправлена');
       setLoadModalOpen(false);
@@ -425,22 +492,96 @@ const TeacherDisciplinesSection = () => {
 
       <div className="teacher-disciplines-section__card">
         <h2>История заявок</h2>
-        {[...data.disciplineRequests, ...data.teachingLoadRequests].length === 0 && (
+        {historyRequests.length === 0 && (
           <p className="teacher-disciplines-section__muted">Заявок пока нет</p>
         )}
-        {data.disciplineRequests.map((request) => (
-          <div key={`d-${request.id}`} className="teacher-disciplines-section__request">
-            <strong>Дисциплина: {request.subject?.name || '—'}</strong>
-            <span>{requestStatusLabel(request.status)}</span>
-          </div>
-        ))}
-        {data.teachingLoadRequests.map((request) => (
-          <div key={`l-${request.id}`} className="teacher-disciplines-section__request">
-            <strong>Назначение: {request.subject?.name || '—'} · {request.group?.name || '—'}</strong>
-            <span>{requestStatusLabel(request.status)}</span>
-          </div>
-        ))}
+        {historyRequests.map((request) => {
+          const attachmentsCount = requestDocumentsCount(request);
+          return (
+            <button
+              key={`${request.requestKind}-${request.id}`}
+              type="button"
+              className={`teacher-disciplines-section__history-request teacher-disciplines-section__history-request--${request.status}`}
+              onClick={() => setSelectedHistoryRequest(request)}
+            >
+              <div className="teacher-disciplines-section__history-request-body">
+                <strong className="teacher-disciplines-section__history-request-title">
+                  {requestHistoryTitle(request)}
+                </strong>
+                <span className="teacher-disciplines-section__history-request-meta">
+                  {requestKindLabel(request.requestKind)}
+                  {request.createdAt ? ` · ${formatDateTimeShortMonth(request.createdAt, '')}` : ''}
+                </span>
+                {attachmentsCount > 0 && (
+                  <span className="teacher-disciplines-section__history-request-files">
+                    {attachmentsCount} {attachmentsCount === 1 ? 'файл' : attachmentsCount < 5 ? 'файла' : 'файлов'}
+                  </span>
+                )}
+              </div>
+              <div className="teacher-disciplines-section__history-request-aside">
+                <span className="teacher-disciplines-section__history-request-status">
+                  {requestStatusLabel(request.status)}
+                </span>
+                <span className="teacher-disciplines-section__history-request-action" aria-hidden="true">
+                  Подробнее
+                </span>
+              </div>
+            </button>
+          );
+        })}
       </div>
+
+      <Modal
+        isOpen={selectedHistoryRequest != null}
+        onClose={() => setSelectedHistoryRequest(null)}
+        title="Заявка"
+        subtitle={selectedHistoryRequest ? requestKindLabel(selectedHistoryRequest.requestKind) : ''}
+        size="medium"
+        contentClassName="teacher-disciplines-section__modal"
+      >
+        {selectedHistoryRequest && (
+          <>
+            <ModalSection title="Информация" variant="soft">
+              <div className="teacher-disciplines-section__history-grid">
+                <div>
+                  <span className="teacher-disciplines-section__history-label">Тема</span>
+                  <p>{requestHistoryTitle(selectedHistoryRequest)}</p>
+                </div>
+                <div>
+                  <span className="teacher-disciplines-section__history-label">Статус</span>
+                  <p>{requestStatusLabel(selectedHistoryRequest.status)}</p>
+                </div>
+                <div>
+                  <span className="teacher-disciplines-section__history-label">Дата подачи</span>
+                  <p>{formatDateTimeShortMonth(selectedHistoryRequest.createdAt, '—')}</p>
+                </div>
+              </div>
+            </ModalSection>
+            <ModalSection title="Комментарий">
+              <p className="teacher-disciplines-section__history-comment">
+                {selectedHistoryRequest.comment || 'Комментарий не указан'}
+              </p>
+            </ModalSection>
+            {selectedHistoryRequest.adminComment && (
+              <ModalSection title="Ответ администратора">
+                <p className="teacher-disciplines-section__history-comment">
+                  {selectedHistoryRequest.adminComment}
+                </p>
+              </ModalSection>
+            )}
+            <ModalSection title="Вложения">
+              <RequestDocumentsList
+                apiClient={api}
+                scope="teacher"
+                requestKind={selectedHistoryRequest.requestKind}
+                requestId={selectedHistoryRequest.id}
+                documents={selectedHistoryRequest.documents || []}
+                onError={showError}
+              />
+            </ModalSection>
+          </>
+        )}
+      </Modal>
 
       <Modal
         isOpen={disciplineModalOpen}
@@ -545,11 +686,18 @@ const TeacherDisciplinesSection = () => {
         />
         <FileDropzone
           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-          selectedFiles={subjectFile ? [subjectFile] : []}
-          onFilesSelected={(files) => setSubjectFile(files?.[0] || null)}
-          buttonText="Прикрепить файл"
-          hint="PDF, DOC/DOCX, JPG или PNG до 5 МБ."
+          multiple
+          showSelectedFiles={false}
+          selectedFiles={subjectFiles}
+          onFilesSelected={(files) => setSubjectFiles((current) => mergeSelectedFiles(current, files))}
+          buttonText="Прикрепить файлы"
+          hint={TEACHER_REQUEST_FILE_HINT}
+          disabled={disciplineSubmitting || subjectFiles.length >= TEACHER_REQUEST_MAX_FILES}
+        />
+        <SelectedRequestFiles
+          files={subjectFiles}
           disabled={disciplineSubmitting}
+          onRemove={(index) => setSubjectFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}
         />
       </Modal>
 
@@ -629,11 +777,18 @@ const TeacherDisciplinesSection = () => {
         />
         <FileDropzone
           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-          selectedFiles={loadFile ? [loadFile] : []}
-          onFilesSelected={(files) => setLoadFile(files?.[0] || null)}
-          buttonText="Прикрепить файл"
-          hint="PDF, DOC/DOCX, JPG или PNG до 5 МБ."
+          multiple
+          showSelectedFiles={false}
+          selectedFiles={loadFiles}
+          onFilesSelected={(files) => setLoadFiles((current) => mergeSelectedFiles(current, files))}
+          buttonText="Прикрепить файлы"
+          hint={TEACHER_REQUEST_FILE_HINT}
+          disabled={loadSubmitting || loadFiles.length >= TEACHER_REQUEST_MAX_FILES}
+        />
+        <SelectedRequestFiles
+          files={loadFiles}
           disabled={loadSubmitting}
+          onRemove={(index) => setLoadFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}
         />
       </Modal>
     </section>

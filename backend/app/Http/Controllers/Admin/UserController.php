@@ -41,7 +41,7 @@ class UserController extends Controller
             'account_status' => ['nullable', 'in:active,must_change_password,blocked'],
             'without_group' => ['nullable', 'boolean'],
             'group_id' => ['nullable', 'integer', 'exists:groups,id'],
-            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'user_id' => ['nullable', 'integer', 'min:1'],
             'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
             'sort' => ['nullable', 'in:newest,oldest,name_asc,name_desc,last_login_desc,last_login_asc'],
             'page' => ['nullable', 'integer', 'min:1'],

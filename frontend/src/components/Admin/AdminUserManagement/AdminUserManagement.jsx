@@ -173,6 +173,7 @@ const AdminUserManagement = () => {
 
   const openUserView = useCallback((row) => {
     if (!row?.id) return;
+    setViewUserRow(row);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('user_id', String(row.id));
@@ -259,9 +260,40 @@ const AdminUserManagement = () => {
       return;
     }
     if (loading) return;
+
     const row = users.find((user) => Number(user.id) === Number(userId));
-    setViewUserRow(row || null);
-  }, [userId, users, loading]);
+    if (row) {
+      setViewUserRow(row);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get('/admin/users', {
+          params: { user_id: Number(userId), per_page: 1 },
+        });
+        if (cancelled) return;
+        const match = Array.isArray(data?.data)
+          ? data.data.find((user) => Number(user.id) === Number(userId))
+          : null;
+        if (match) {
+          setViewUserRow(match);
+          return;
+        }
+        setViewUserRow(null);
+        clearViewUserParam();
+      } catch {
+        if (!cancelled) {
+          setViewUserRow(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, users, loading, clearViewUserParam]);
 
   useEffect(() => {
     let cancelled = false;
@@ -284,7 +316,7 @@ const AdminUserManagement = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, role, accountStatus, groupId, userId, sort]);
+  }, [debouncedSearch, role, accountStatus, groupId, sort]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -304,9 +336,6 @@ const AdminUserManagement = () => {
       } else if (groupId) {
         params.group_id = Number(groupId);
       }
-      if (userId) {
-        params.user_id = Number(userId);
-      }
 
       const { data } = await api.get('/admin/users', { params });
       setUsers(Array.isArray(data?.data) ? data.data : []);
@@ -318,7 +347,7 @@ const AdminUserManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, role, accountStatus, groupId, userId, sort]);
+  }, [page, debouncedSearch, role, accountStatus, groupId, sort]);
 
   usePaginationClamp(page, meta.lastPage, setPage);
 
@@ -778,9 +807,11 @@ const AdminUserManagement = () => {
         onConfirm={async () => {
           if (!deleteTargetRow) return;
           try {
-            await api.delete(`/admin/users/${deleteTargetRow.id}`);
+            const deletedId = Number(deleteTargetRow.id);
+            await api.delete(`/admin/users/${deletedId}`);
             showSuccess('Пользователь удалён');
-            setViewUserRow((v) => (v && Number(v.id) === Number(deleteTargetRow.id) ? null : v));
+            setViewUserRow(null);
+            clearViewUserParam();
             await fetchUsers();
           } catch (e) {
             showError(getApiErrorMessage(e, 'Не удалось удалить пользователя'));

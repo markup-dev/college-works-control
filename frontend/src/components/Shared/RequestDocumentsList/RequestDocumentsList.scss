@@ -1,0 +1,56 @@
+.request-documents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &__empty {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.92rem;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+  }
+
+  &__name {
+    min-width: 0;
+    color: #0f172a;
+    font-size: 0.92rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 0.45rem;
+  }
+
+  &__action {
+    border: none;
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    background: #e8f0fb;
+    color: #1e4a8c;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+
+    &:hover {
+      background: #dbeafe;
+    }
+  }
+}

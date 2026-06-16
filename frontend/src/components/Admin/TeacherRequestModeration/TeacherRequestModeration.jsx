@@ -6,6 +6,8 @@ import Button from '../../UI/Button/Button';
 import ConfirmModal from '../../UI/Modal/ConfirmModal';
 import Modal from '../../UI/Modal/Modal';
 import ModalDangerZone from '../../UI/Modal/ModalDangerZone';
+import RequestDocumentsList from '../../Shared/RequestDocumentsList/RequestDocumentsList';
+import { requestDocumentsCount } from '../../../utils/teacherRequestDocuments';
 import './TeacherRequestModeration.scss';
 
 const teacherName = (teacher) => (
@@ -104,48 +106,6 @@ const TeacherRequestModeration = ({
     return `Просит допуск к дисциплине: ${request.subject?.name || '—'}`;
   };
 
-  const downloadAttachment = async (request) => {
-    if (!request.documentUrl) {
-      return;
-    }
-
-    const fileName = request.documentName || 'Вложение преподавателя';
-
-    try {
-      const response = await api.get(request.documentUrl, { responseType: 'blob' });
-      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(blobUrl);
-    } catch {
-      showError('Не удалось скачать вложение');
-    }
-  };
-
-  const renderAttachment = (request) => {
-    if (!request.documentUrl) {
-      return <p>Файл не прикреплен</p>;
-    }
-
-    const fileName = request.documentName || 'Вложение преподавателя';
-
-    return (
-      <button
-        type="button"
-        className="teacher-request-moderation__file"
-        title="Скачать вложение"
-        onClick={() => void downloadAttachment(request)}
-      >
-        <span className="teacher-request-moderation__file-name">{fileName}</span>
-        <span className="teacher-request-moderation__file-action">Скачать</span>
-      </button>
-    );
-  };
-
   if (loading || requests.length === 0) {
     return null;
   }
@@ -178,6 +138,11 @@ const TeacherRequestModeration = ({
             <strong>{teacherName(request.teacher)}</strong>
             <span>{renderRequestMeta(request)}</span>
             {request.comment && <p>{request.comment}</p>}
+            {requestDocumentsCount(request) > 0 && (
+              <span className="teacher-request-moderation__attachments-badge">
+                {requestDocumentsCount(request)} {requestDocumentsCount(request) === 1 ? 'файл' : requestDocumentsCount(request) < 5 ? 'файла' : 'файлов'}
+              </span>
+            )}
           </div>
           <div className="teacher-request-moderation__request-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
             <Button type="button" size="small" variant="primary" onClick={() => openResolveConfirm(request, 'approved')}>Одобрить</Button>
@@ -226,8 +191,15 @@ const TeacherRequestModeration = ({
             </div>
 
             <div className="teacher-request-moderation__detail-block">
-              <span>Вложение</span>
-              {renderAttachment(selectedRequest)}
+              <span>Вложения</span>
+              <RequestDocumentsList
+                apiClient={api}
+                scope="admin"
+                requestKind={kind}
+                requestId={selectedRequest.id}
+                documents={selectedRequest.documents || []}
+                onError={showError}
+              />
             </div>
 
             <ModalDangerZone

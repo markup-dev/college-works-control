@@ -6,15 +6,21 @@ use App\Models\Group;
 use App\Models\Specialty;
 use App\Models\SpecialtyProgramSubject;
 use App\Models\Subject;
+use App\Models\TeacherRequestDocument;
 use App\Models\TeacherSubjectRequest;
 use App\Models\TeachingLoadRequest;
 use App\Services\AcademicProgramService;
+use App\Services\TeacherRequestDocumentService;
 use App\Services\TeacherRequestNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class TeacherDisciplineController extends Controller
 {
+    public function __construct(
+        private readonly TeacherRequestDocumentService $documents,
+    ) {}
+
     public function index(Request $request)
     {
         $teacher = $request->user();
@@ -24,8 +30,10 @@ class TeacherDisciplineController extends Controller
                 ->where('status', 'active')
                 ->with(['subject:id,name,code,status', 'group:id,name,current_course,admission_year,graduation_year']),
             'subjectRequests.subject:id,name,code',
+            'subjectRequests.documents',
             'teachingLoadRequests.subject:id,name,code',
             'teachingLoadRequests.group:id,name,current_course,admission_year,graduation_year',
+            'teachingLoadRequests.documents',
         ]);
 
         return response()->json([
@@ -101,38 +109,26 @@ class TeacherDisciplineController extends Controller
 
     public function requestDiscipline(Request $request, AcademicProgramService $programs)
     {
-        $validated = $request->validate([
+        $validated = $request->validate(array_merge([
             'subject_id' => ['required', Rule::exists('subjects', 'id')->where(fn ($query) => $query->where('status', 'active'))],
             'comment' => ['nullable', 'string', 'max:3000'],
-            'document' => ['nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:5120'],
-        ]);
+        ], $this->documents->validationRules()));
 
         $programs->assertTeacherSubjectRequestAllowed(
             (int) $request->user()->id,
             (int) $validated['subject_id'],
         );
 
-        $path = null;
-        $name = null;
-        $type = null;
-        if ($request->hasFile('document')) {
-            $file = $request->file('document');
-            $path = $file->store('teacher-request-documents', 'public');
-            $name = $file->getClientOriginalName();
-            $type = $file->getClientMimeType();
-        }
-
         $row = TeacherSubjectRequest::create([
             'teacher_id' => $request->user()->id,
             'subject_id' => (int) $validated['subject_id'],
             'comment' => $validated['comment'] ?? null,
-            'document_path' => $path,
-            'document_name' => $name,
-            'document_type' => $type,
             'status' => 'pending',
         ]);
 
-        $row->load(['subject', 'teacher']);
+        $this->documents->attachTo($row, $this->documents->collectUploadedFiles($request));
+
+        $row->load(['subject', 'teacher', 'documents']);
         app(TeacherRequestNotificationService::class)->notifyAdminsOfDisciplineRequest($row);
 
         return response()->json(['success' => true, 'request' => $row], 201);
@@ -140,12 +136,11 @@ class TeacherDisciplineController extends Controller
 
     public function requestTeachingLoad(Request $request, AcademicProgramService $programs)
     {
-        $validated = $request->validate([
+        $validated = $request->validate(array_merge([
             'subject_id' => ['required', Rule::exists('subjects', 'id')->where(fn ($query) => $query->where('status', 'active'))],
             'group_id' => ['required', 'exists:groups,id'],
             'comment' => ['nullable', 'string', 'max:3000'],
-            'document' => ['nullable', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png', 'max:5120'],
-        ]);
+        ], $this->documents->validationRules()));
 
         $programs->assertTeachingLoadRequestAllowed(
             (int) $request->user()->id,
@@ -153,30 +148,49 @@ class TeacherDisciplineController extends Controller
             (int) $validated['group_id'],
         );
 
-        $path = null;
-        $name = null;
-        $type = null;
-        if ($request->hasFile('document')) {
-            $file = $request->file('document');
-            $path = $file->store('teacher-request-documents', 'public');
-            $name = $file->getClientOriginalName();
-            $type = $file->getClientMimeType();
-        }
-
         $row = TeachingLoadRequest::create([
             'teacher_id' => $request->user()->id,
             'subject_id' => (int) $validated['subject_id'],
             'group_id' => (int) $validated['group_id'],
             'comment' => $validated['comment'] ?? null,
-            'document_path' => $path,
-            'document_name' => $name,
-            'document_type' => $type,
             'status' => 'pending',
         ]);
 
-        $row->load(['subject', 'group', 'teacher']);
+        $this->documents->attachTo($row, $this->documents->collectUploadedFiles($request));
+
+        $row->load(['subject', 'group', 'teacher', 'documents']);
         app(TeacherRequestNotificationService::class)->notifyAdminsOfTeachingLoadRequest($row);
 
         return response()->json(['success' => true, 'request' => $row], 201);
+    }
+
+    public function downloadDisciplineRequestDocument(
+        Request $request,
+        TeacherSubjectRequest $teacherSubjectRequest,
+        TeacherRequestDocument $document,
+    ) {
+        if ((int) $teacherSubjectRequest->teacher_id !== (int) $request->user()->id) {
+            abort(403, 'Нет доступа к заявке.');
+        }
+
+        $this->documents->assertBelongsToRequest($document, $teacherSubjectRequest);
+        $this->documents->authorizeDownload($document, $request->user());
+
+        return $this->documents->download($document);
+    }
+
+    public function downloadTeachingLoadRequestDocument(
+        Request $request,
+        TeachingLoadRequest $teachingLoadRequest,
+        TeacherRequestDocument $document,
+    ) {
+        if ((int) $teachingLoadRequest->teacher_id !== (int) $request->user()->id) {
+            abort(403, 'Нет доступа к заявке.');
+        }
+
+        $this->documents->assertBelongsToRequest($document, $teachingLoadRequest);
+        $this->documents->authorizeDownload($document, $request->user());
+
+        return $this->documents->download($document);
     }
 }

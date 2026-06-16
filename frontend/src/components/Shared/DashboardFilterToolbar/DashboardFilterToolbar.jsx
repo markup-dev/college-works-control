@@ -40,7 +40,14 @@ const DashboardFilterToolbar = ({
       return undefined;
     }
     const onDocMouseDown = (event) => {
-      if (toolbarRef.current && !toolbarRef.current.contains(event.target)) {
+      const target = event.target;
+      if (target instanceof Element && (
+        target.closest('.searchable-select__panel')
+        || target.closest('.assignment-filter-combobox__panel')
+      )) {
+        return;
+      }
+      if (toolbarRef.current && !toolbarRef.current.contains(target)) {
         setFiltersOpen(false);
       }
     };

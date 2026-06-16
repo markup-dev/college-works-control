@@ -9,8 +9,10 @@ use App\Models\TeacherSubject;
 use App\Models\TeacherSubjectRequest;
 use App\Models\TeachingLoad;
 use App\Models\TeachingLoadRequest;
+use App\Models\TeacherRequestDocument;
 use App\Services\AcademicProgramService;
 use App\Services\AdminActionNotificationService;
+use App\Services\TeacherRequestDocumentService;
 use App\Support\AdminLogMessages;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +21,10 @@ use Illuminate\Validation\Rule;
 class TeacherDisciplineController extends Controller
 {
     use LogsAdminActions;
+
+    public function __construct(
+        private readonly TeacherRequestDocumentService $documents,
+    ) {}
 
     public function teacherSubjects(int $teacherId)
     {
@@ -131,7 +137,7 @@ class TeacherDisciplineController extends Controller
     {
         $status = $request->query('status');
         $query = TeacherSubjectRequest::query()
-            ->with(['teacher:id,last_name,first_name,middle_name,login', 'subject:id,name,code']);
+            ->with(['teacher:id,last_name,first_name,middle_name,login', 'subject:id,name,code', 'documents']);
 
         if (in_array($status, ['pending', 'approved', 'rejected'], true)) {
             $query->where('status', $status);
@@ -211,7 +217,7 @@ class TeacherDisciplineController extends Controller
     {
         $status = $request->query('status');
         $query = TeachingLoadRequest::query()
-            ->with(['teacher:id,last_name,first_name,middle_name,login', 'subject:id,name,code', 'group:id,name,current_course,admission_year']);
+            ->with(['teacher:id,last_name,first_name,middle_name,login', 'subject:id,name,code', 'group:id,name,current_course,admission_year', 'documents']);
 
         if (in_array($status, ['pending', 'approved', 'rejected'], true)) {
             $query->where('status', $status);
@@ -289,5 +295,27 @@ class TeacherDisciplineController extends Controller
         );
 
         return response()->json(['success' => true, 'request' => $fresh]);
+    }
+
+    public function downloadDisciplineRequestDocument(
+        Request $request,
+        TeacherSubjectRequest $teacherSubjectRequest,
+        TeacherRequestDocument $document,
+    ) {
+        $this->documents->assertBelongsToRequest($document, $teacherSubjectRequest);
+        $this->documents->authorizeDownload($document, $request->user());
+
+        return $this->documents->download($document);
+    }
+
+    public function downloadTeachingLoadRequestDocument(
+        Request $request,
+        TeachingLoadRequest $teachingLoadRequest,
+        TeacherRequestDocument $document,
+    ) {
+        $this->documents->assertBelongsToRequest($document, $teachingLoadRequest);
+        $this->documents->authorizeDownload($document, $request->user());
+
+        return $this->documents->download($document);
     }
 }

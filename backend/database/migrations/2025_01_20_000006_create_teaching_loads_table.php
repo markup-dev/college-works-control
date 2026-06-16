@@ -26,9 +26,6 @@ return new class extends Migration
             $table->foreignId('teacher_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('subject_id')->constrained('subjects')->cascadeOnDelete();
             $table->text('comment')->nullable();
-            $table->string('document_path')->nullable();
-            $table->string('document_name')->nullable();
-            $table->string('document_type', 120)->nullable();
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->foreignId('resolved_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('resolved_at')->nullable();
@@ -54,9 +51,6 @@ return new class extends Migration
             $table->foreignId('subject_id')->constrained('subjects')->cascadeOnDelete();
             $table->foreignId('group_id')->constrained('groups')->cascadeOnDelete();
             $table->text('comment')->nullable();
-            $table->string('document_path')->nullable();
-            $table->string('document_name')->nullable();
-            $table->string('document_type', 120)->nullable();
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->foreignId('resolved_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('resolved_at')->nullable();
@@ -66,10 +60,25 @@ return new class extends Migration
             $table->index(['teacher_id', 'status']);
             $table->index(['group_id', 'status']);
         });
+
+        Schema::create('teacher_request_documents', function (Blueprint $table) {
+            $table->id();
+            $table->string('documentable_type');
+            $table->unsignedBigInteger('documentable_id');
+            $table->string('path');
+            $table->string('name');
+            $table->string('type', 120)->nullable();
+            $table->unsignedSmallInteger('sort_order')->default(0);
+            $table->timestamps();
+
+            $table->index(['documentable_type', 'documentable_id'], 'trd_documentable_idx');
+            $table->index(['documentable_type', 'documentable_id', 'sort_order'], 'trd_documentable_sort_idx');
+        });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('teacher_request_documents');
         Schema::dropIfExists('teaching_load_requests');
         Schema::dropIfExists('teaching_loads');
         Schema::dropIfExists('teacher_subject_requests');

@@ -106,6 +106,7 @@ const TeacherDashboard = () => {
   showInfoRef.current = showInfo;
   const [searchParams, setSearchParams] = useSearchParams();
   const [teacherNotificationNav, setTeacherNotificationNav] = useState(null);
+  const [assignmentDetailsNav, setAssignmentDetailsNav] = useState(null);
 
   const storedFilters = getStoredTeacherFilters();
   const tabRestoredFromStorageRef = useRef(false);
@@ -114,7 +115,7 @@ const TeacherDashboard = () => {
     if (urlTab) {
       return resolveTeacherDashboardTab(urlTab);
     }
-    if (searchParams.get('assignment')) {
+    if (searchParams.get('assignment') && searchParams.get('tab') !== 'assignments') {
       return 'submissions';
     }
     return DEFAULT_TEACHER_DASHBOARD_TAB;
@@ -348,14 +349,92 @@ const TeacherDashboard = () => {
     if (!assignmentId) {
       return;
     }
+
+    const urlTab = searchParams.get('tab');
     const submissionId = searchParams.get('submission');
+
+    if (urlTab === 'assignments' && !submissionId) {
+      setAssignmentDetailsNav({ assignmentId: String(assignmentId) });
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('tab', 'assignments');
+        next.delete('assignment');
+        return next;
+      }, { replace: true });
+      return;
+    }
+
     setTeacherNotificationNav({
       assignmentId: String(assignmentId),
       submissionId: submissionId ? String(submissionId) : null,
       loaded: false,
     });
-    setSearchParams({ tab: 'submissions' }, { replace: true });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', 'submissions');
+      if (submissionId) {
+        next.set('submission', submissionId);
+      } else {
+        next.delete('submission');
+      }
+      next.delete('assignment');
+      return next;
+    }, { replace: true });
   }, [searchParams, user?.role, setSearchParams]);
+
+  useEffect(() => {
+    if (!assignmentDetailsNav || activeTab !== 'assignments') {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const aid = assignmentDetailsNav.assignmentId;
+
+    const openDetails = (assignment) => {
+      if (cancelled || !assignment) {
+        return;
+      }
+      setDetailsAssignment(normalizeAssignment(assignment));
+      setShowAssignmentDetails(true);
+      setAssignmentDetailsNav(null);
+      if (assignment.id) {
+        void api.get(`/assignments/${assignment.id}`)
+          .then(({ data }) => {
+            if (cancelled) {
+              return;
+            }
+            setDetailsAssignment((prev) => (
+              Number(prev?.id) === Number(assignment.id)
+                ? normalizeAssignment({ ...prev, ...data })
+                : prev
+            ));
+          })
+          .catch(() => {});
+      }
+    };
+
+    const existingAssignment = assignments.find((item) => String(item.id) === String(aid));
+    if (existingAssignment) {
+      openDetails(existingAssignment);
+      return undefined;
+    }
+
+    (async () => {
+      try {
+        const { data } = await api.get(`/assignments/${aid}`);
+        openDetails(normalizeAssignment(data?.assignment || data));
+      } catch {
+        if (!cancelled) {
+          showInfoRef.current('Задание не найдено или у вас нет доступа.');
+          setAssignmentDetailsNav(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assignmentDetailsNav, activeTab, assignments]);
 
   useEffect(() => {
     if (!teacherNotificationNav || teacherNotificationNav.loaded || activeTab !== 'submissions') {

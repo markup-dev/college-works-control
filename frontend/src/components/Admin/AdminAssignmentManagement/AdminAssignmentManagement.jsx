@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import api from '../../../services/api';
 import { useNotification } from '../../../context/NotificationContext';
@@ -25,6 +26,11 @@ import { parsePaginationMeta } from '../../../utils/pagination';
 import './AdminAssignmentManagement.scss';
 
 const FILTER_OPTIONS_LIMIT = 20;
+const FILTER_COMBOBOX_PANEL_GAP = 6;
+const FILTER_COMBOBOX_VIEWPORT_PADDING = 8;
+const FILTER_COMBOBOX_PANEL_Z_INDEX = 6000;
+const FILTER_COMBOBOX_MIN_PANEL_HEIGHT = 120;
+const FILTER_COMBOBOX_MAX_PANEL_HEIGHT = 280;
 
 const SORT_OPTIONS = [
   { value: 'deadline_asc', label: 'Дедлайн (ближайшие)' },
@@ -362,10 +368,80 @@ const AssignmentFilterCombobox = ({
   const [loadError, setLoadError] = useState('');
   const debouncedQuery = useDebouncedValue(query, 250);
   const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
   const inputRef = useRef(null);
   const requestRef = useRef(0);
+  const [panelStyle, setPanelStyle] = useState(null);
   const reactId = useId().replace(/:/g, '');
   const inputId = `aam-${type}-filter-${reactId}`;
+
+  const updatePanelPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let width = Math.min(rect.width, viewportWidth - FILTER_COMBOBOX_VIEWPORT_PADDING * 2);
+    let left = rect.left;
+    if (left + width > viewportWidth - FILTER_COMBOBOX_VIEWPORT_PADDING) {
+      left = viewportWidth - FILTER_COMBOBOX_VIEWPORT_PADDING - width;
+    }
+    if (left < FILTER_COMBOBOX_VIEWPORT_PADDING) {
+      left = FILTER_COMBOBOX_VIEWPORT_PADDING;
+    }
+
+    const spaceBelow = viewportHeight - rect.bottom - FILTER_COMBOBOX_VIEWPORT_PADDING;
+    const spaceAbove = rect.top - FILTER_COMBOBOX_VIEWPORT_PADDING;
+    const shouldOpenUp = spaceBelow < FILTER_COMBOBOX_MIN_PANEL_HEIGHT && spaceAbove > spaceBelow;
+    const availableSpace = shouldOpenUp
+      ? spaceAbove - FILTER_COMBOBOX_PANEL_GAP
+      : spaceBelow - FILTER_COMBOBOX_PANEL_GAP;
+    const maxHeight = Math.max(
+      FILTER_COMBOBOX_MIN_PANEL_HEIGHT,
+      Math.min(FILTER_COMBOBOX_MAX_PANEL_HEIGHT, availableSpace),
+    );
+
+    setPanelStyle(
+      shouldOpenUp
+        ? {
+            position: 'fixed',
+            left: `${left}px`,
+            width: `${width}px`,
+            bottom: `${viewportHeight - rect.top + FILTER_COMBOBOX_PANEL_GAP}px`,
+            maxHeight: `${maxHeight}px`,
+            zIndex: FILTER_COMBOBOX_PANEL_Z_INDEX,
+          }
+        : {
+            position: 'fixed',
+            left: `${left}px`,
+            width: `${width}px`,
+            top: `${rect.bottom + FILTER_COMBOBOX_PANEL_GAP}px`,
+            maxHeight: `${maxHeight}px`,
+            zIndex: FILTER_COMBOBOX_PANEL_Z_INDEX,
+          },
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPanelStyle(null);
+      return undefined;
+    }
+
+    updatePanelPosition();
+
+    const onScrollOrResize = () => updatePanelPosition();
+    window.addEventListener('resize', onScrollOrResize);
+    window.addEventListener('scroll', onScrollOrResize, true);
+
+    return () => {
+      window.removeEventListener('resize', onScrollOrResize);
+      window.removeEventListener('scroll', onScrollOrResize, true);
+    };
+  }, [open, updatePanelPosition, options.length, query, loading, loadError]);
 
   const loadOptions = useCallback(async (searchValue, selectedId) => {
     const requestId = requestRef.current + 1;
@@ -412,9 +488,10 @@ const AssignmentFilterCombobox = ({
     if (!open) return undefined;
 
     const onDocMouseDown = (event) => {
-      if (rootRef.current && !rootRef.current.contains(event.target)) {
-        setOpen(false);
-      }
+      const target = event.target;
+      if (rootRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
@@ -453,12 +530,70 @@ const AssignmentFilterCombobox = ({
     setOpen(false);
   };
 
+  const panelContent = (
+    <div
+      ref={panelRef}
+      className="assignment-filter-combobox__panel assignment-filter-combobox__panel--portal"
+      style={panelStyle ?? undefined}
+    >
+      <input
+        id={inputId}
+        ref={inputRef}
+        type="search"
+        className="assignment-filter-combobox__search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+      <div className="assignment-filter-combobox__list" role="listbox">
+        <button
+          type="button"
+          className={`assignment-filter-combobox__option${!hasSelectedValue ? ' assignment-filter-combobox__option--active' : ''}`}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            clearSelection();
+          }}
+        >
+          <span className="assignment-filter-combobox__option-label">{allLabel}</span>
+          <span className="assignment-filter-combobox__option-meta">Без ограничения</span>
+        </button>
+
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            className={`assignment-filter-combobox__option${String(option.id) === String(value) ? ' assignment-filter-combobox__option--active' : ''}`}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              selectOption(option);
+            }}
+            role="option"
+            aria-selected={String(option.id) === String(value)}
+          >
+            <span className="assignment-filter-combobox__option-label">{option.label}</span>
+            {option.meta ? <span className="assignment-filter-combobox__option-meta">{option.meta}</span> : null}
+          </button>
+        ))}
+
+        {loading && <div className="assignment-filter-combobox__state">Загрузка...</div>}
+        {!loading && !loadError && options.length === 0 && (
+          <div className="assignment-filter-combobox__state">{emptyMessage}</div>
+        )}
+        {!loading && loadError && (
+          <div className="assignment-filter-combobox__state assignment-filter-combobox__state--error">{loadError}</div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="assignment-filter-combobox" ref={rootRef}>
       <label className="filter-popover__label" htmlFor={inputId}>
         {label}
       </label>
       <button
+        ref={triggerRef}
         type="button"
         className={`assignment-filter-combobox__trigger${open ? ' assignment-filter-combobox__trigger--open' : ''}${hasSelectedValue ? ' assignment-filter-combobox__trigger--selected' : ''}`}
         onClick={() => setOpen((isOpen) => !isOpen)}
@@ -470,48 +605,9 @@ const AssignmentFilterCombobox = ({
       </button>
 
       {open && (
-        <div className="assignment-filter-combobox__panel">
-          <input
-            id={inputId}
-            ref={inputRef}
-            type="search"
-            className="assignment-filter-combobox__search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={placeholder}
-            autoComplete="off"
-          />
-          <div className="assignment-filter-combobox__list" role="listbox">
-            <button
-              type="button"
-              className={`assignment-filter-combobox__option${!hasSelectedValue ? ' assignment-filter-combobox__option--active' : ''}`}
-              onClick={clearSelection}
-            >
-              <span className="assignment-filter-combobox__option-label">{allLabel}</span>
-              <span className="assignment-filter-combobox__option-meta">Без ограничения</span>
-            </button>
-
-            {options.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={`assignment-filter-combobox__option${String(option.id) === String(value) ? ' assignment-filter-combobox__option--active' : ''}`}
-                onClick={() => selectOption(option)}
-                role="option"
-                aria-selected={String(option.id) === String(value)}
-              >
-                <span className="assignment-filter-combobox__option-label">{option.label}</span>
-                {option.meta ? <span className="assignment-filter-combobox__option-meta">{option.meta}</span> : null}
-              </button>
-            ))}
-
-            {loading && <div className="assignment-filter-combobox__state">Загрузка...</div>}
-            {!loading && !loadError && options.length === 0 && (
-              <div className="assignment-filter-combobox__state">{emptyMessage}</div>
-            )}
-            {!loading && loadError && <div className="assignment-filter-combobox__state assignment-filter-combobox__state--error">{loadError}</div>}
-          </div>
-        </div>
+        typeof document !== 'undefined' && panelStyle
+          ? createPortal(panelContent, document.body)
+          : null
       )}
     </div>
   );

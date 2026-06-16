@@ -60,7 +60,9 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
         Route::get('/teacher/disciplines/options', [TeacherDisciplineController::class, 'options']);
         Route::get('/teacher/disciplines/specialties/{specialty}/subjects', [TeacherDisciplineController::class, 'programSubjects']);
         Route::post('/teacher/discipline-requests', [TeacherDisciplineController::class, 'requestDiscipline']);
+        Route::get('/teacher/discipline-requests/{teacherSubjectRequest}/documents/{document}/download', [TeacherDisciplineController::class, 'downloadDisciplineRequestDocument']);
         Route::post('/teacher/teaching-load-requests', [TeacherDisciplineController::class, 'requestTeachingLoad']);
+        Route::get('/teacher/teaching-load-requests/{teachingLoadRequest}/documents/{document}/download', [TeacherDisciplineController::class, 'downloadTeachingLoadRequestDocument']);
 
         Route::post('/assignments', [AssignmentController::class, 'store']);
         Route::put('/assignments/{assignment}', [AssignmentController::class, 'update']);
@@ -155,8 +157,10 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:api_user'])->group(f
         Route::post('/teachers/{teacher}/disciplines', [AdminTeacherDisciplineController::class, 'storeTeacherSubject']);
         Route::delete('/teacher-disciplines/{teacherSubject}', [AdminTeacherDisciplineController::class, 'deleteTeacherSubject']);
         Route::get('/discipline-requests', [AdminTeacherDisciplineController::class, 'disciplineRequests']);
+        Route::get('/discipline-requests/{teacherSubjectRequest}/documents/{document}/download', [AdminTeacherDisciplineController::class, 'downloadDisciplineRequestDocument']);
         Route::put('/discipline-requests/{teacherSubjectRequest}', [AdminTeacherDisciplineController::class, 'resolveDisciplineRequest']);
         Route::get('/teaching-load-requests', [AdminTeacherDisciplineController::class, 'teachingLoadRequests']);
+        Route::get('/teaching-load-requests/{teachingLoadRequest}/documents/{document}/download', [AdminTeacherDisciplineController::class, 'downloadTeachingLoadRequestDocument']);
         Route::put('/teaching-load-requests/{teachingLoadRequest}', [AdminTeacherDisciplineController::class, 'resolveTeachingLoadRequest']);
 
         Route::get('/teaching-loads/form-options', [TeachingLoadController::class, 'formOptions']);

@@ -155,12 +155,13 @@ const AssignmentCard = ({
           </div>
         </div>
         <div className="assignment-status">
-          <StatusBadge tone={statusInfo.variant}>
-            {statusInfo.label}
-          </StatusBadge>
-          {showRetakeBadge && (
+          {showRetakeBadge ? (
             <StatusBadge tone="retake">
               Пересдача
+            </StatusBadge>
+          ) : (
+            <StatusBadge tone={statusInfo.variant}>
+              {statusInfo.label}
             </StatusBadge>
           )}
         </div>

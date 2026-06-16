@@ -1,0 +1,8 @@
+email,last_name,first_name,middle_name,role,group,department,phone
+import.student1@example.ru,Петров,Пётр,Иванович,student,ИСП-029,,+7 (999) 111-22-33
+import.student2@example.ru,Сидорова,Анна,Сергеевна,student,ИСП-029,,8(999)222-33-44
+import.teacher1@example.ru,Новиков,Алексей,Павлович,teacher,,PHP-разработка,+7 (999) 333-44-55
+import.admin1@example.ru,Смирнова,Елена,Дмитриевна,admin,,,+7 (999) 444-55-66
+bad-email,Кузнецов,Игорь,,student,ИСП-029,,
+import.student3@example.ru,Морозов,Денис,,student,,,
+import.student1@example.ru,Волкова,Мария,Андреевна,student,ИСП-029,,+7 (999) 555-66-77
