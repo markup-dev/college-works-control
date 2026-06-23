@@ -191,6 +191,14 @@ class AssignmentTemplateController extends Controller
             return response()->json(['message' => 'Выберите хотя бы одну группу из назначенной учебной нагрузки.'], 422);
         }
 
+        $this->assignments->assertNoDuplicateAssignment(
+            $user->id,
+            $subjectId,
+            (string) $assignmentTemplate->title,
+            $validated['deadline'],
+            $groupIds,
+        );
+
         $criteriaRows = $assignmentTemplate->criteriaItems->map(fn ($c) => [
             'text' => $c->text,
             'max_points' => (int) $c->max_points,

@@ -221,6 +221,48 @@
     color: #285ea8;
   }
 
+  .submissions-pinned-assignment {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+    padding: 0.35rem 0.4rem 0.35rem 0.75rem;
+    border: 1px solid #cdddf2;
+    border-radius: 999px;
+    background: #eef4fd;
+    font-size: 0.85rem;
+    color: #285ea8;
+
+    &__label strong {
+      font-weight: 700;
+    }
+
+    &__clear {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.4rem;
+      height: 1.4rem;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      color: #285ea8;
+      font-size: 0.8rem;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.15s ease;
+
+      &:hover:not(:disabled) {
+        background: #d8e6f8;
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+  }
+
   .submissions-section__main {
     position: relative;
     margin-top: 1rem;

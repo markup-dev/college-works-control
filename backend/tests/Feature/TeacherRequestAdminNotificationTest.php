@@ -43,6 +43,32 @@ class TeacherRequestAdminNotificationTest extends TestCase
         );
     }
 
+    public function test_discipline_request_persists_database_notification_for_admin(): void
+    {
+        // Без Notification::fake: реальный канал database вызывает toArray()
+        // и ловит регрессии вроде loadMissing несуществующей связи group.
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $teacher = User::factory()->create(['role' => 'teacher', 'is_active' => true]);
+        $subject = Subject::create([
+            'name' => 'Базы данных',
+            'code' => 'DB-201',
+            'status' => 'active',
+        ]);
+
+        Sanctum::actingAs($teacher);
+
+        $this->postJson('/api/teacher/discipline-requests', [
+            'subject_id' => $subject->id,
+        ])->assertCreated();
+
+        $admin->refresh();
+        $this->assertSame(1, $admin->notifications()->count());
+
+        $payload = $admin->notifications()->first()->data;
+        $this->assertSame('teacher_discipline_request', $payload['kind']);
+        $this->assertSame((int) $subject->id, (int) $payload['subject_id']);
+    }
+
     public function test_teaching_load_request_notifies_active_admins(): void
     {
         Notification::fake();

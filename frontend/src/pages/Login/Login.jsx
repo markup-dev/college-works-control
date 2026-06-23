@@ -48,7 +48,11 @@ const Login = () => {
 
   useEffect(() => {
     if (user) {
-      navigate(`/${user.role}`);
+      // Та же логика, что и в guard'ах App.js: при принудительной смене пароля ведём в профиль.
+      const target = user.mustChangePassword
+        ? (user.role === 'admin' ? '/admin/profile' : '/profile')
+        : `/${user.role}`;
+      navigate(target, { replace: true });
     }
   }, [user, navigate]);
 

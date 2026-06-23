@@ -123,6 +123,14 @@ class AssignmentController extends Controller
             return response()->json(['message' => 'Выберите хотя бы одну группу из назначенной учебной нагрузки.'], 422);
         }
 
+        $this->assignments->assertNoDuplicateAssignment(
+            (int) $request->user()->id,
+            $subjectId,
+            $validated['title'],
+            $validated['deadline'],
+            $groupIds,
+        );
+
         unset($validated['student_groups'], $validated['criteria'], $validated['allowed_formats'], $validated['max_score']);
 
         $assignment = Assignment::create([

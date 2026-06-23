@@ -180,6 +180,11 @@ class SubmissionController extends Controller
             ]);
         }
 
+        // Та же проверка доступа, что и при обычной сдаче: задание активно, назначено группе студента
+        // и пересдача разрешена. Иначе чанки писались бы на диск для чужого или закрытого задания.
+        $assignment = Assignment::with('groups:id')->findOrFail($validated['assignment_id']);
+        $this->validateSubmissionTarget($request, $assignment);
+
         $student = $request->user();
         $uploadId = (string) $validated['upload_id'];
         $chunkPath = $this->chunkPath((int) $student->id, $uploadId, $chunkIndex);

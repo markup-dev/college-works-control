@@ -975,6 +975,52 @@ class AssignmentService
         return array_values(array_unique($ids));
     }
 
+    /**
+     * Защита от дублей: нельзя выдать задание с тем же названием той же группе на ту же дату
+     * (один преподаватель + одна дисциплина). Разные даты — это легитимная повторная выдача.
+     * Бросает ValidationException со списком конфликтных групп.
+     *
+     * @param  list<int>  $groupIds
+     */
+    public function assertNoDuplicateAssignment(
+        int $teacherId,
+        int $subjectId,
+        string $title,
+        string $deadline,
+        array $groupIds,
+        ?int $ignoreAssignmentId = null,
+    ): void {
+        if ($groupIds === []) {
+            return;
+        }
+
+        $normalizedTitle = mb_strtolower(trim($title));
+        $deadlineDate = \Illuminate\Support\Carbon::parse($deadline)->toDateString();
+
+        $conflictGroups = Assignment::query()
+            ->where('teacher_id', $teacherId)
+            ->where('subject_id', $subjectId)
+            ->whereDate('deadline', $deadlineDate)
+            ->when($ignoreAssignmentId, fn ($query) => $query->where('id', '!=', $ignoreAssignmentId))
+            ->whereHas('groups', fn ($query) => $query->whereIn('groups.id', $groupIds))
+            ->with(['groups:id,name'])
+            ->get()
+            ->filter(fn (Assignment $assignment) => mb_strtolower(trim($assignment->title)) === $normalizedTitle)
+            ->flatMap(fn (Assignment $assignment) => $assignment->groups)
+            ->filter(fn (Group $group) => in_array((int) $group->id, $groupIds, true))
+            ->unique('id')
+            ->values();
+
+        if ($conflictGroups->isNotEmpty()) {
+            $displayTitle = trim($title);
+            $names = $conflictGroups->pluck('name')->implode(', ');
+
+            throw ValidationException::withMessages([
+                'student_groups' => ["Задание «{$displayTitle}» с этим сроком уже выдано группам: {$names}."],
+            ]);
+        }
+    }
+
     public function teacherCanTeachSubject(int $teacherId, int $subjectId): bool
     {
         return TeacherSubject::where('teacher_id', $teacherId)

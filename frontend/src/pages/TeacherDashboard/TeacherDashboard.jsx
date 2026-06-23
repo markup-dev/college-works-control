@@ -11,6 +11,7 @@ import PublishFromBankModal from '../../components/Teacher/PublishFromBankModal/
 import SubmissionDetailsModal from '../../components/Teacher/SubmissionDetailsModal/SubmissionDetailsModal';
 import Button from '../../components/UI/Button/Button';
 import Pagination from '../../components/UI/Pagination/Pagination';
+import SearchableSelect from '../../components/UI/SearchableSelect/SearchableSelect';
 import PageShell from '../../components/UI/PageShell/PageShell';
 import LoadingState from '../../components/UI/LoadingState/LoadingState';
 import EmptyState from '../../components/UI/EmptyState/EmptyState';
@@ -29,7 +30,6 @@ import {
   calculateSubmissionStats,
   buildNormalizedGroupOptions,
   buildSubmissionSubjectOptions,
-  buildSubmissionsNavFiltersFromAssignment,
   PAGINATION_DEFAULTS,
   downloadAssignmentMaterial,
   DownloadCancelledError,
@@ -51,10 +51,10 @@ const isCompletedAssignment = (assignment) => (
 );
 
 const normalizeStoredSubmissionStatus = (value) => {
-  if (value === 'all' || value == null || value === '') {
+  if (value == null || value === '') {
     return DEFAULT_SUBMISSION_STATUS_FILTER;
   }
-  if (['submitted', 'graded', 'returned'].includes(value)) {
+  if (['all', 'submitted', 'graded', 'returned'].includes(value)) {
     return value;
   }
   return DEFAULT_SUBMISSION_STATUS_FILTER;
@@ -168,6 +168,9 @@ const TeacherDashboard = () => {
   const [bankTemplateToDelete, setBankTemplateToDelete] = useState(null);
   const [showBankDeleteConfirm, setShowBankDeleteConfirm] = useState(false);
   const [submissionPage, setSubmissionPage] = useState(1);
+  // Закреплённое задание при переходе «Просмотр работ» с карточки: { id, title }.
+  // Транзитное, в localStorage не сохраняется.
+  const [pinnedAssignment, setPinnedAssignment] = useState(null);
   const [submissionSort, setSubmissionSort] = useState(
     storedFilters?.submissionSort || 'review_queue'
   );
@@ -203,7 +206,8 @@ const TeacherDashboard = () => {
       groupFilter === 'all' &&
       statusFilter === DEFAULT_SUBMISSION_STATUS_FILTER &&
       submissionSort === 'review_queue' &&
-      deadlineFilter === 'all';
+      deadlineFilter === 'all' &&
+      !pinnedAssignment;
     return atDefaults || submissionsTabBusy;
   }, [
     searchTerm,
@@ -212,6 +216,7 @@ const TeacherDashboard = () => {
     statusFilter,
     submissionSort,
     deadlineFilter,
+    pinnedAssignment,
     submissionsTabBusy,
   ]);
 
@@ -338,6 +343,7 @@ const TeacherDashboard = () => {
     setStatusFilter(DEFAULT_SUBMISSION_STATUS_FILTER);
     setSubmissionSort('review_queue');
     setDeadlineFilter('all');
+    setPinnedAssignment(null);
     setSubmissionPage(1);
   };
 
@@ -669,8 +675,10 @@ const TeacherDashboard = () => {
       subjectId: assignmentFilter !== 'all' ? assignmentFilter : 'all',
       group: groupFilter !== 'all' ? groupFilter : 'all',
       deadlineFilter: deadlineFilter !== 'all' ? deadlineFilter : 'all',
-      assignmentId: 'all',
+      assignmentId: pinnedAssignment ? pinnedAssignment.id : 'all',
       studentId: 'all',
+      // Статус «Все»: без list_context бэкенд скрывает возвращённые на доработку.
+      ...(statusFilter === 'all' ? { listContext: 'full' } : {}),
     };
 
     (async () => {
@@ -698,6 +706,7 @@ const TeacherDashboard = () => {
     groupFilter,
     submissionSort,
     deadlineFilter,
+    pinnedAssignment,
     teacherNotificationNav,
     loadTeacherSubmissions,
   ]);
@@ -1178,38 +1187,24 @@ const TeacherDashboard = () => {
     setShowDetailsModal(true);
   };
 
-  const handleViewSubmissions = (assignmentOrId, nextStatusFilter = DEFAULT_SUBMISSION_STATUS_FILTER) => {
+  const handleViewSubmissions = (assignmentOrId) => {
     const relatedAssignment = assignmentOrId && typeof assignmentOrId === 'object'
       ? assignmentOrId
       : assignments.find((assignment) => Number(assignment.id) === Number(assignmentOrId));
 
-    if (relatedAssignment) {
-      const preferredGroup = assignmentGroupFilter !== 'all'
-        ? assignmentGroupFilter
-        : groupFilter;
-      const preferredSubjectId = assignmentSubjectFilter !== 'all'
-        ? assignmentSubjectFilter
-        : assignmentFilter;
-      const {
-        searchTerm: nextSearch,
-        groupFilter: nextGroup,
-        assignmentFilter: nextAssignmentFilter,
-      } = buildSubmissionsNavFiltersFromAssignment(
-        relatedAssignment,
-        { preferredGroup, preferredSubjectId },
-      );
-      setSearchTerm(nextSearch);
-      setGroupFilter(nextGroup);
-      setAssignmentFilter(nextAssignmentFilter);
-    } else {
-      setSearchTerm('');
-      setGroupFilter('all');
-      setAssignmentFilter('all');
-    }
-
-    setStatusFilter(nextStatusFilter);
-    setSubmissionPage(1);
+    // Показываем ровно работы выбранного задания: фильтр по assignment_id + все статусы.
+    setPinnedAssignment(
+      relatedAssignment
+        ? { id: relatedAssignment.id, title: relatedAssignment.title }
+        : null
+    );
+    setSearchTerm('');
+    setGroupFilter('all');
+    setAssignmentFilter('all');
+    setStatusFilter('all');
     setDeadlineFilter('all');
+    setSubmissionSort('review_queue');
+    setSubmissionPage(1);
     handleTabChange('submissions');
   };
 
@@ -1404,6 +1399,11 @@ const TeacherDashboard = () => {
           onResetSubmissionFilters={handleResetSubmissionFilters}
           assignmentFiltersResetDisabled={assignmentFiltersResetDisabled}
           submissionFiltersResetDisabled={submissionFiltersResetDisabled}
+          pinnedAssignment={pinnedAssignment}
+          onClearPinnedAssignment={() => {
+            setPinnedAssignment(null);
+            setSubmissionPage(1);
+          }}
           onPrevAssignmentsPage={() => setAssignmentPage((prev) => Math.max(1, prev - 1))}
           onNextAssignmentsPage={() => setAssignmentPage((prev) => prev + 1)}
           onPrevSubmissionsPage={() => setSubmissionPage((prev) => Math.max(1, prev - 1))}
@@ -1614,6 +1614,8 @@ const DashboardContent = ({
   onResetSubmissionFilters,
   assignmentFiltersResetDisabled = false,
   submissionFiltersResetDisabled = false,
+  pinnedAssignment = null,
+  onClearPinnedAssignment,
   onPrevAssignmentsPage,
   onNextAssignmentsPage,
   onPrevSubmissionsPage,
@@ -1721,6 +1723,8 @@ const DashboardContent = ({
             onSearchChange={onSearchChange}
             onResetFilters={onResetSubmissionFilters}
             filtersResetDisabled={submissionFiltersResetDisabled}
+            pinnedAssignment={pinnedAssignment}
+            onClearPinnedAssignment={onClearPinnedAssignment}
             paginationMeta={submissionsMeta}
             onPrevPage={onPrevSubmissionsPage}
             onNextPage={onNextSubmissionsPage}
@@ -2112,6 +2116,8 @@ const SubmissionsSection = ({
   onStatusFilterChange,
   onSearchChange,
   onResetFilters,
+  pinnedAssignment = null,
+  onClearPinnedAssignment,
   paginationMeta = {},
   onPrevPage,
   onNextPage,
@@ -2169,21 +2175,16 @@ const SubmissionsSection = ({
               <label className="filter-popover__label" htmlFor="teacher-submissions-group-filter">
                 Группа
               </label>
-              <select
-                id="teacher-submissions-group-filter"
-                value={groupFilter}
-                onChange={(e) => onGroupFilterChange(e.target.value)}
-                className="teacher-submissions-select"
+              <SearchableSelect
+                value={groupFilter === 'all' ? '' : groupFilter}
+                onChange={(value) => onGroupFilterChange(value || 'all')}
+                options={availableGroups.map((group) => ({ value: group, label: group }))}
+                placeholder="Все группы"
+                searchPlaceholder="Найти группу…"
+                ariaLabel="Фильтр по группе"
                 disabled={submissionsBusy}
-                aria-disabled={submissionsBusy}
-              >
-                <option value="all">Все группы</option>
-                {availableGroups.map((group) => (
-                  <option key={group} value={group}>
-                    {group}
-                  </option>
-                ))}
-              </select>
+                className="teacher-submissions-group-select"
+              />
             </div>
             <div className="filter-popover__field">
               <label className="filter-popover__label" htmlFor="teacher-submissions-status-filter">
@@ -2197,6 +2198,7 @@ const SubmissionsSection = ({
                 disabled={submissionsBusy}
                 aria-disabled={submissionsBusy}
               >
+                <option value="all">Все</option>
                 <option value="submitted">На проверке</option>
                 <option value="returned">Возвращены на доработку</option>
                 <option value="graded">Зачтены</option>
@@ -2230,6 +2232,23 @@ const SubmissionsSection = ({
         )}
       </div>
     </div>
+
+    {pinnedAssignment && (
+      <div className="submissions-pinned-assignment" role="status">
+        <span className="submissions-pinned-assignment__label">
+          Задание: <strong>{pinnedAssignment.title}</strong>
+        </span>
+        <button
+          type="button"
+          className="submissions-pinned-assignment__clear"
+          onClick={onClearPinnedAssignment}
+          disabled={submissionsBusy}
+          aria-label="Сбросить фильтр по заданию"
+        >
+          ✕
+        </button>
+      </div>
+    )}
 
     <div className={`submissions-section__main${submissionsBusy ? ' submissions-section__main--busy' : ''}`}>
       <SubmissionsTable

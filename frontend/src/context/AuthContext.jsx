@@ -26,6 +26,16 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
+  // Истёкшая сессия (401 в перехватчике api): мягко выходим без перезагрузки страницы.
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+      setError(null);
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
   const login = useCallback(async (login, password, role) => {
     setLoading(true);
     setError(null);

@@ -23,7 +23,9 @@ class TeacherRequestAdminNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $this->request->loadMissing(['teacher', 'subject', 'group']);
+        // Связь group есть только у TeachingLoadRequest; для заявки на дисциплину
+        // её загрузка бросила бы BadMethodCallException и уведомление потерялось бы.
+        $this->request->loadMissing(['teacher', 'subject']);
 
         $teacherName = $this->request->teacher?->full_name
             ?? $this->request->teacher?->login
@@ -42,6 +44,7 @@ class TeacherRequestAdminNotification extends Notification
             ];
         }
 
+        $this->request->loadMissing('group');
         $groupName = $this->request->group?->name ?? '—';
 
         return [

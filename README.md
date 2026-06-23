@@ -258,8 +258,6 @@ php artisan migrate --seed
 php artisan serve
 ```
 
-На Windows можно запустить `serve.bat` в папке `backend`.
-
 #### 2) Настройка frontend (React)
 
 ```bash
@@ -375,7 +373,6 @@ college-works-control/
 │   ├── routes/
 │   │   └── api.php
 │   ├── tests/Feature/              # PHPUnit feature-тесты
-│   └── serve.bat
 │
 ├── frontend/
 │   ├── src/

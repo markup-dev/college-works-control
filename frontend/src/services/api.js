@@ -67,9 +67,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
-      }
+      // Истёкшая сессия: уведомляем приложение вместо жёсткой перезагрузки.
+      // AuthContext сбросит пользователя, а роутер мягко уведёт на публичную страницу (SPA, без reload).
+      window.dispatchEvent(new Event('auth:unauthorized'));
     }
     return Promise.reject(error);
   }
