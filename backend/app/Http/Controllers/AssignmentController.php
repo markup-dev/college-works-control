@@ -157,6 +157,9 @@ class AssignmentController extends Controller
             'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subject:id,name',
             'groups:id,name',
+            'criteriaItems:id,assignment_id,position,text,max_points',
+            'allowedFormatItems:id,assignment_id,format',
+            'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
         ]);
 
         return response()
@@ -333,6 +336,9 @@ class AssignmentController extends Controller
             'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subject:id,name',
             'groups:id,name',
+            'criteriaItems:id,assignment_id,position,text,max_points',
+            'allowedFormatItems:id,assignment_id,format',
+            'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
         ]);
 
         return response()->json([
@@ -429,9 +435,19 @@ class AssignmentController extends Controller
             ]);
         }
 
+        $assignment->load([
+            'teacher:id,login,last_name,first_name,middle_name,grade_scale',
+            'subject:id,name',
+            'groups:id,name',
+            'criteriaItems:id,assignment_id,position,text,max_points',
+            'allowedFormatItems:id,assignment_id,format',
+            'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
+        ]);
+
         return response()->json([
             'success' => true,
             'assignment_id' => $assignment->id,
+            'assignment' => $this->assignments->mapCreatedAssignmentResponse($assignment),
         ]);
     }
 

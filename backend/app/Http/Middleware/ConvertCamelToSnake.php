@@ -18,6 +18,11 @@ class ConvertCamelToSnake
             return $next($request);
         }
 
+        // Multipart с файлами не нормализуем: replace() ломает доступ к UploadedFile в некоторых окружениях.
+        if ($request->files->count() > 0) {
+            return $next($request);
+        }
+
         $input = $request->all();
         $request->replace($this->convertKeys($input));
 

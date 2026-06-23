@@ -7,6 +7,7 @@ use App\Models\AssignmentTemplate;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -16,6 +17,9 @@ class AssignmentTemplateFromAssignmentTest extends TestCase
 
     public function test_assignment_with_criteria_is_copied_to_bank_template(): void
     {
+        Storage::fake('public');
+        Storage::disk('public')->put('assignment-materials/task-material.pdf', 'pdf-content');
+
         $teacher = $this->createTeacher();
         $assignment = $this->createAssignmentWithCriteria($teacher);
 
@@ -35,12 +39,19 @@ class AssignmentTemplateFromAssignmentTest extends TestCase
         ]);
         $this->assertDatabaseHas('assignment_template_materials', [
             'file_name' => 'task-material.pdf',
-            'file_path' => 'assignment-materials/task-material.pdf',
         ]);
+
+        $templatePath = AssignmentTemplate::query()->first()?->materialItems()->value('file_path');
+        $this->assertNotSame('assignment-materials/task-material.pdf', $templatePath);
+        $this->assertStringStartsWith('assignment-template-materials/', (string) $templatePath);
+        Storage::disk('public')->assertExists((string) $templatePath);
     }
 
     public function test_existing_bank_template_is_refreshed_from_assignment_criteria(): void
     {
+        Storage::fake('public');
+        Storage::disk('public')->put('assignment-materials/task-material.pdf', 'pdf-content');
+
         $teacher = $this->createTeacher();
         $assignment = $this->createAssignmentWithCriteria($teacher);
 

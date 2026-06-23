@@ -267,7 +267,7 @@ class AssignmentTemplateController extends Controller
         }
 
         foreach ($request->file('files', []) as $file) {
-            $storedPath = $file->store('assignment-template-materials', 'public');
+            $storedPath = $file->store('assignment-template-materials/' . $assignmentTemplate->id, 'public');
             $assignmentTemplate->materialItems()->create([
                 'file_name' => $file->getClientOriginalName(),
                 'file_path' => $storedPath,

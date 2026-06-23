@@ -298,20 +298,30 @@ export const TeacherProvider = ({ children }) => {
     const removeIds = Array.isArray(removedMaterialIds) ? removedMaterialIds.filter(Boolean) : [];
 
     if (!assignmentId || (files.length === 0 && removeIds.length === 0)) {
-      return;
+      return null;
     }
+
+    let lastAssignment = null;
 
     if (removeIds.length > 0) {
       const removeData = new FormData();
       removeIds.forEach((id) => removeData.append('remove_ids[]', String(id)));
-      await api.post(`/assignments/${assignmentId}/materials`, removeData);
+      const removeRes = await api.post(`/assignments/${assignmentId}/materials`, removeData);
+      if (removeRes?.data?.assignment) {
+        lastAssignment = removeRes.data.assignment;
+      }
     }
 
     for (const file of files) {
       const fileData = new FormData();
       fileData.append('files[]', file);
-      await api.post(`/assignments/${assignmentId}/materials`, fileData);
+      const uploadRes = await api.post(`/assignments/${assignmentId}/materials`, fileData);
+      if (uploadRes?.data?.assignment) {
+        lastAssignment = uploadRes.data.assignment;
+      }
     }
+
+    return lastAssignment;
   }, []);
 
   const replaceAssignmentInList = useCallback((assignment) => {
@@ -495,11 +505,21 @@ export const TeacherProvider = ({ children }) => {
       const files = Array.isArray(materialFiles) ? materialFiles.filter(Boolean) : [];
       const removeIds = Array.isArray(removedMaterialIds) ? removedMaterialIds.filter(Boolean) : [];
       if (files.length > 0 || removeIds.length > 0) {
-        void uploadAssignmentMaterials(createdAssignmentId, files, removeIds).catch((matErr) => {
+        try {
+          const uploadedAssignment = await uploadAssignmentMaterials(createdAssignmentId, files, removeIds);
+          if (uploadedAssignment) {
+            replaceAssignmentInList(uploadedAssignment);
+          } else {
+            const materialsRes = await api.get(`/assignments/${createdAssignmentId}`);
+            if (materialsRes?.data) {
+              replaceAssignmentInList(materialsRes.data);
+            }
+          }
+        } catch (matErr) {
           showNotificationError(
             getApiErrorMessage(matErr, 'Задание создано, но материалы не загрузились'),
           );
-        });
+        }
       }
 
       return { success: true, assignmentId: createdAssignmentId };
@@ -509,6 +529,7 @@ export const TeacherProvider = ({ children }) => {
     }
   }, [
     prependCreatedAssignment,
+    replaceAssignmentInList,
     showNotificationError,
     uploadAssignmentMaterials,
   ]);
@@ -538,18 +559,21 @@ export const TeacherProvider = ({ children }) => {
       const files = Array.isArray(materialFiles) ? materialFiles.filter(Boolean) : [];
       const removeIds = Array.isArray(removedMaterialIds) ? removedMaterialIds.filter(Boolean) : [];
       if (files.length > 0 || removeIds.length > 0) {
-        void uploadAssignmentMaterials(assignmentId, files, removeIds)
-          .then(() => api.get(`/assignments/${assignmentId}`))
-          .then((materialsRes) => {
+        try {
+          const uploadedAssignment = await uploadAssignmentMaterials(assignmentId, files, removeIds);
+          if (uploadedAssignment) {
+            replaceAssignmentInList(uploadedAssignment);
+          } else {
+            const materialsRes = await api.get(`/assignments/${assignmentId}`);
             if (materialsRes?.data) {
               replaceAssignmentInList(materialsRes.data);
             }
-          })
-          .catch((matErr) => {
-            showNotificationError(
-              getApiErrorMessage(matErr, 'Задание сохранено, но материалы не загрузились'),
-            );
-          });
+          }
+        } catch (matErr) {
+          showNotificationError(
+            getApiErrorMessage(matErr, 'Задание сохранено, но материалы не загрузились'),
+          );
+        }
       }
 
       return { success: true };

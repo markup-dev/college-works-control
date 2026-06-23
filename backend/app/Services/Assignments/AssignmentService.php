@@ -140,6 +140,7 @@ class AssignmentService
                     ->select(['id', 'assignment_id', 'student_id', 'status', 'score', 'teacher_comment', 'criterion_scores', 'submitted_at', 'is_resubmission']),
                 'criteriaItems:id,assignment_id,position,text,max_points',
                 'allowedFormatItems:id,assignment_id,format',
+                'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
             ])
                 ->whereHas('groups', fn ($q) => $q->where('groups.id', $user->group_id))
                 ->withCount([
@@ -193,6 +194,9 @@ class AssignmentService
             'teacher:id,login,last_name,first_name,middle_name,grade_scale',
             'subject:id,name',
             'groups:id,name',
+            'criteriaItems:id,assignment_id,position,text,max_points',
+            'allowedFormatItems:id,assignment_id,format',
+            'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
         ])
             ->withCount([
                 'submissions',

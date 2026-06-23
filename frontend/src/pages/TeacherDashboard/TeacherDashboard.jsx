@@ -952,13 +952,14 @@ const TeacherDashboard = () => {
       const files = Array.isArray(data.materialFiles) ? data.materialFiles.filter(Boolean) : [];
       const removeIds = Array.isArray(data.removedMaterialIds) ? data.removedMaterialIds.filter(Boolean) : [];
       if (files.length > 0 || removeIds.length > 0) {
-        void uploadBankTemplateMaterials(templateId, files, removeIds)
-          .catch((err) => {
-            showError(getApiErrorMessage(err, 'Заготовка сохранена, но материалы не загрузились'));
-          });
+        try {
+          await uploadBankTemplateMaterials(templateId, files, removeIds);
+        } catch (err) {
+          showError(getApiErrorMessage(err, 'Заготовка сохранена, но материалы не загрузились'));
+        }
       }
 
-      void loadBankTemplates({ silent: true });
+      await loadBankTemplates({ silent: true });
     } catch (err) {
       showError(getApiErrorMessage(err, 'Не удалось сохранить заготовку'));
     }

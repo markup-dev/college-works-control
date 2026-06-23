@@ -234,17 +234,8 @@ class AssignmentTemplateService
             }
 
             $t->materialItems()->delete();
-            $materialRows = $assignment->materialItems
-                ->map(fn ($m) => [
-                    'file_name' => $m->file_name,
-                    'file_path' => $m->file_path,
-                    'file_size' => $m->file_size,
-                    'file_type' => $m->file_type,
-                ])
-                ->values()
-                ->all();
-            if ($materialRows !== []) {
-                $t->materialItems()->createMany($materialRows);
+            foreach ($assignment->materialItems as $material) {
+                $this->copyAssignmentMaterialToTemplate($material, $t);
             }
 
             return $t->fresh([
@@ -317,6 +308,9 @@ class AssignmentTemplateService
                 'teacher:id,login,last_name,first_name,middle_name,grade_scale',
                 'subject:id,name',
                 'groups:id,name',
+                'criteriaItems:id,assignment_id,position,text,max_points',
+                'allowedFormatItems:id,assignment_id,format',
+                'materialItems:id,assignment_id,file_name,file_path,file_size,file_type,created_at',
             ]);
         });
     }
